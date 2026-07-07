@@ -373,7 +373,9 @@ async function deleteProduct(productId) {
   if (!product) {
     return;
   }
-  const confirmed = window.confirm(`Delete "${product.title}" from the mobile catalog?`);
+  const confirmed = window.confirm(
+    `Permanently delete "${product.title}" from the database and remove its images from storage? This cannot be undone.`
+  );
   if (!confirmed) {
     return;
   }
@@ -382,7 +384,7 @@ async function deleteProduct(productId) {
     await request(`/api/v1/admin/products/${productId}`, { method: "DELETE" });
     await loadProducts();
     $("catalogStatus").className = "success";
-    setText("catalogStatus", `Deleted ${product.sku}.`);
+    setText("catalogStatus", `Deleted ${product.sku} from catalog and storage.`);
   } catch (error) {
     $("catalogStatus").className = "error";
     setText("catalogStatus", error.message);
