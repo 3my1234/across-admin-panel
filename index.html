@@ -34,36 +34,68 @@
       </section>
 
       <section class="dashboard hidden" id="dashboard">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Operations</p>
-            <h1>Atlantic Express Admin</h1>
+        <aside class="sidebar">
+          <div class="brand-block">
+            <p class="eyebrow">Atlantic Express</p>
+            <h1>Admin</h1>
           </div>
-          <button id="refreshButton">Refresh</button>
-        </header>
+          <nav class="side-nav" aria-label="Admin sections">
+            <button class="nav-item active" data-tab="overview">Overview</button>
+            <button class="nav-item" data-tab="products">Products</button>
+            <button class="nav-item" data-tab="orders">Orders</button>
+            <button class="nav-item" data-tab="transactions">Transactions</button>
+            <button class="nav-item" data-tab="admins">Admins</button>
+          </nav>
+        </aside>
 
-        <section class="stats-grid">
-          <article class="stat">
-            <span>Orders</span>
-            <strong id="orderCount">0</strong>
-          </article>
-          <article class="stat">
-            <span>Transactions</span>
-            <strong id="transactionCount">0</strong>
-          </article>
-          <article class="stat">
-            <span>Pending Manifests</span>
-            <strong id="manifestCount">0</strong>
-          </article>
-        </section>
+        <div class="main-pane">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Operations</p>
+              <h1>Atlantic Express Admin</h1>
+            </div>
+            <button id="refreshButton">Refresh</button>
+          </header>
 
-        <section class="grid">
-          <form class="panel" id="productForm">
+          <section class="tab-panel" data-panel="overview">
+            <section class="stats-grid">
+              <article class="stat">
+                <span>Orders</span>
+                <strong id="orderCount">0</strong>
+              </article>
+              <article class="stat">
+                <span>Transactions</span>
+                <strong id="transactionCount">0</strong>
+              </article>
+              <article class="stat">
+                <span>Pending Manifests</span>
+                <strong id="manifestCount">0</strong>
+              </article>
+            </section>
+          </section>
+
+          <section class="tab-panel hidden" data-panel="products">
+            <form class="panel" id="productForm">
             <h2>Add Product</h2>
             <div class="form-grid">
-              <label>SKU <input name="sku" required /></label>
+              <label>SKU <input name="sku" placeholder="Auto-generated if blank" /></label>
               <label>Title <input name="title" required /></label>
-              <label>Category <input name="category" placeholder="Mobile Devices" required /></label>
+              <label>
+                Category
+                <select name="category" required>
+                  <option value="">Select category</option>
+                  <option>Mobile Devices</option>
+                  <option>Laptops</option>
+                  <option>Accessories</option>
+                  <option>Male Clothes</option>
+                  <option>Female Clothes</option>
+                  <option>Shoes</option>
+                  <option>Beauty</option>
+                  <option>Home</option>
+                  <option>Electronics</option>
+                  <option>Kids</option>
+                </select>
+              </label>
               <label>Price NGN <input name="local_selling_price" type="number" min="1" required /></label>
               <label>Slash Price NGN <input name="compare_at_price" type="number" min="0" /></label>
               <label>Cost RMB <input name="cost_price_rmb" type="number" min="0" step="0.01" /></label>
@@ -78,8 +110,10 @@
             <button>Add product</button>
             <p class="success" id="productStatus"></p>
           </form>
+          </section>
 
-          <section class="panel">
+          <section class="tab-panel hidden" data-panel="admins">
+            <section class="panel">
             <h2>Create Admin</h2>
             <form id="adminForm" class="stack">
               <label>Full name <input name="full_name" required /></label>
@@ -96,17 +130,22 @@
               <p class="success" id="adminStatus"></p>
             </form>
           </section>
-        </section>
+          </section>
 
-        <section class="panel">
-          <h2>Recent Orders</h2>
-          <div class="table-wrap"><table id="ordersTable"></table></div>
-        </section>
+          <section class="tab-panel hidden" data-panel="orders">
+            <section class="panel">
+              <h2>Recent Orders</h2>
+              <div class="table-wrap"><table id="ordersTable"></table></div>
+            </section>
+          </section>
 
-        <section class="panel">
-          <h2>Transactions</h2>
-          <div class="table-wrap"><table id="transactionsTable"></table></div>
-        </section>
+          <section class="tab-panel hidden" data-panel="transactions">
+            <section class="panel">
+              <h2>Transactions</h2>
+              <div class="table-wrap"><table id="transactionsTable"></table></div>
+            </section>
+          </section>
+        </div>
       </section>
     </main>
     <script src="./app.js"></script>

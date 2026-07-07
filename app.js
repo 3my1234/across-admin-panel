@@ -4,6 +4,18 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+const categoryPrefixes = {
+  "Mobile Devices": "MOB",
+  Laptops: "LAP",
+  Accessories: "ACC",
+  "Male Clothes": "MCL",
+  "Female Clothes": "FCL",
+  Shoes: "SHO",
+  Beauty: "BEA",
+  Home: "HOM",
+  Electronics: "ELC",
+  Kids: "KID"
+};
 
 $("apiUrl").value = state.apiUrl;
 
@@ -38,35 +50,50 @@ $("loginButton").addEventListener("click", async () => {
 
 $("refreshButton").addEventListener("click", loadDashboard);
 
+document.querySelectorAll(".nav-item").forEach((button) => {
+  button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+});
+
+const productForm = $("productForm");
+productForm.elements.title.addEventListener("input", updateSkuPreview);
+productForm.elements.category.addEventListener("change", updateSkuPreview);
+
 $("productForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   $("productStatus").textContent = "";
-  const category = String(form.get("category") || "").trim();
-  const imageUrls = String(form.get("image_urls") || "")
-    .split("\n")
-    .map((url) => url.trim())
-    .filter(Boolean);
-  const uploadedUrls = await uploadProductImages(form.getAll("image_files").filter((file) => file instanceof File && file.size > 0));
-  await request("/api/v1/admin/products", {
-    method: "POST",
-    body: {
-      sku: form.get("sku"),
-      title: form.get("title"),
-      description: form.get("description"),
-      category_path: category ? [category] : [],
-      local_selling_price: Number(form.get("local_selling_price") || 0),
-      compare_at_price: Number(form.get("compare_at_price") || 0),
-      cost_price_rmb: Number(form.get("cost_price_rmb") || 0),
-      exchange_rate_snapshot: Number(form.get("exchange_rate_snapshot") || 1),
-      inventory_count: Number(form.get("inventory_count") || 0),
-      image_urls: [...uploadedUrls, ...imageUrls],
-      factory_name: form.get("factory_name"),
-      factory_location: form.get("factory_location")
-    }
-  });
-  event.currentTarget.reset();
-  $("productStatus").textContent = "Product added. It will appear in the mobile catalog on refresh.";
+  try {
+    const category = String(form.get("category") || "").trim();
+    const imageUrls = String(form.get("image_urls") || "")
+      .split("\n")
+      .map((url) => url.trim())
+      .filter(Boolean);
+    const uploadedUrls = await uploadProductImages(form.getAll("image_files").filter((file) => file instanceof File && file.size > 0));
+    const product = await request("/api/v1/admin/products", {
+      method: "POST",
+      body: {
+        sku: String(form.get("sku") || "").trim(),
+        title: form.get("title"),
+        description: form.get("description"),
+        category_path: category ? [category] : [],
+        local_selling_price: Number(form.get("local_selling_price") || 0),
+        compare_at_price: Number(form.get("compare_at_price") || 0),
+        cost_price_rmb: Number(form.get("cost_price_rmb") || 0),
+        exchange_rate_snapshot: Number(form.get("exchange_rate_snapshot") || 1),
+        inventory_count: Number(form.get("inventory_count") || 0),
+        image_urls: [...uploadedUrls, ...imageUrls],
+        factory_name: form.get("factory_name"),
+        factory_location: form.get("factory_location")
+      }
+    });
+    event.currentTarget.reset();
+    updateSkuPreview();
+    $("productStatus").className = "success";
+    $("productStatus").textContent = `Product added with SKU ${product.sku}. It will appear in the mobile catalog on refresh.`;
+  } catch (error) {
+    $("productStatus").className = "error";
+    $("productStatus").textContent = error.message;
+  }
 });
 
 $("adminForm").addEventListener("submit", async (event) => {
@@ -135,14 +162,51 @@ async function uploadProductImages(files) {
 }
 
 async function putFile(uploadUrl, file, mimeType) {
-  const response = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": mimeType },
-    body: file
-  });
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${response.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+  try {
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": mimeType },
+      body: file,
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.status}. Check S3 CORS and bucket credentials.`);
+    }
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("Upload timed out. Check S3 CORS and backend AWS credentials.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+function setActiveTab(tab) {
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    button.classList.toggle("active", button.dataset.tab === tab);
+  });
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.panel !== tab);
+  });
+}
+
+function updateSkuPreview() {
+  const skuInput = productForm.elements.sku;
+  if (skuInput.value.trim()) return;
+  const title = String(productForm.elements.title.value || "");
+  const category = String(productForm.elements.category.value || "");
+  skuInput.placeholder = title ? `${categoryPrefixes[category] || "PRD"}-${slugPart(title)}-AUTO` : "Auto-generated if blank";
+}
+
+function slugPart(value) {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 12);
 }
 
 function renderTable(id, columns, rows) {

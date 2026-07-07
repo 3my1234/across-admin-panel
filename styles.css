@@ -44,9 +44,9 @@ button:hover {
 }
 
 .shell {
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 24px;
+  width: 100%;
+  min-height: 100vh;
+  padding: 0;
 }
 
 .panel {
@@ -65,6 +65,54 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  border-right: 1px solid var(--line);
+  padding: 22px 16px;
+  background: #101817;
+  color: #fff;
+}
+
+.brand-block {
+  padding: 4px 8px 18px;
+}
+
+.brand-block .eyebrow {
+  color: #9fb0aa;
+}
+
+.side-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-item {
+  justify-content: flex-start;
+  width: 100%;
+  background: transparent;
+  color: #cbd8d4;
+  text-align: left;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  background: #1f332e;
+  color: #fff;
+}
+
+.main-pane {
+  min-width: 0;
+  padding: 24px;
 }
 
 .eyebrow {
@@ -149,7 +197,7 @@ textarea {
 }
 
 .grid {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr;
   align-items: start;
 }
 
@@ -218,7 +266,21 @@ th {
 }
 
 @media (max-width: 760px) {
-  .shell {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 14px;
+  }
+
+  .side-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-pane {
     padding: 14px;
   }
 
