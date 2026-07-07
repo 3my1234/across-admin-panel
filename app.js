@@ -4,6 +4,10 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+const setText = (id, value) => {
+  const element = $(id);
+  if (element) element.textContent = value;
+};
 const categoryPrefixes = {
   "Mobile Devices": "MOB",
   Laptops: "LAP",
@@ -18,6 +22,16 @@ const categoryPrefixes = {
 };
 
 $("apiUrl").value = state.apiUrl;
+renderSession();
+
+if (state.token) {
+  loadDashboard().catch((error) => {
+    state.token = "";
+    localStorage.removeItem("across.admin.token");
+    renderSession();
+    setText("authError", `Session expired. Sign in again. ${error.message}`);
+  });
+}
 
 $("togglePassword").addEventListener("click", () => {
   const input = $("password");
@@ -28,7 +42,7 @@ $("togglePassword").addEventListener("click", () => {
 $("loginButton").addEventListener("click", async () => {
   state.apiUrl = $("apiUrl").value.replace(/\/$/, "");
   localStorage.setItem("across.admin.apiUrl", state.apiUrl);
-  $("authError").textContent = "";
+  setText("authError", "");
   try {
     const data = await request("/api/v1/admin/login", {
       method: "POST",
@@ -40,11 +54,10 @@ $("loginButton").addEventListener("click", async () => {
     });
     state.token = data.access_token;
     localStorage.setItem("across.admin.token", state.token);
-    $("authPanel").classList.add("hidden");
-    $("dashboard").classList.remove("hidden");
+    renderSession();
     await loadDashboard();
   } catch (error) {
-    $("authError").textContent = error.message;
+    setText("authError", error.message);
   }
 });
 
@@ -60,8 +73,11 @@ productForm.elements.category.addEventListener("change", updateSkuPreview);
 
 $("productForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
-  $("productStatus").textContent = "";
+  const formElement = event.currentTarget;
+  const submitButton = formElement.querySelector('button[type="submit"], button:not([type])');
+  const form = new FormData(formElement);
+  setText("productStatus", "");
+  if (submitButton) submitButton.disabled = true;
   try {
     const category = String(form.get("category") || "").trim();
     const imageUrls = String(form.get("image_urls") || "")
@@ -86,31 +102,40 @@ $("productForm").addEventListener("submit", async (event) => {
         factory_location: form.get("factory_location")
       }
     });
-    event.currentTarget.reset();
+    formElement.reset();
     updateSkuPreview();
     $("productStatus").className = "success";
-    $("productStatus").textContent = `Product added with SKU ${product.sku}. It will appear in the mobile catalog on refresh.`;
+    setText("productStatus", `Product added with SKU ${product.sku}. It will appear in the mobile catalog on refresh.`);
   } catch (error) {
     $("productStatus").className = "error";
-    $("productStatus").textContent = error.message;
+    setText("productStatus", error.message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 });
 
 $("adminForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
-  $("adminStatus").textContent = "";
-  await request("/api/v1/admin/admins", {
-    method: "POST",
-    body: {
-      full_name: form.get("full_name"),
-      email: form.get("email"),
-      password: form.get("password"),
-      role: form.get("role")
-    }
-  });
-  event.currentTarget.reset();
-  $("adminStatus").textContent = "Admin created.";
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
+  setText("adminStatus", "");
+  try {
+    await request("/api/v1/admin/admins", {
+      method: "POST",
+      body: {
+        full_name: form.get("full_name"),
+        email: form.get("email"),
+        password: form.get("password"),
+        role: form.get("role")
+      }
+    });
+    formElement.reset();
+    $("adminStatus").className = "success";
+    setText("adminStatus", "Admin created.");
+  } catch (error) {
+    $("adminStatus").className = "error";
+    setText("adminStatus", error.message);
+  }
 });
 
 async function loadDashboard() {
@@ -124,6 +149,12 @@ async function loadDashboard() {
   $("manifestCount").textContent = manifest.items.length;
   renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], orders.orders);
   renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], transactions.transactions);
+}
+
+function renderSession() {
+  const isAuthenticated = Boolean(state.token);
+  $("authPanel").classList.toggle("hidden", isAuthenticated);
+  $("dashboard").classList.toggle("hidden", !isAuthenticated);
 }
 
 async function request(path, options = {}) {
@@ -145,7 +176,7 @@ async function request(path, options = {}) {
 async function uploadProductImages(files) {
   const urls = [];
   for (const file of files) {
-    $("productStatus").textContent = `Uploading ${file.name}...`;
+    setText("productStatus", `Uploading ${file.name}...`);
     const presign = await request("/api/v1/admin/uploads/presign", {
       method: "POST",
       body: {
