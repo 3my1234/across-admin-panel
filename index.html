@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atlantic Express Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel auth-panel" id="authPanel">
+        <div>
+          <p class="eyebrow">Atlantic Express</p>
+          <h1>Admin Control</h1>
+          <p class="muted">Manage products, orders, transaction visibility, and operations.</p>
+        </div>
+        <label>
+          API URL
+          <input id="apiUrl" value="https://across-api.sportbanter.online" />
+        </label>
+        <label>
+          Email
+          <input id="email" type="email" placeholder="admin@example.com" />
+        </label>
+        <label>
+          Password
+          <div class="password-row">
+            <input id="password" type="password" placeholder="Password" />
+            <button type="button" id="togglePassword" class="icon-button">Show</button>
+          </div>
+        </label>
+        <button id="loginButton">Sign in</button>
+        <p class="error" id="authError"></p>
+      </section>
+
+      <section class="dashboard hidden" id="dashboard">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operations</p>
+            <h1>Atlantic Express Admin</h1>
+          </div>
+          <button id="refreshButton">Refresh</button>
+        </header>
+
+        <section class="stats-grid">
+          <article class="stat">
+            <span>Orders</span>
+            <strong id="orderCount">0</strong>
+          </article>
+          <article class="stat">
+            <span>Transactions</span>
+            <strong id="transactionCount">0</strong>
+          </article>
+          <article class="stat">
+            <span>Pending Manifests</span>
+            <strong id="manifestCount">0</strong>
+          </article>
+        </section>
+
+        <section class="grid">
+          <form class="panel" id="productForm">
+            <h2>Add Product</h2>
+            <div class="form-grid">
+              <label>SKU <input name="sku" required /></label>
+              <label>Title <input name="title" required /></label>
+              <label>Category <input name="category" placeholder="Mobile Devices" required /></label>
+              <label>Price NGN <input name="local_selling_price" type="number" min="1" required /></label>
+              <label>Slash Price NGN <input name="compare_at_price" type="number" min="0" /></label>
+              <label>Cost RMB <input name="cost_price_rmb" type="number" min="0" step="0.01" /></label>
+              <label>Exchange Rate <input name="exchange_rate_snapshot" type="number" min="1" value="220" required /></label>
+              <label>Inventory <input name="inventory_count" type="number" min="0" value="10" /></label>
+              <label>Factory <input name="factory_name" placeholder="Guangzhou supplier" /></label>
+              <label>Factory Location <input name="factory_location" placeholder="Guangzhou" /></label>
+            </div>
+            <label>Description <textarea name="description" rows="3"></textarea></label>
+            <label>Image URLs <textarea name="image_urls" rows="3" placeholder="One image URL per line"></textarea></label>
+            <button>Add product</button>
+            <p class="success" id="productStatus"></p>
+          </form>
+
+          <section class="panel">
+            <h2>Create Admin</h2>
+            <form id="adminForm" class="stack">
+              <label>Full name <input name="full_name" required /></label>
+              <label>Email <input name="email" type="email" required /></label>
+              <label>Password <input name="password" type="password" minlength="10" required /></label>
+              <label>
+                Role
+                <select name="role">
+                  <option value="admin">Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </label>
+              <button>Create admin</button>
+              <p class="success" id="adminStatus"></p>
+            </form>
+          </section>
+        </section>
+
+        <section class="panel">
+          <h2>Recent Orders</h2>
+          <div class="table-wrap"><table id="ordersTable"></table></div>
+        </section>
+
+        <section class="panel">
+          <h2>Transactions</h2>
+          <div class="table-wrap"><table id="transactionsTable"></table></div>
+        </section>
+      </section>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>
