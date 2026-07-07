@@ -47,6 +47,7 @@ $("productForm").addEventListener("submit", async (event) => {
     .split("\n")
     .map((url) => url.trim())
     .filter(Boolean);
+  const uploadedUrls = await uploadProductImages(form.getAll("image_files").filter((file) => file instanceof File && file.size > 0));
   await request("/api/v1/admin/products", {
     method: "POST",
     body: {
@@ -59,7 +60,7 @@ $("productForm").addEventListener("submit", async (event) => {
       cost_price_rmb: Number(form.get("cost_price_rmb") || 0),
       exchange_rate_snapshot: Number(form.get("exchange_rate_snapshot") || 1),
       inventory_count: Number(form.get("inventory_count") || 0),
-      image_urls: imageUrls,
+      image_urls: [...uploadedUrls, ...imageUrls],
       factory_name: form.get("factory_name"),
       factory_location: form.get("factory_location")
     }
@@ -112,6 +113,36 @@ async function request(path, options = {}) {
     throw new Error(data.message || data.error || `Request failed: ${response.status}`);
   }
   return data;
+}
+
+async function uploadProductImages(files) {
+  const urls = [];
+  for (const file of files) {
+    $("productStatus").textContent = `Uploading ${file.name}...`;
+    const presign = await request("/api/v1/admin/uploads/presign", {
+      method: "POST",
+      body: {
+        filename: file.name,
+        mimeType: file.type || "image/jpeg",
+        kind: "image",
+        scope: "products"
+      }
+    });
+    await putFile(presign.uploadUrl, file, file.type || "image/jpeg");
+    urls.push(presign.viewUrl || presign.publicUrl);
+  }
+  return urls.filter(Boolean);
+}
+
+async function putFile(uploadUrl, file, mimeType) {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": mimeType },
+    body: file
+  });
+  if (!response.ok) {
+    throw new Error(`Upload failed: ${response.status}`);
+  }
 }
 
 function renderTable(id, columns, rows) {

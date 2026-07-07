@@ -73,7 +73,8 @@
               <label>Factory Location <input name="factory_location" placeholder="Guangzhou" /></label>
             </div>
             <label>Description <textarea name="description" rows="3"></textarea></label>
-            <label>Image URLs <textarea name="image_urls" rows="3" placeholder="One image URL per line"></textarea></label>
+            <label>Upload product images <input name="image_files" type="file" accept="image/*" multiple /></label>
+            <label>Image URLs <textarea name="image_urls" rows="3" placeholder="Optional: one existing image URL per line"></textarea></label>
             <button>Add product</button>
             <p class="success" id="productStatus"></p>
           </form>
