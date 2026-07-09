@@ -507,7 +507,7 @@ async function uploadProductImages(files, statusId = "productStatus") {
 
 async function putFile(uploadUrl, file, mimeType) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+  const timeout = setTimeout(() => controller.abort(), 180000);
   try {
     const response = await fetch(uploadUrl, {
       method: "PUT",
@@ -520,7 +520,7 @@ async function putFile(uploadUrl, file, mimeType) {
     }
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error("Upload timed out. Check S3 CORS and backend AWS credentials.");
+      throw new Error("Upload timed out. The file may be too large or the network is slow. If this repeats with a small image, check S3 CORS and backend AWS credentials.");
     }
     throw error;
   } finally {
