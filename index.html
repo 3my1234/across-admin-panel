@@ -119,9 +119,20 @@
               </div>
               <button type="button" id="reloadProductsButton" class="secondary-button">Reload catalog</button>
             </div>
+            <div class="catalog-toolbar">
+              <label>
+                Search products
+                <input id="productSearch" type="search" placeholder="Search SKU, title, category, status" autocomplete="off" />
+              </label>
+              <p class="muted" id="catalogSummary"></p>
+            </div>
             <p class="error" id="catalogStatus"></p>
             <div class="table-wrap desktop-only"><table id="productsTable"></table></div>
             <div class="mobile-card-list" id="productsCards"></div>
+            <div class="catalog-actions">
+              <button type="button" id="showMoreProductsButton" class="secondary-button hidden">Show more products</button>
+              <button type="button" id="collapseProductsButton" class="secondary-button hidden">Collapse list</button>
+            </div>
           </section>
           </section>
 
@@ -189,6 +200,12 @@
           <label>Inventory <input name="inventory_count" type="number" min="0" step="1" required /></label>
         </div>
         <label>Description <textarea name="description" rows="3"></textarea></label>
+        <div class="edit-images-block">
+          <p class="field-title">Current Images</p>
+          <div class="image-preview-list" id="editImagePreviewList"></div>
+        </div>
+        <label>Upload replacement/additional images <input name="image_files" type="file" accept="image/*" multiple /></label>
+        <label>Image URLs <textarea name="image_urls" rows="4" placeholder="One image URL per line"></textarea></label>
         <label class="checkbox-row">
           <input name="is_active" type="checkbox" />
           Visible in mobile catalog

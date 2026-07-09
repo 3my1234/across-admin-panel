@@ -1,7 +1,10 @@
 const state = {
   apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
   token: localStorage.getItem("across.admin.token") || "",
-  products: []
+  products: [],
+  productSearch: "",
+  productLimit: 25,
+  activeTab: localStorage.getItem("across.admin.activeTab") || "overview"
 };
 
 const $ = (id) => document.getElementById(id);
@@ -64,9 +67,26 @@ $("loginButton").addEventListener("click", async () => {
 
 $("refreshButton").addEventListener("click", loadDashboard);
 $("reloadProductsButton").addEventListener("click", loadProducts);
+$("productSearch").addEventListener("input", () => {
+  state.productSearch = $("productSearch").value.trim();
+  state.productLimit = 25;
+  renderProductsTable();
+});
+$("showMoreProductsButton").addEventListener("click", () => {
+  state.productLimit += 25;
+  renderProductsTable();
+});
+$("collapseProductsButton").addEventListener("click", () => {
+  state.productLimit = 25;
+  renderProductsTable();
+  document.querySelector("[data-panel='products']")?.scrollIntoView({ block: "start" });
+});
 $("closeEditDialog").addEventListener("click", closeEditDialog);
 $("cancelEditButton").addEventListener("click", closeEditDialog);
 $("editProductForm").addEventListener("submit", saveProductEdits);
+$("editProductForm").elements.image_urls.addEventListener("input", () => {
+  renderEditImagePreview(parseImageUrls($("editProductForm").elements.image_urls.value));
+});
 
 document.querySelectorAll(".nav-item").forEach((button) => {
   button.addEventListener("click", () => {
@@ -76,6 +96,8 @@ document.querySelectorAll(".nav-item").forEach((button) => {
     }
   });
 });
+
+setActiveTab(state.activeTab, { persist: false });
 
 document.querySelectorAll(".mobile-nav-item").forEach((button) => {
   button.addEventListener("click", () => {
@@ -184,6 +206,9 @@ async function loadProducts() {
 function renderProductsTable() {
   const table = $("productsTable");
   table.innerHTML = "";
+  const filteredProducts = getFilteredProducts();
+  const visibleProducts = filteredProducts.slice(0, state.productLimit);
+  updateCatalogControls(filteredProducts.length, visibleProducts.length);
   const thead = document.createElement("thead");
   thead.innerHTML = `
     <tr>
@@ -199,20 +224,20 @@ function renderProductsTable() {
     </tr>
   `;
   const tbody = document.createElement("tbody");
-  if (!state.products.length) {
-    tbody.innerHTML = `<tr><td colspan="9">No products uploaded yet.</td></tr>`;
+  if (!visibleProducts.length) {
+    tbody.innerHTML = `<tr><td colspan="9">${state.products.length ? "No products match this search." : "No products uploaded yet."}</td></tr>`;
     table.append(thead, tbody);
-    renderProductCards();
+    renderProductCards(visibleProducts);
     return;
   }
-  for (const product of state.products) {
+  for (const product of visibleProducts) {
     const row = document.createElement("tr");
-    const imageUrl = product.image_urls?.[0] || "";
+    const imageUrl = displayImageUrl(product.image_urls?.[0] || "");
     const category = product.category_path?.[0] || "-";
     const statusClass = product.is_active ? "active" : "inactive";
     const statusLabel = product.is_active ? "Live" : "Hidden";
     row.innerHTML = `
-      <td>${imageUrl ? `<img class="product-thumb" src="${escapeHtml(imageUrl)}" alt="" />` : "-"}</td>
+      <td>${imageUrl ? `<img class="product-thumb" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" />` : "-"}</td>
       <td>${escapeHtml(product.sku)}</td>
       <td>${escapeHtml(product.title)}</td>
       <td>${escapeHtml(category)}</td>
@@ -234,26 +259,27 @@ function renderProductsTable() {
   table.querySelectorAll("[data-action='delete']").forEach((button) => {
     button.addEventListener("click", () => deleteProduct(button.dataset.id));
   });
-  renderProductCards();
+  renderProductCards(visibleProducts);
 }
 
-function renderProductCards() {
+function renderProductCards(products) {
   const container = $("productsCards");
   if (!container) return;
-  if (!state.products.length) {
-    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No products uploaded yet.</p></article>`;
+  const rows = products || getFilteredProducts().slice(0, state.productLimit);
+  if (!rows.length) {
+    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">${state.products.length ? "No products match this search." : "No products uploaded yet."}</p></article>`;
     return;
   }
-  container.innerHTML = state.products
+  container.innerHTML = rows
     .map((product) => {
-      const imageUrl = product.image_urls?.[0] || "";
+      const imageUrl = displayImageUrl(product.image_urls?.[0] || "");
       const category = product.category_path?.[0] || "-";
       const statusClass = product.is_active ? "active" : "inactive";
       const statusLabel = product.is_active ? "Live" : "Hidden";
       return `
         <article class="mobile-card">
           <div class="mobile-card-head">
-            ${imageUrl ? `<img class="product-thumb" src="${escapeHtml(imageUrl)}" alt="" />` : ""}
+            ${imageUrl ? `<img class="product-thumb" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" />` : ""}
             <div>
               <h3 class="mobile-card-title">${escapeHtml(product.title)}</h3>
               <p class="mobile-card-meta">${escapeHtml(product.sku)} · ${escapeHtml(category)}</p>
@@ -275,6 +301,39 @@ function renderProductCards() {
   container.querySelectorAll("[data-action='delete']").forEach((button) => {
     button.addEventListener("click", () => deleteProduct(button.dataset.id));
   });
+}
+
+function getFilteredProducts() {
+  const query = state.productSearch.toLowerCase();
+  if (!query) {
+    return state.products;
+  }
+  return state.products.filter((product) => {
+    const haystack = [
+      product.sku,
+      product.title,
+      product.description,
+      product.category_path?.join(" "),
+      product.is_active ? "live active visible" : "hidden inactive"
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+}
+
+function updateCatalogControls(filteredCount, visibleCount) {
+  const totalCount = state.products.length;
+  const hasMore = visibleCount < filteredCount;
+  setText(
+    "catalogSummary",
+    totalCount
+      ? `Showing ${visibleCount} of ${filteredCount} matching products (${totalCount} total).`
+      : "No products uploaded yet."
+  );
+  $("showMoreProductsButton").classList.toggle("hidden", !hasMore);
+  $("collapseProductsButton").classList.toggle("hidden", !(filteredCount > 25 && visibleCount > 25));
 }
 
 function renderOrderCards(rows) {
@@ -332,6 +391,9 @@ function openEditDialog(productId) {
   form.elements.compare_at_price.value = product.compare_at_price || "";
   form.elements.inventory_count.value = product.inventory_count || 0;
   form.elements.is_active.checked = Boolean(product.is_active);
+  form.elements.image_files.value = "";
+  form.elements.image_urls.value = (product.image_urls || []).join("\n");
+  renderEditImagePreview(product.image_urls || []);
   setText("editProductMeta", `SKU ${product.sku}`);
   setText("editProductStatus", "");
   $("editProductDialog").showModal();
@@ -343,10 +405,18 @@ function closeEditDialog() {
 
 async function saveProductEdits(event) {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const submitButton = formElement.querySelector('button[type="submit"]');
+  const form = new FormData(formElement);
   const productId = String(form.get("id") || "");
   setText("editProductStatus", "");
+  if (submitButton) submitButton.disabled = true;
   try {
+    const currentImageUrls = parseImageUrls(String(form.get("image_urls") || ""));
+    const uploadedUrls = await uploadProductImages(
+      form.getAll("image_files").filter((file) => file instanceof File && file.size > 0),
+      "editProductStatus"
+    );
     await request(`/api/v1/admin/products/${productId}`, {
       method: "PATCH",
       body: {
@@ -355,7 +425,8 @@ async function saveProductEdits(event) {
         local_selling_price: Number(form.get("local_selling_price") || 0),
         compare_at_price: Number(form.get("compare_at_price") || 0),
         inventory_count: Number(form.get("inventory_count") || 0),
-        is_active: form.get("is_active") === "on"
+        is_active: form.get("is_active") === "on",
+        image_urls: [...uploadedUrls, ...currentImageUrls]
       }
     });
     closeEditDialog();
@@ -365,6 +436,8 @@ async function saveProductEdits(event) {
   } catch (error) {
     $("editProductStatus").className = "error";
     setText("editProductStatus", error.message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -413,10 +486,10 @@ async function request(path, options = {}) {
   return data;
 }
 
-async function uploadProductImages(files) {
+async function uploadProductImages(files, statusId = "productStatus") {
   const urls = [];
   for (const file of files) {
-    setText("productStatus", `Uploading ${file.name}...`);
+    setText(statusId, `Uploading ${file.name}...`);
     const presign = await request("/api/v1/admin/uploads/presign", {
       method: "POST",
       body: {
@@ -455,13 +528,83 @@ async function putFile(uploadUrl, file, mimeType) {
   }
 }
 
-function setActiveTab(tab) {
+function setActiveTab(tab, options = {}) {
+  const knownTabs = new Set(["overview", "products", "orders", "transactions", "admins"]);
+  const nextTab = knownTabs.has(tab) ? tab : "overview";
+  state.activeTab = nextTab;
+  if (options.persist !== false) {
+    localStorage.setItem("across.admin.activeTab", nextTab);
+  }
   document.querySelectorAll(".nav-item, .mobile-nav-item").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tab);
+    button.classList.toggle("active", button.dataset.tab === nextTab);
   });
   document.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.classList.toggle("hidden", panel.dataset.panel !== tab);
+    panel.classList.toggle("hidden", panel.dataset.panel !== nextTab);
   });
+}
+
+function parseImageUrls(value) {
+  return String(value || "")
+    .split("\n")
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
+function renderEditImagePreview(urls) {
+  const container = $("editImagePreviewList");
+  if (!container) return;
+  const cleanUrls = (urls || []).filter(Boolean);
+  if (!cleanUrls.length) {
+    container.innerHTML = `<span class="muted">No images saved for this product.</span>`;
+    return;
+  }
+  container.innerHTML = cleanUrls
+    .map((url) => {
+      const src = displayImageUrl(url);
+      return `
+        <figure class="image-preview-item">
+          <img src="${escapeHtml(src)}" alt="" loading="lazy" />
+          <figcaption>${escapeHtml(shortUrl(url))}</figcaption>
+        </figure>
+      `;
+    })
+    .join("");
+}
+
+function displayImageUrl(rawUrl) {
+  const raw = String(rawUrl || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("user-uploads/")) {
+    return `${state.apiUrl}/api/v1/public/images/view/${encodeKeyPath(raw)}`;
+  }
+  const marker = "/api/v1/public/images/view/";
+  const markerIndex = raw.indexOf(marker);
+  if (markerIndex >= 0) {
+    return `${state.apiUrl}${raw.slice(markerIndex)}`;
+  }
+  if (/^https:\/\/[^/]+\.s3[.-][^/]*amazonaws\.com\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      return `${state.apiUrl}/api/v1/public/images/view/${encodeKeyPath(decodeURIComponent(url.pathname.replace(/^\/+/, "")))}`;
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
+function encodeKeyPath(key) {
+  return String(key || "")
+    .replace(/^\/+/, "")
+    .split("/")
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+function shortUrl(url) {
+  const value = String(url || "");
+  if (value.length <= 42) return value;
+  return `${value.slice(0, 20)}...${value.slice(-16)}`;
 }
 
 function updateSkuPreview() {
