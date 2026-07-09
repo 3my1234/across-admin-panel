@@ -479,7 +479,15 @@ async function request(path, options = {}) {
     },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
-  const data = await response.json().catch(() => ({}));
+  const raw = await response.text();
+  let data = {};
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = { message: raw };
+    }
+  }
   if (!response.ok) {
     throw new Error(data.message || data.error || `Request failed: ${response.status}`);
   }
