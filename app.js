@@ -1,5 +1,5 @@
 const state = {
-  apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://across-api.sportbanter.online",
+  apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
   token: localStorage.getItem("across.admin.token") || "",
   products: []
 };
