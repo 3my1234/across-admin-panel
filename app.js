@@ -221,6 +221,7 @@ $("adminForm").addEventListener("submit", async (event) => {
 async function loadDashboard() {
   const canSeeCommerce = isSuperAdmin() || isCatalogAdmin();
   const canSeeOps = isSuperAdmin() || isProcurementAdmin() || isCourierAdmin();
+  const canSeeDirectory = isSuperAdmin() || isCatalogAdmin();
 
   state.admins = [];
   state.users = [];
@@ -251,7 +252,7 @@ async function loadDashboard() {
     renderTransactionCards([]);
   }
 
-  if (isSuperAdmin()) {
+  if (canSeeDirectory) {
     await loadAdminDirectory();
   } else {
     renderAdminsTable();
@@ -952,9 +953,9 @@ function roleLabel(value) {
 function allowedTabsForRole(role = state.role) {
   switch (role) {
     case "super_admin":
-      return ["overview", "products", "orders", "batches", "transactions", "admins"];
+      return ["overview", "products", "orders", "batches", "transactions", "admins", "users"];
     case "catalog_admin":
-      return ["overview", "products", "orders", "transactions"];
+      return ["overview", "products", "orders", "transactions", "admins", "users"];
     case "procurement_admin":
     case "courier_admin":
       return ["batches"];
@@ -971,18 +972,6 @@ function configureRoleUi() {
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("hidden", !allowedTabs.has(panel.dataset.panel));
   });
-  const adminPanel = document.querySelector("[data-panel='admins']");
-  if (adminPanel) {
-    adminPanel.classList.toggle("hidden", !isSuperAdmin());
-  }
-  const productPanel = document.querySelector("[data-panel='products']");
-  const ordersPanel = document.querySelector("[data-panel='orders']");
-  const transactionsPanel = document.querySelector("[data-panel='transactions']");
-  const overviewPanel = document.querySelector("[data-panel='overview']");
-  if (overviewPanel) overviewPanel.classList.toggle("hidden", !allowedTabs.has("overview"));
-  if (productPanel) productPanel.classList.toggle("hidden", !allowedTabs.has("products"));
-  if (ordersPanel) ordersPanel.classList.toggle("hidden", !allowedTabs.has("orders"));
-  if (transactionsPanel) transactionsPanel.classList.toggle("hidden", !allowedTabs.has("transactions"));
   const sessionName = $("sessionName");
   const sessionRole = $("sessionRole");
   if (sessionName) sessionName.textContent = state.fullName || "Signed in";
