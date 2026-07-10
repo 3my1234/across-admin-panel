@@ -149,7 +149,13 @@
               <form id="adminForm" class="stack">
                 <label>Full name <input name="full_name" required /></label>
                 <label>Email <input name="email" type="email" required /></label>
-                <label>Password <input name="password" type="password" minlength="10" required /></label>
+                <label>
+                  Password
+                  <div class="password-row">
+                    <input name="password" type="password" minlength="10" required />
+                    <button type="button" id="toggleAdminPassword" class="icon-button">Show</button>
+                  </div>
+                </label>
                 <label>
                   Role
                   <select name="role">
@@ -295,6 +301,29 @@
           <button type="submit">Save changes</button>
         </div>
         <p class="error" id="editBatchStatus"></p>
+      </form>
+    </dialog>
+
+    <dialog id="resetAdminDialog" class="modal">
+      <form id="resetAdminForm" class="panel modal-panel">
+        <div class="section-head">
+          <h2>Reset Admin Password</h2>
+          <button type="button" id="closeResetAdminDialog" class="icon-button" aria-label="Close">Close</button>
+        </div>
+        <input type="hidden" name="id" />
+        <p class="muted" id="resetAdminMeta"></p>
+        <label>
+          New Password
+          <div class="password-row">
+            <input name="password" type="password" minlength="10" required />
+            <button type="button" id="toggleResetAdminPassword" class="icon-button">Show</button>
+          </div>
+        </label>
+        <div class="action-row">
+          <button type="button" id="cancelResetAdminButton" class="secondary-button">Cancel</button>
+          <button type="submit">Reset password</button>
+        </div>
+        <p class="error" id="resetAdminStatus"></p>
       </form>
     </dialog>
 

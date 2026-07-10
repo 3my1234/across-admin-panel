@@ -8,7 +8,8 @@ const state = {
   users: [],
   productSearch: "",
   productLimit: 25,
-  activeTab: localStorage.getItem("across.admin.activeTab") || "overview"
+  activeTab: localStorage.getItem("across.admin.activeTab") || "overview",
+  resetAdminTarget: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -46,6 +47,14 @@ $("togglePassword").addEventListener("click", () => {
   input.type = input.type === "password" ? "text" : "password";
   $("togglePassword").textContent = input.type === "password" ? "Show" : "Hide";
 });
+const createAdminPasswordInput = document.querySelector("#adminForm input[name='password']");
+const toggleAdminPassword = $("toggleAdminPassword");
+if (createAdminPasswordInput && toggleAdminPassword) {
+  toggleAdminPassword.addEventListener("click", () => {
+    createAdminPasswordInput.type = createAdminPasswordInput.type === "password" ? "text" : "password";
+    toggleAdminPassword.textContent = createAdminPasswordInput.type === "password" ? "Show" : "Hide";
+  });
+}
 
 $("loginButton").addEventListener("click", async () => {
   state.apiUrl = $("apiUrl").value.replace(/\/$/, "");
@@ -98,6 +107,17 @@ $("editProductForm").elements.image_urls.addEventListener("input", () => {
 $("closeBatchDialog").addEventListener("click", closeBatchDialog);
 $("cancelBatchButton").addEventListener("click", closeBatchDialog);
 $("editBatchForm").addEventListener("submit", saveBatchEdits);
+$("closeResetAdminDialog").addEventListener("click", closeResetAdminDialog);
+$("cancelResetAdminButton").addEventListener("click", closeResetAdminDialog);
+$("resetAdminForm").addEventListener("submit", saveResetAdminPassword);
+const resetAdminPasswordInput = document.querySelector("#resetAdminForm input[name='password']");
+const toggleResetAdminPassword = $("toggleResetAdminPassword");
+if (resetAdminPasswordInput && toggleResetAdminPassword) {
+  toggleResetAdminPassword.addEventListener("click", () => {
+    resetAdminPasswordInput.type = resetAdminPasswordInput.type === "password" ? "text" : "password";
+    toggleResetAdminPassword.textContent = resetAdminPasswordInput.type === "password" ? "Show" : "Hide";
+  });
+}
 
 document.querySelectorAll(".nav-item").forEach((button) => {
   button.addEventListener("click", () => {
@@ -289,6 +309,7 @@ function renderAdminsTable() {
   const table = $("adminsTable");
   if (!table) return;
   table.innerHTML = "";
+  const canManageAdmins = isSuperAdmin();
   const thead = document.createElement("thead");
   thead.innerHTML = `
     <tr>
@@ -297,11 +318,12 @@ function renderAdminsTable() {
       <th>Role</th>
       <th>Status</th>
       <th>Created</th>
+      ${canManageAdmins ? "<th>Actions</th>" : ""}
     </tr>
   `;
   const tbody = document.createElement("tbody");
   if (!state.admins.length) {
-    tbody.innerHTML = `<tr><td colspan="5">No admins yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${canManageAdmins ? 6 : 5}">No admins yet.</td></tr>`;
     table.append(thead, tbody);
     renderAdminCards([]);
     return;
@@ -314,10 +336,16 @@ function renderAdminsTable() {
       <td>${escapeHtml(prettyRole(admin.role))}</td>
       <td>${admin.is_active ? "Active" : "Inactive"}</td>
       <td>${format(admin.created_at)}</td>
+      ${canManageAdmins ? `<td class="table-actions"><button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button></td>` : ""}
     `;
     tbody.appendChild(row);
   }
   table.append(thead, tbody);
+  if (canManageAdmins) {
+    table.querySelectorAll("[data-action='reset-admin-password']").forEach((button) => {
+      button.addEventListener("click", () => openResetAdminDialog(button.dataset.id));
+    });
+  }
   renderAdminCards(state.admins);
 }
 
@@ -325,6 +353,7 @@ function renderUsersTable() {
   const table = $("usersTable");
   if (!table) return;
   table.innerHTML = "";
+  const canDeleteUsers = isSuperAdmin();
   const thead = document.createElement("thead");
   thead.innerHTML = `
     <tr>
@@ -334,11 +363,12 @@ function renderUsersTable() {
       <th>Country</th>
       <th>Status</th>
       <th>Created</th>
+      ${canDeleteUsers ? "<th>Actions</th>" : ""}
     </tr>
   `;
   const tbody = document.createElement("tbody");
   if (!state.users.length) {
-    tbody.innerHTML = `<tr><td colspan="6">No buyers yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${canDeleteUsers ? 7 : 6}">No buyers yet.</td></tr>`;
     table.append(thead, tbody);
     renderUserCards([]);
     return;
@@ -352,16 +382,23 @@ function renderUsersTable() {
       <td>${escapeHtml(user.country_code || "-")}</td>
       <td>${user.is_active ? "Active" : "Inactive"}</td>
       <td>${format(user.created_at)}</td>
+      ${canDeleteUsers ? `<td class="table-actions"><button type="button" class="danger-button" data-action="delete-user" data-id="${user.id}">Delete user</button></td>` : ""}
     `;
     tbody.appendChild(row);
   }
   table.append(thead, tbody);
+  if (canDeleteUsers) {
+    table.querySelectorAll("[data-action='delete-user']").forEach((button) => {
+      button.addEventListener("click", () => deleteUser(button.dataset.id));
+    });
+  }
   renderUserCards(state.users);
 }
 
 function renderAdminCards(rows) {
   const container = $("adminsCards");
   if (!container) return;
+  const canManageAdmins = isSuperAdmin();
   if (!rows.length) {
     container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No admins yet.</p></article>`;
     return;
@@ -370,16 +407,23 @@ function renderAdminCards(rows) {
     .map((admin) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(admin.full_name || "-")}</h3>
-        <p class="mobile-card-meta">${escapeHtml(admin.email || "-")} Â· ${escapeHtml(prettyRole(admin.role))}</p>
-        <p class="mobile-card-meta">${admin.is_active ? "Active" : "Inactive"} Â· ${format(admin.created_at)}</p>
+        <p class="mobile-card-meta">${escapeHtml(admin.email || "-")} · ${escapeHtml(prettyRole(admin.role))}</p>
+        <p class="mobile-card-meta">${admin.is_active ? "Active" : "Inactive"} · ${format(admin.created_at)}</p>
+        ${canManageAdmins ? `<div class="mobile-card-actions"><button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button></div>` : ""}
       </article>
     `)
     .join("");
+  if (canManageAdmins) {
+    container.querySelectorAll("[data-action='reset-admin-password']").forEach((button) => {
+      button.addEventListener("click", () => openResetAdminDialog(button.dataset.id));
+    });
+  }
 }
 
 function renderUserCards(rows) {
   const container = $("usersCards");
   if (!container) return;
+  const canDeleteUsers = isSuperAdmin();
   if (!rows.length) {
     container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No buyers yet.</p></article>`;
     return;
@@ -388,12 +432,18 @@ function renderUserCards(rows) {
     .map((user) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(user.full_name || "-")}</h3>
-        <p class="mobile-card-meta">${escapeHtml(user.email || "-")} Â· ${escapeHtml(user.phone || "-")}</p>
-        <p class="mobile-card-meta">${escapeHtml(user.country_code || "-")} Â· ${user.is_active ? "Active" : "Inactive"}</p>
+        <p class="mobile-card-meta">${escapeHtml(user.email || "-")} · ${escapeHtml(user.phone || "-")}</p>
+        <p class="mobile-card-meta">${escapeHtml(user.country_code || "-")} · ${user.is_active ? "Active" : "Inactive"}</p>
         <p class="mobile-card-meta">${format(user.created_at)}</p>
+        ${canDeleteUsers ? `<div class="mobile-card-actions"><button type="button" class="danger-button" data-action="delete-user" data-id="${user.id}">Delete user</button></div>` : ""}
       </article>
     `)
     .join("");
+  if (canDeleteUsers) {
+    container.querySelectorAll("[data-action='delete-user']").forEach((button) => {
+      button.addEventListener("click", () => deleteUser(button.dataset.id));
+    });
+  }
 }
 
 function renderBatchCards(rows) {
@@ -639,6 +689,26 @@ function closeBatchDialog() {
   $("editBatchDialog").close();
 }
 
+function openResetAdminDialog(adminId) {
+  const admin = state.admins.find((item) => item.id === adminId);
+  if (!admin) return;
+  state.resetAdminTarget = admin;
+  const form = $("resetAdminForm");
+  form.elements.id.value = admin.id;
+  form.elements.password.value = "";
+  form.elements.password.type = "password";
+  const toggle = $("toggleResetAdminPassword");
+  if (toggle) toggle.textContent = "Show";
+  setText("resetAdminMeta", `${admin.full_name || "-"} Â· ${admin.email || "-"}`);
+  setText("resetAdminStatus", "");
+  $("resetAdminDialog").showModal();
+}
+
+function closeResetAdminDialog() {
+  state.resetAdminTarget = null;
+  $("resetAdminDialog").close();
+}
+
 async function saveProductEdits(event) {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -707,6 +777,32 @@ async function saveBatchEdits(event) {
   }
 }
 
+async function saveResetAdminPassword(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  const submitButton = formElement.querySelector('button[type="submit"]');
+  const form = new FormData(formElement);
+  const adminId = String(form.get("id") || "");
+  setText("resetAdminStatus", "");
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await request(`/api/v1/admin/admins/${adminId}/password`, {
+      method: "PATCH",
+      body: {
+        password: String(form.get("password") || "")
+      }
+    });
+    closeResetAdminDialog();
+    $("catalogStatus").className = "success";
+    setText("catalogStatus", "Admin password reset.");
+  } catch (error) {
+    $("resetAdminStatus").className = "error";
+    setText("resetAdminStatus", error.message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
 async function deleteProduct(productId) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) {
@@ -728,6 +824,33 @@ async function deleteProduct(productId) {
     $("catalogStatus").className = "error";
     setText("catalogStatus", error.message);
   }
+}
+
+async function deleteUser(userId) {
+  const user = state.users.find((item) => item.id === userId);
+  if (!user) {
+    return;
+  }
+  const confirmed = window.confirm(
+    `Delete buyer "${user.full_name}" and all associated orders, reviews, and history? This cannot be undone.`
+  );
+  if (!confirmed) {
+    return;
+  }
+  setText("catalogStatus", "");
+  try {
+    await request(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+    await loadAdminDirectory();
+    $("catalogStatus").className = "success";
+    setText("catalogStatus", `Deleted ${user.full_name}.`);
+  } catch (error) {
+    $("catalogStatus").className = "error";
+    setText("catalogStatus", error.message);
+  }
+}
+
+function isSuperAdmin() {
+  return state.role === "super_admin";
 }
 
 function renderSession() {
@@ -950,3 +1073,4 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
