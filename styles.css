@@ -214,6 +214,15 @@ textarea {
   margin-bottom: 18px;
 }
 
+.session-identity {
+  display: grid;
+  gap: 4px;
+}
+
+.session-identity .muted {
+  margin: 0;
+}
+
 .stats-grid,
 .grid {
   display: grid;

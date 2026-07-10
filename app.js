@@ -1,7 +1,8 @@
-const state = {
+﻿const state = {
   apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
   token: localStorage.getItem("across.admin.token") || "",
   role: localStorage.getItem("across.admin.role") || "",
+  fullName: localStorage.getItem("across.admin.fullName") || "",
   products: [],
   batches: [],
   admins: [],
@@ -71,8 +72,10 @@ $("loginButton").addEventListener("click", async () => {
     });
     state.token = data.access_token;
     state.role = data.role || "";
+    state.fullName = data.full_name || "";
     localStorage.setItem("across.admin.token", state.token);
     localStorage.setItem("across.admin.role", state.role);
+    localStorage.setItem("across.admin.fullName", state.fullName);
     renderSession();
     await loadDashboard();
   } catch (error) {
@@ -216,21 +219,50 @@ $("adminForm").addEventListener("submit", async (event) => {
 });
 
 async function loadDashboard() {
-  const [orders, transactions, manifest] = await Promise.all([
-    request("/api/v1/admin/orders"),
-    request("/api/v1/admin/transactions"),
-    request("/api/v1/admin/manifest/pending")
-  ]);
-  $("orderCount").textContent = orders.orders.length;
-  $("transactionCount").textContent = transactions.transactions.length;
-  $("manifestCount").textContent = manifest.items.length;
-  renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], orders.orders);
-  renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], transactions.transactions);
-  renderOrderCards(orders.orders);
-  renderTransactionCards(transactions.transactions);
-  await loadAdminDirectory();
-  await loadProducts();
-  await loadBatches();
+  const canSeeCommerce = isSuperAdmin() || isCatalogAdmin();
+  const canSeeOps = isSuperAdmin() || isProcurementAdmin() || isCourierAdmin();
+
+  state.admins = [];
+  state.users = [];
+  state.products = [];
+  state.batches = [];
+
+  if (canSeeCommerce) {
+    const [orders, transactions, manifest] = await Promise.all([
+      request("/api/v1/admin/orders"),
+      request("/api/v1/admin/transactions"),
+      request("/api/v1/admin/manifest/pending")
+    ]);
+    $("orderCount").textContent = orders.orders.length;
+    $("transactionCount").textContent = transactions.transactions.length;
+    $("manifestCount").textContent = manifest.items.length;
+    renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], orders.orders);
+    renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], transactions.transactions);
+    renderOrderCards(orders.orders);
+    renderTransactionCards(transactions.transactions);
+    await loadProducts();
+  } else {
+    $("orderCount").textContent = "0";
+    $("transactionCount").textContent = "0";
+    $("manifestCount").textContent = "0";
+    renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], []);
+    renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], []);
+    renderOrderCards([]);
+    renderTransactionCards([]);
+  }
+
+  if (isSuperAdmin()) {
+    await loadAdminDirectory();
+  } else {
+    renderAdminsTable();
+    renderUsersTable();
+  }
+
+  if (canSeeOps) {
+    await loadBatches();
+  } else {
+    renderBatchesTable();
+  }
 }
 
 async function loadProducts() {
@@ -336,7 +368,10 @@ function renderAdminsTable() {
       <td>${escapeHtml(prettyRole(admin.role))}</td>
       <td>${admin.is_active ? "Active" : "Inactive"}</td>
       <td>${format(admin.created_at)}</td>
-      ${canManageAdmins ? `<td class="table-actions"><button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button></td>` : ""}
+      ${canManageAdmins ? `<td class="table-actions">
+        <button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button>
+        <button type="button" class="danger-button" data-action="delete-admin" data-id="${admin.id}">Delete admin</button>
+      </td>` : ""}
     `;
     tbody.appendChild(row);
   }
@@ -344,6 +379,9 @@ function renderAdminsTable() {
   if (canManageAdmins) {
     table.querySelectorAll("[data-action='reset-admin-password']").forEach((button) => {
       button.addEventListener("click", () => openResetAdminDialog(button.dataset.id));
+    });
+    table.querySelectorAll("[data-action='delete-admin']").forEach((button) => {
+      button.addEventListener("click", () => deleteAdmin(button.dataset.id));
     });
   }
   renderAdminCards(state.admins);
@@ -407,15 +445,21 @@ function renderAdminCards(rows) {
     .map((admin) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(admin.full_name || "-")}</h3>
-        <p class="mobile-card-meta">${escapeHtml(admin.email || "-")} � ${escapeHtml(prettyRole(admin.role))}</p>
-        <p class="mobile-card-meta">${admin.is_active ? "Active" : "Inactive"} � ${format(admin.created_at)}</p>
-        ${canManageAdmins ? `<div class="mobile-card-actions"><button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button></div>` : ""}
+        <p class="mobile-card-meta">${escapeHtml(admin.email || "-")} · ${escapeHtml(prettyRole(admin.role))}</p>
+        <p class="mobile-card-meta">${admin.is_active ? "Active" : "Inactive"} · ${format(admin.created_at)}</p>
+        ${canManageAdmins ? `<div class="mobile-card-actions">
+          <button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button>
+          <button type="button" class="danger-button" data-action="delete-admin" data-id="${admin.id}">Delete admin</button>
+        </div>` : ""}
       </article>
     `)
     .join("");
   if (canManageAdmins) {
     container.querySelectorAll("[data-action='reset-admin-password']").forEach((button) => {
       button.addEventListener("click", () => openResetAdminDialog(button.dataset.id));
+    });
+    container.querySelectorAll("[data-action='delete-admin']").forEach((button) => {
+      button.addEventListener("click", () => deleteAdmin(button.dataset.id));
     });
   }
 }
@@ -432,8 +476,8 @@ function renderUserCards(rows) {
     .map((user) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(user.full_name || "-")}</h3>
-        <p class="mobile-card-meta">${escapeHtml(user.email || "-")} � ${escapeHtml(user.phone || "-")}</p>
-        <p class="mobile-card-meta">${escapeHtml(user.country_code || "-")} � ${user.is_active ? "Active" : "Inactive"}</p>
+        <p class="mobile-card-meta">${escapeHtml(user.email || "-")} · ${escapeHtml(user.phone || "-")}</p>
+        <p class="mobile-card-meta">${escapeHtml(user.country_code || "-")} · ${user.is_active ? "Active" : "Inactive"}</p>
         <p class="mobile-card-meta">${format(user.created_at)}</p>
         ${canDeleteUsers ? `<div class="mobile-card-actions"><button type="button" class="danger-button" data-action="delete-user" data-id="${user.id}">Delete user</button></div>` : ""}
       </article>
@@ -457,9 +501,9 @@ function renderBatchCards(rows) {
     .map((batch) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(batch.batch_code)}</h3>
-        <p class="mobile-card-meta">${escapeHtml(format(batch.batch_date))} · ${escapeHtml(prettyBatchStatus(batch.status))}</p>
-        <p class="mobile-card-meta">${escapeHtml(prettyTransportMode(batch.transport_mode))} · ${escapeHtml(batch.current_location || "-")}</p>
-        <p class="mobile-card-meta">${format(batch.order_count)} orders · NGN ${format(batch.total_ngn_collected)}</p>
+        <p class="mobile-card-meta">${escapeHtml(format(batch.batch_date))} Ã‚· ${escapeHtml(prettyBatchStatus(batch.status))}</p>
+        <p class="mobile-card-meta">${escapeHtml(prettyTransportMode(batch.transport_mode))} Ã‚· ${escapeHtml(batch.current_location || "-")}</p>
+        <p class="mobile-card-meta">${format(batch.order_count)} orders Ã‚· NGN ${format(batch.total_ngn_collected)}</p>
         <div class="mobile-card-actions">
           <button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Update</button>
         </div>
@@ -550,9 +594,9 @@ function renderProductCards(products) {
             ${imageUrl ? `<img class="product-thumb" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" />` : ""}
             <div>
               <h3 class="mobile-card-title">${escapeHtml(product.title)}</h3>
-              <p class="mobile-card-meta">${escapeHtml(product.sku)} · ${escapeHtml(category)}</p>
-              <p class="mobile-card-meta">${format(product.local_selling_price)}${product.compare_at_price ? ` · slash ${format(product.compare_at_price)}` : ""}</p>
-              <p class="mobile-card-meta">Stock ${format(product.inventory_count)} · <span class="status-pill ${statusClass}">${statusLabel}</span></p>
+              <p class="mobile-card-meta">${escapeHtml(product.sku)} Ã‚· ${escapeHtml(category)}</p>
+              <p class="mobile-card-meta">${format(product.local_selling_price)}${product.compare_at_price ? ` Ã‚· slash ${format(product.compare_at_price)}` : ""}</p>
+              <p class="mobile-card-meta">Stock ${format(product.inventory_count)} Ã‚· <span class="status-pill ${statusClass}">${statusLabel}</span></p>
             </div>
           </div>
           <div class="mobile-card-actions">
@@ -616,8 +660,8 @@ function renderOrderCards(rows) {
       (row) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(row.email)}</h3>
-        <p class="mobile-card-meta">${escapeHtml(row.status)} · ${escapeHtml(row.stage)}</p>
-        <p class="mobile-card-meta">Total ${format(row.total_amount)} · Customs ${format(row.customs_fee)} · VAT ${format(row.vat_fee)}</p>
+        <p class="mobile-card-meta">${escapeHtml(row.status)} Ã‚· ${escapeHtml(row.stage)}</p>
+        <p class="mobile-card-meta">Total ${format(row.total_amount)} Ã‚· Customs ${format(row.customs_fee)} Ã‚· VAT ${format(row.vat_fee)}</p>
         <p class="mobile-card-meta">${format(row.created_at)}</p>
       </article>
     `
@@ -637,8 +681,8 @@ function renderTransactionCards(rows) {
       (row) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(row.email)}</h3>
-        <p class="mobile-card-meta">${escapeHtml(row.order_status)} · escrow ${escapeHtml(row.escrow_status)}</p>
-        <p class="mobile-card-meta">Dispute ${escapeHtml(row.dispute_status)} · ${format(row.total_amount)}</p>
+        <p class="mobile-card-meta">${escapeHtml(row.order_status)} Ã‚· escrow ${escapeHtml(row.escrow_status)}</p>
+        <p class="mobile-card-meta">Dispute ${escapeHtml(row.dispute_status)} Ã‚· ${format(row.total_amount)}</p>
         <p class="mobile-card-meta">${escapeHtml(row.flutterwave_tx_ref || "-")}</p>
       </article>
     `
@@ -680,7 +724,7 @@ function openBatchDialog(batchId) {
   form.elements.transport_mode.value = batch.transport_mode || "air";
   form.elements.current_location.value = batch.current_location || "";
   form.elements.notes.value = batch.notes || "";
-  setText("editBatchMeta", `${batch.batch_code} · ${format(batch.batch_date)} · ${batch.order_count} orders`);
+  setText("editBatchMeta", `${batch.batch_code} Ã‚· ${format(batch.batch_date)} Ã‚· ${batch.order_count} orders`);
   setText("editBatchStatus", "");
   $("editBatchDialog").showModal();
 }
@@ -699,7 +743,7 @@ function openResetAdminDialog(adminId) {
   form.elements.password.type = "password";
   const toggle = $("toggleResetAdminPassword");
   if (toggle) toggle.textContent = "Show";
-  setText("resetAdminMeta", `${admin.full_name || "-"} · ${admin.email || "-"}`);
+  setText("resetAdminMeta", `${admin.full_name || "-"} Ã‚· ${admin.email || "-"}`);
   setText("resetAdminStatus", "");
   $("resetAdminDialog").showModal();
 }
@@ -849,14 +893,110 @@ async function deleteUser(userId) {
   }
 }
 
+async function deleteAdmin(adminId) {
+  const admin = state.admins.find((item) => item.id === adminId);
+  if (!admin) {
+    return;
+  }
+  const confirmed = window.confirm(
+    `Delete admin "${admin.full_name}"? Super admins only can remove admin accounts. This cannot be undone.`
+  );
+  if (!confirmed) {
+    return;
+  }
+  setText("adminStatus", "");
+  try {
+    await request(`/api/v1/admin/admins/${adminId}`, { method: "DELETE" });
+    await loadAdminDirectory();
+    $("adminStatus").className = "success";
+    setText("adminStatus", `Deleted ${admin.full_name}.`);
+  } catch (error) {
+    $("adminStatus").className = "error";
+    setText("adminStatus", error.message);
+  }
+}
+
 function isSuperAdmin() {
   return state.role === "super_admin";
+}
+
+function isCatalogAdmin() {
+  return state.role === "catalog_admin";
+}
+
+function isProcurementAdmin() {
+  return state.role === "procurement_admin";
+}
+
+function isCourierAdmin() {
+  return state.role === "courier_admin";
+}
+
+function roleLabel(value) {
+  switch (String(value || "").toLowerCase()) {
+    case "super_admin":
+      return "Super Admin";
+    case "catalog_admin":
+      return "Admin I";
+    case "procurement_admin":
+      return "Admin II";
+    case "courier_admin":
+      return "Admin III";
+    default:
+      return String(value || "")
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+}
+
+function allowedTabsForRole(role = state.role) {
+  switch (role) {
+    case "super_admin":
+      return ["overview", "products", "orders", "batches", "transactions", "admins"];
+    case "catalog_admin":
+      return ["overview", "products", "orders", "transactions"];
+    case "procurement_admin":
+    case "courier_admin":
+      return ["batches"];
+    default:
+      return ["overview"];
+  }
+}
+
+function configureRoleUi() {
+  const allowedTabs = new Set(allowedTabsForRole());
+  document.querySelectorAll(".nav-item, .mobile-nav-item").forEach((button) => {
+    button.classList.toggle("hidden", !allowedTabs.has(button.dataset.tab));
+  });
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
+    panel.classList.toggle("hidden", !allowedTabs.has(panel.dataset.panel));
+  });
+  const adminPanel = document.querySelector("[data-panel='admins']");
+  if (adminPanel) {
+    adminPanel.classList.toggle("hidden", !isSuperAdmin());
+  }
+  const productPanel = document.querySelector("[data-panel='products']");
+  const ordersPanel = document.querySelector("[data-panel='orders']");
+  const transactionsPanel = document.querySelector("[data-panel='transactions']");
+  const overviewPanel = document.querySelector("[data-panel='overview']");
+  if (overviewPanel) overviewPanel.classList.toggle("hidden", !allowedTabs.has("overview"));
+  if (productPanel) productPanel.classList.toggle("hidden", !allowedTabs.has("products"));
+  if (ordersPanel) ordersPanel.classList.toggle("hidden", !allowedTabs.has("orders"));
+  if (transactionsPanel) transactionsPanel.classList.toggle("hidden", !allowedTabs.has("transactions"));
+  const sessionName = $("sessionName");
+  const sessionRole = $("sessionRole");
+  if (sessionName) sessionName.textContent = state.fullName || "Signed in";
+  if (sessionRole) sessionRole.textContent = roleLabel(state.role);
+  setActiveTab(state.activeTab, { persist: false });
 }
 
 function renderSession() {
   const isAuthenticated = Boolean(state.token);
   $("authPanel").classList.toggle("hidden", isAuthenticated);
   $("dashboard").classList.toggle("hidden", !isAuthenticated);
+  if (isAuthenticated) {
+    configureRoleUi();
+  }
 }
 
 async function request(path, options = {}) {
@@ -926,8 +1066,9 @@ async function putFile(uploadUrl, file, mimeType) {
 }
 
 function setActiveTab(tab, options = {}) {
-  const knownTabs = new Set(["overview", "products", "orders", "batches", "transactions", "admins"]);
-  const nextTab = knownTabs.has(tab) ? tab : "overview";
+  const allowedTabs = allowedTabsForRole();
+  const knownTabs = new Set(allowedTabs);
+  const nextTab = knownTabs.has(tab) ? tab : allowedTabs[0] || "overview";
   state.activeTab = nextTab;
   if (options.persist !== false) {
     localStorage.setItem("across.admin.activeTab", nextTab);
@@ -936,7 +1077,7 @@ function setActiveTab(tab, options = {}) {
     button.classList.toggle("active", button.dataset.tab === nextTab);
   });
   document.querySelectorAll(".tab-panel").forEach((panel) => {
-    panel.classList.toggle("hidden", panel.dataset.panel !== nextTab);
+    panel.classList.toggle("hidden", panel.dataset.panel !== nextTab || !knownTabs.has(panel.dataset.panel));
   });
 }
 
@@ -947,9 +1088,7 @@ function prettyBatchStatus(value) {
 }
 
 function prettyRole(value) {
-  return String(value || "")
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return roleLabel(value);
 }
 
 function prettyTransportMode(value) {
@@ -1073,4 +1212,5 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
 

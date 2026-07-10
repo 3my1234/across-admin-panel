@@ -51,9 +51,11 @@
 
         <div class="main-pane">
           <header class="topbar">
-            <div>
+            <div class="session-identity">
               <p class="eyebrow">Operations</p>
               <h1>Atlantic Express Admin</h1>
+              <p class="muted" id="sessionName"></p>
+              <p class="muted" id="sessionRole"></p>
             </div>
             <button id="refreshButton">Refresh</button>
           </header>
@@ -159,9 +161,9 @@
                 <label>
                   Role
                   <select name="role">
-                    <option value="catalog_admin">Catalog Admin</option>
-                    <option value="procurement_admin">Procurement Admin</option>
-                    <option value="courier_admin">Courier Admin</option>
+                    <option value="catalog_admin">Admin I</option>
+                    <option value="procurement_admin">Admin II</option>
+                    <option value="courier_admin">Admin III</option>
                     <option value="super_admin">Super Admin</option>
                   </select>
                 </label>
