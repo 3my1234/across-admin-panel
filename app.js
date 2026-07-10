@@ -1,7 +1,9 @@
 const state = {
   apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
   token: localStorage.getItem("across.admin.token") || "",
+  role: localStorage.getItem("across.admin.role") || "",
   products: [],
+  batches: [],
   productSearch: "",
   productLimit: 25,
   activeTab: localStorage.getItem("across.admin.activeTab") || "overview"
@@ -57,7 +59,9 @@ $("loginButton").addEventListener("click", async () => {
       auth: false
     });
     state.token = data.access_token;
+    state.role = data.role || "";
     localStorage.setItem("across.admin.token", state.token);
+    localStorage.setItem("across.admin.role", state.role);
     renderSession();
     await loadDashboard();
   } catch (error) {
@@ -67,6 +71,7 @@ $("loginButton").addEventListener("click", async () => {
 
 $("refreshButton").addEventListener("click", loadDashboard);
 $("reloadProductsButton").addEventListener("click", loadProducts);
+$("reloadBatchesButton").addEventListener("click", loadBatches);
 $("productSearch").addEventListener("input", () => {
   state.productSearch = $("productSearch").value.trim();
   state.productLimit = 25;
@@ -87,12 +92,17 @@ $("editProductForm").addEventListener("submit", saveProductEdits);
 $("editProductForm").elements.image_urls.addEventListener("input", () => {
   renderEditImagePreview(parseImageUrls($("editProductForm").elements.image_urls.value));
 });
+$("closeBatchDialog").addEventListener("click", closeBatchDialog);
+$("cancelBatchButton").addEventListener("click", closeBatchDialog);
+$("editBatchForm").addEventListener("submit", saveBatchEdits);
 
 document.querySelectorAll(".nav-item").forEach((button) => {
   button.addEventListener("click", () => {
     setActiveTab(button.dataset.tab);
     if (button.dataset.tab === "products") {
       loadProducts().catch((error) => setText("catalogStatus", error.message));
+    } else if (button.dataset.tab === "batches") {
+      loadBatches().catch((error) => setText("catalogStatus", error.message));
     }
   });
 });
@@ -104,6 +114,8 @@ document.querySelectorAll(".mobile-nav-item").forEach((button) => {
     setActiveTab(button.dataset.tab);
     if (button.dataset.tab === "products") {
       loadProducts().catch((error) => setText("catalogStatus", error.message));
+    } else if (button.dataset.tab === "batches") {
+      loadBatches().catch((error) => setText("catalogStatus", error.message));
     }
   });
 });
@@ -194,6 +206,7 @@ async function loadDashboard() {
   renderOrderCards(orders.orders);
   renderTransactionCards(transactions.transactions);
   await loadProducts();
+  await loadBatches();
 }
 
 async function loadProducts() {
@@ -201,6 +214,85 @@ async function loadProducts() {
   const data = await request("/api/v1/admin/products");
   state.products = data.products || [];
   renderProductsTable();
+}
+
+async function loadBatches() {
+  setText("batchStatus", "");
+  const data = await request("/api/v1/admin/batches");
+  state.batches = data.batches || [];
+  renderBatchesTable();
+}
+
+function renderBatchesTable() {
+  const table = $("batchesTable");
+  if (!table) return;
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `
+    <tr>
+      <th>Batch</th>
+      <th>Date</th>
+      <th>Status</th>
+      <th>Transport</th>
+      <th>Location</th>
+      <th>Orders</th>
+      <th>Collected</th>
+      <th>Actions</th>
+    </tr>
+  `;
+  const tbody = document.createElement("tbody");
+  if (!state.batches.length) {
+    tbody.innerHTML = `<tr><td colspan="8">No batches yet.</td></tr>`;
+    table.append(thead, tbody);
+    renderBatchCards([]);
+    return;
+  }
+  for (const batch of state.batches) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(batch.batch_code)}</td>
+      <td>${format(batch.batch_date)}</td>
+      <td>${escapeHtml(prettyBatchStatus(batch.status))}</td>
+      <td>${escapeHtml(prettyTransportMode(batch.transport_mode))}</td>
+      <td>${escapeHtml(batch.current_location || "-")}</td>
+      <td>${format(batch.order_count)}</td>
+      <td>${format(batch.total_ngn_collected)}</td>
+      <td class="table-actions">
+        <button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Update</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+  table.querySelectorAll("[data-action='edit-batch']").forEach((button) => {
+    button.addEventListener("click", () => openBatchDialog(button.dataset.id));
+  });
+  renderBatchCards(state.batches);
+}
+
+function renderBatchCards(rows) {
+  const container = $("batchesCards");
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No batches yet.</p></article>`;
+    return;
+  }
+  container.innerHTML = rows
+    .map((batch) => `
+      <article class="mobile-card">
+        <h3 class="mobile-card-title">${escapeHtml(batch.batch_code)}</h3>
+        <p class="mobile-card-meta">${escapeHtml(format(batch.batch_date))} · ${escapeHtml(prettyBatchStatus(batch.status))}</p>
+        <p class="mobile-card-meta">${escapeHtml(prettyTransportMode(batch.transport_mode))} · ${escapeHtml(batch.current_location || "-")}</p>
+        <p class="mobile-card-meta">${format(batch.order_count)} orders · NGN ${format(batch.total_ngn_collected)}</p>
+        <div class="mobile-card-actions">
+          <button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Update</button>
+        </div>
+      </article>
+    `)
+    .join("");
+  container.querySelectorAll("[data-action='edit-batch']").forEach((button) => {
+    button.addEventListener("click", () => openBatchDialog(button.dataset.id));
+  });
 }
 
 function renderProductsTable() {
@@ -403,6 +495,24 @@ function closeEditDialog() {
   $("editProductDialog").close();
 }
 
+function openBatchDialog(batchId) {
+  const batch = state.batches.find((item) => item.id === batchId);
+  if (!batch) return;
+  const form = $("editBatchForm");
+  form.elements.id.value = batch.id;
+  form.elements.status.value = batch.status || "collecting_funds";
+  form.elements.transport_mode.value = batch.transport_mode || "air";
+  form.elements.current_location.value = batch.current_location || "";
+  form.elements.notes.value = batch.notes || "";
+  setText("editBatchMeta", `${batch.batch_code} · ${format(batch.batch_date)} · ${batch.order_count} orders`);
+  setText("editBatchStatus", "");
+  $("editBatchDialog").showModal();
+}
+
+function closeBatchDialog() {
+  $("editBatchDialog").close();
+}
+
 async function saveProductEdits(event) {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -436,6 +546,36 @@ async function saveProductEdits(event) {
   } catch (error) {
     $("editProductStatus").className = "error";
     setText("editProductStatus", error.message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function saveBatchEdits(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  const submitButton = formElement.querySelector('button[type="submit"]');
+  const form = new FormData(formElement);
+  const batchId = String(form.get("id") || "");
+  setText("editBatchStatus", "");
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await request(`/api/v1/admin/batches/${batchId}`, {
+      method: "PATCH",
+      body: {
+        status: String(form.get("status") || ""),
+        transport_mode: String(form.get("transport_mode") || ""),
+        current_location: String(form.get("current_location") || ""),
+        notes: String(form.get("notes") || "")
+      }
+    });
+    closeBatchDialog();
+    await loadBatches();
+    $("catalogStatus").className = "success";
+    setText("catalogStatus", "Batch updated.");
+  } catch (error) {
+    $("editBatchStatus").className = "error";
+    setText("editBatchStatus", error.message);
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
@@ -537,7 +677,7 @@ async function putFile(uploadUrl, file, mimeType) {
 }
 
 function setActiveTab(tab, options = {}) {
-  const knownTabs = new Set(["overview", "products", "orders", "transactions", "admins"]);
+  const knownTabs = new Set(["overview", "products", "orders", "batches", "transactions", "admins"]);
   const nextTab = knownTabs.has(tab) ? tab : "overview";
   state.activeTab = nextTab;
   if (options.persist !== false) {
@@ -549,6 +689,16 @@ function setActiveTab(tab, options = {}) {
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== nextTab);
   });
+}
+
+function prettyBatchStatus(value) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function prettyTransportMode(value) {
+  return String(value || "").toUpperCase();
 }
 
 function parseImageUrls(value) {

@@ -43,6 +43,7 @@
             <button class="nav-item active" data-tab="overview">Overview</button>
             <button class="nav-item" data-tab="products">Products</button>
             <button class="nav-item" data-tab="orders">Orders</button>
+            <button class="nav-item" data-tab="batches">Batches</button>
             <button class="nav-item" data-tab="transactions">Transactions</button>
             <button class="nav-item" data-tab="admins">Admins</button>
           </nav>
@@ -146,7 +147,9 @@
               <label>
                 Role
                 <select name="role">
-                  <option value="admin">Admin</option>
+                  <option value="catalog_admin">Catalog Admin</option>
+                  <option value="procurement_admin">Procurement Admin</option>
+                  <option value="courier_admin">Courier Admin</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
               </label>
@@ -164,6 +167,20 @@
             </section>
           </section>
 
+          <section class="tab-panel hidden" data-panel="batches">
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>Order Batches</h2>
+                  <p class="muted">Grouped order processing, procurement, shipping, and delivery batches.</p>
+                </div>
+                <button type="button" id="reloadBatchesButton" class="secondary-button">Reload batches</button>
+              </div>
+              <div class="table-wrap desktop-only"><table id="batchesTable"></table></div>
+              <div class="mobile-card-list" id="batchesCards"></div>
+            </section>
+          </section>
+
           <section class="tab-panel hidden" data-panel="transactions">
             <section class="panel">
               <h2>Transactions</h2>
@@ -178,6 +195,7 @@
             <button class="mobile-nav-item active" data-tab="overview">Overview</button>
             <button class="mobile-nav-item" data-tab="products">Products</button>
             <button class="mobile-nav-item" data-tab="orders">Orders</button>
+            <button class="mobile-nav-item" data-tab="batches">Batches</button>
             <button class="mobile-nav-item" data-tab="transactions">Transactions</button>
             <button class="mobile-nav-item" data-tab="admins">Admins</button>
           </div>
@@ -215,6 +233,52 @@
           <button type="submit">Save changes</button>
         </div>
         <p class="error" id="editProductStatus"></p>
+      </form>
+    </dialog>
+
+    <dialog id="editBatchDialog" class="modal">
+      <form id="editBatchForm" class="panel modal-panel">
+        <div class="section-head">
+          <h2>Edit Batch</h2>
+          <button type="button" id="closeBatchDialog" class="icon-button" aria-label="Close">Close</button>
+        </div>
+        <input type="hidden" name="id" />
+        <p class="muted" id="editBatchMeta"></p>
+        <div class="form-grid">
+          <label>
+            Status
+            <select name="status" required>
+              <option value="collecting_funds">Collecting Funds</option>
+              <option value="settled">Settled</option>
+              <option value="funds_sent_to_china">Funds Sent to China</option>
+              <option value="purchasing">Purchasing</option>
+              <option value="enroute_nigeria">Enroute Nigeria</option>
+              <option value="arrived_local">Arrived Local</option>
+              <option value="sorted">Sorted</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
+          <label>
+            Transport Mode
+            <select name="transport_mode" required>
+              <option value="air">Air</option>
+              <option value="sea">Sea</option>
+            </select>
+          </label>
+          <label>
+            Current Location
+            <input name="current_location" />
+          </label>
+          <label>
+            Notes
+            <input name="notes" />
+          </label>
+        </div>
+        <div class="action-row">
+          <button type="button" id="cancelBatchButton" class="secondary-button">Cancel</button>
+          <button type="submit">Save changes</button>
+        </div>
+        <p class="error" id="editBatchStatus"></p>
       </form>
     </dialog>
 
