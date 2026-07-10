@@ -4,6 +4,8 @@ const state = {
   role: localStorage.getItem("across.admin.role") || "",
   products: [],
   batches: [],
+  admins: [],
+  users: [],
   productSearch: "",
   productLimit: 25,
   activeTab: localStorage.getItem("across.admin.activeTab") || "overview"
@@ -72,6 +74,7 @@ $("loginButton").addEventListener("click", async () => {
 $("refreshButton").addEventListener("click", loadDashboard);
 $("reloadProductsButton").addEventListener("click", loadProducts);
 $("reloadBatchesButton").addEventListener("click", loadBatches);
+$("reloadAdminsButton").addEventListener("click", loadAdminDirectory);
 $("productSearch").addEventListener("input", () => {
   state.productSearch = $("productSearch").value.trim();
   state.productLimit = 25;
@@ -205,6 +208,7 @@ async function loadDashboard() {
   renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], transactions.transactions);
   renderOrderCards(orders.orders);
   renderTransactionCards(transactions.transactions);
+  await loadAdminDirectory();
   await loadProducts();
   await loadBatches();
 }
@@ -221,6 +225,17 @@ async function loadBatches() {
   const data = await request("/api/v1/admin/batches");
   state.batches = data.batches || [];
   renderBatchesTable();
+}
+
+async function loadAdminDirectory() {
+  const [admins, users] = await Promise.all([
+    request("/api/v1/admin/admins"),
+    request("/api/v1/admin/users")
+  ]);
+  state.admins = admins.admins || [];
+  state.users = users.users || [];
+  renderAdminsTable();
+  renderUsersTable();
 }
 
 function renderBatchesTable() {
@@ -268,6 +283,117 @@ function renderBatchesTable() {
     button.addEventListener("click", () => openBatchDialog(button.dataset.id));
   });
   renderBatchCards(state.batches);
+}
+
+function renderAdminsTable() {
+  const table = $("adminsTable");
+  if (!table) return;
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `
+    <tr>
+      <th>Full Name</th>
+      <th>Email</th>
+      <th>Role</th>
+      <th>Status</th>
+      <th>Created</th>
+    </tr>
+  `;
+  const tbody = document.createElement("tbody");
+  if (!state.admins.length) {
+    tbody.innerHTML = `<tr><td colspan="5">No admins yet.</td></tr>`;
+    table.append(thead, tbody);
+    renderAdminCards([]);
+    return;
+  }
+  for (const admin of state.admins) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(admin.full_name || "-")}</td>
+      <td>${escapeHtml(admin.email || "-")}</td>
+      <td>${escapeHtml(prettyRole(admin.role))}</td>
+      <td>${admin.is_active ? "Active" : "Inactive"}</td>
+      <td>${format(admin.created_at)}</td>
+    `;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+  renderAdminCards(state.admins);
+}
+
+function renderUsersTable() {
+  const table = $("usersTable");
+  if (!table) return;
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `
+    <tr>
+      <th>Full Name</th>
+      <th>Email</th>
+      <th>Phone</th>
+      <th>Country</th>
+      <th>Status</th>
+      <th>Created</th>
+    </tr>
+  `;
+  const tbody = document.createElement("tbody");
+  if (!state.users.length) {
+    tbody.innerHTML = `<tr><td colspan="6">No buyers yet.</td></tr>`;
+    table.append(thead, tbody);
+    renderUserCards([]);
+    return;
+  }
+  for (const user of state.users) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(user.full_name || "-")}</td>
+      <td>${escapeHtml(user.email || "-")}</td>
+      <td>${escapeHtml(user.phone || "-")}</td>
+      <td>${escapeHtml(user.country_code || "-")}</td>
+      <td>${user.is_active ? "Active" : "Inactive"}</td>
+      <td>${format(user.created_at)}</td>
+    `;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+  renderUserCards(state.users);
+}
+
+function renderAdminCards(rows) {
+  const container = $("adminsCards");
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No admins yet.</p></article>`;
+    return;
+  }
+  container.innerHTML = rows
+    .map((admin) => `
+      <article class="mobile-card">
+        <h3 class="mobile-card-title">${escapeHtml(admin.full_name || "-")}</h3>
+        <p class="mobile-card-meta">${escapeHtml(admin.email || "-")} · ${escapeHtml(prettyRole(admin.role))}</p>
+        <p class="mobile-card-meta">${admin.is_active ? "Active" : "Inactive"} · ${format(admin.created_at)}</p>
+      </article>
+    `)
+    .join("");
+}
+
+function renderUserCards(rows) {
+  const container = $("usersCards");
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No buyers yet.</p></article>`;
+    return;
+  }
+  container.innerHTML = rows
+    .map((user) => `
+      <article class="mobile-card">
+        <h3 class="mobile-card-title">${escapeHtml(user.full_name || "-")}</h3>
+        <p class="mobile-card-meta">${escapeHtml(user.email || "-")} · ${escapeHtml(user.phone || "-")}</p>
+        <p class="mobile-card-meta">${escapeHtml(user.country_code || "-")} · ${user.is_active ? "Active" : "Inactive"}</p>
+        <p class="mobile-card-meta">${format(user.created_at)}</p>
+      </article>
+    `)
+    .join("");
 }
 
 function renderBatchCards(rows) {
@@ -692,6 +818,12 @@ function setActiveTab(tab, options = {}) {
 }
 
 function prettyBatchStatus(value) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function prettyRole(value) {
   return String(value || "")
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());

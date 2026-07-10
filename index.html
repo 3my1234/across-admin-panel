@@ -139,24 +139,40 @@
 
           <section class="tab-panel hidden" data-panel="admins">
             <section class="panel">
-            <h2>Create Admin</h2>
-            <form id="adminForm" class="stack">
-              <label>Full name <input name="full_name" required /></label>
-              <label>Email <input name="email" type="email" required /></label>
-              <label>Password <input name="password" type="password" minlength="10" required /></label>
-              <label>
-                Role
-                <select name="role">
-                  <option value="catalog_admin">Catalog Admin</option>
-                  <option value="procurement_admin">Procurement Admin</option>
-                  <option value="courier_admin">Courier Admin</option>
-                  <option value="super_admin">Super Admin</option>
-                </select>
-              </label>
-              <button>Create admin</button>
-              <p class="success" id="adminStatus"></p>
-            </form>
-          </section>
+              <div class="section-head">
+                <div>
+                  <h2>Create Admin</h2>
+                  <p class="muted">Create staff accounts and assign operational roles.</p>
+                </div>
+                <button type="button" id="reloadAdminsButton" class="secondary-button">Reload admins</button>
+              </div>
+              <form id="adminForm" class="stack">
+                <label>Full name <input name="full_name" required /></label>
+                <label>Email <input name="email" type="email" required /></label>
+                <label>Password <input name="password" type="password" minlength="10" required /></label>
+                <label>
+                  Role
+                  <select name="role">
+                    <option value="catalog_admin">Catalog Admin</option>
+                    <option value="procurement_admin">Procurement Admin</option>
+                    <option value="courier_admin">Courier Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+                </label>
+                <button>Create admin</button>
+                <p class="success" id="adminStatus"></p>
+              </form>
+            </section>
+            <section class="panel">
+              <h2>Existing Admins</h2>
+              <div class="table-wrap desktop-only"><table id="adminsTable"></table></div>
+              <div class="mobile-card-list" id="adminsCards"></div>
+            </section>
+            <section class="panel">
+              <h2>Buyer Accounts</h2>
+              <div class="table-wrap desktop-only"><table id="usersTable"></table></div>
+              <div class="mobile-card-list" id="usersCards"></div>
+            </section>
           </section>
 
           <section class="tab-panel hidden" data-panel="orders">
