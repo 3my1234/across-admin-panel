@@ -1194,12 +1194,9 @@ function format(value) {
 }
 
 function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&")
-    .replaceAll("<", "<")
-    .replaceAll(">", ">")
-    .replaceAll('"', """)
-    .replaceAll("'", "&#39;");
+  var s = String(value);
+  var map = {38: "amp", 60: "lt", 62: "gt", 34: "quot", 39: "#39"};
+  return s.replace(/[&<>"']/g, function(m) { return "&" + map[m.charCodeAt(0)] + ";"; });
 }
 
 // ---- Support Tickets ----
