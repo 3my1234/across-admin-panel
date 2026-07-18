@@ -953,9 +953,9 @@ function roleLabel(value) {
 function allowedTabsForRole(role = state.role) {
   switch (role) {
     case "super_admin":
-      return ["overview", "products", "orders", "batches", "transactions", "admins", "users"];
+      return ["overview", "products", "orders", "batches", "transactions", "admins", "support"];
     case "catalog_admin":
-      return ["overview", "products", "orders", "transactions", "admins", "users"];
+      return ["overview", "products", "orders", "transactions", "admins", "support"];
     case "procurement_admin":
     case "courier_admin":
       return ["batches"];
@@ -1195,11 +1195,145 @@ function format(value) {
 
 function escapeHtml(value) {
   return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
+    .replaceAll("&", "&")
+    .replaceAll("<", "<")
+    .replaceAll(">", ">")
+    .replaceAll('"', """)
     .replaceAll("'", "&#39;");
 }
 
+// ---- Support Tickets ----
+let currentTicketId = null;
+
+$("reloadTicketsButton").addEventListener("click", loadTickets);
+$("closeTicketView").addEventListener("click", () => {
+  currentTicketId = null;
+  $("ticketMessages").classList.add("hidden");
+});
+$("sendTicketReply").addEventListener("click", sendTicketReply);
+
+async function loadTickets() {
+  try {
+    const data = await request("/api/v1/admin/support/tickets");
+    renderTicketsTable(data.tickets || []);
+  } catch (error) {
+    setText("ticketStatus", error.message);
+  }
+}
+
+function renderTicketsTable(tickets) {
+  const table = $("ticketsTable");
+  if (!table) return;
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Subject</th><th>User</th><th>Status</th><th>Created</th><th>Actions</th></tr>`;
+  const tbody = document.createElement("tbody");
+  if (!tickets.length) {
+    tbody.innerHTML = `<tr><td colspan="5">No support tickets yet.</td></tr>`;
+    table.append(thead, tbody);
+    renderTicketCards(tickets);
+    return;
+  }
+  for (const ticket of tickets) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(ticket.subject)}</td>
+      <td>${escapeHtml(ticket.user_email)}</td>
+      <td><span class="status-pill ${ticket.status === 'open' ? 'active' : ticket.status === 'responded' ? '' : 'inactive'}">${escapeHtml(ticket.status)}</span></td>
+      <td>${format(ticket.created_at)}</td>
+      <td class="table-actions">
+        <button type="button" class="secondary-button" data-action="view-ticket" data-id="${ticket.id}" data-subject="${escapeHtml(ticket.subject)}">View</button>
+        <button type="button" class="danger-button" data-action="close-ticket" data-id="${ticket.id}">Close</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+  table.querySelectorAll("[data-action='view-ticket']").forEach((btn) => {
+    btn.addEventListener("click", () => openTicketView(btn.dataset.id, btn.dataset.subject));
+  });
+  table.querySelectorAll("[data-action='close-ticket']").forEach((btn) => {
+    btn.addEventListener("click", () => closeTicket(btn.dataset.id));
+  });
+  renderTicketCards(tickets);
+}
+
+function renderTicketCards(tickets) {
+  const container = $("ticketsCards");
+  if (!container) return;
+  if (!tickets.length) {
+    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No support tickets yet.</p></article>`;
+    return;
+  }
+  container.innerHTML = tickets.map(t => `
+    <article class="mobile-card">
+      <h3 class="mobile-card-title">${escapeHtml(t.subject)}</h3>
+      <p class="mobile-card-meta">${escapeHtml(t.user_email)} · <span class="status-pill ${t.status === 'open' ? 'active' : t.status === 'responded' ? '' : 'inactive'}">${escapeHtml(t.status)}</span></p>
+      <p class="mobile-card-meta">${format(t.created_at)}</p>
+      <div class="mobile-card-actions">
+        <button type="button" class="secondary-button" data-action="view-ticket" data-id="${t.id}" data-subject="${escapeHtml(t.subject)}">View</button>
+        <button type="button" class="danger-button" data-action="close-ticket" data-id="${t.id}">Close</button>
+      </div>
+    </article>
+  `).join("");
+  container.querySelectorAll("[data-action='view-ticket']").forEach((btn) => {
+    btn.addEventListener("click", () => openTicketView(btn.dataset.id, btn.dataset.subject));
+  });
+  container.querySelectorAll("[data-action='close-ticket']").forEach((btn) => {
+    btn.addEventListener("click", () => closeTicket(btn.dataset.id));
+  });
+}
+
+async function openTicketView(ticketId, subject) {
+  currentTicketId = ticketId;
+  setText("ticketSubject", subject);
+  $("ticketMessages").classList.remove("hidden");
+  setText("ticketStatus", "");
+  try {
+    const data = await request(`/api/v1/admin/support/tickets/${ticketId}/messages`);
+    const messages = data.messages || [];
+    const container = $("ticketMessagesList");
+    container.innerHTML = messages.map(m => `
+      <div style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
+        <p style="font-weight:700;font-size:12px;color:#66736F;margin-bottom:4px;">${m.sender_type === 'admin' ? 'Admin' : 'User'}</p>
+        <p style="color:#191919;font-size:14px;">${escapeHtml(m.message)}</p>
+        <p style="font-size:11px;color:#8C8C8C;margin-top:4px;">${format(m.created_at)}</p>
+      </div>
+    `).join("");
+  } catch (error) {
+    setText("ticketStatus", error.message);
+  }
+}
+
+async function sendTicketReply() {
+  if (!currentTicketId) return;
+  const message = $("ticketReplyInput").value.trim();
+  if (!message) return;
+  setText("ticketStatus", "");
+  try {
+    await request(`/api/v1/admin/support/tickets/${currentTicketId}/reply`, {
+      method: "POST",
+      body: { message }
+    });
+    $("ticketReplyInput").value = "";
+    await openTicketView(currentTicketId, $("ticketSubject").textContent);
+    await loadTickets();
+  } catch (error) {
+    setText("ticketStatus", error.message);
+  }
+}
+
+async function closeTicket(ticketId) {
+  if (!confirm("Close this ticket?")) return;
+  try {
+    await request(`/api/v1/admin/support/tickets/${ticketId}/close`, { method: "POST" });
+    if (currentTicketId === ticketId) {
+      currentTicketId = null;
+      $("ticketMessages").classList.add("hidden");
+    }
+    await loadTickets();
+  } catch (error) {
+    setText("ticketStatus", error.message);
+  }
+}
 

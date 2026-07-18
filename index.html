@@ -46,6 +46,7 @@
             <button class="nav-item" data-tab="batches">Batches</button>
             <button class="nav-item" data-tab="transactions">Transactions</button>
             <button class="nav-item" data-tab="admins">Admins</button>
+            <button class="nav-item" data-tab="support">Support</button>
           </nav>
         </aside>
 
@@ -215,6 +216,32 @@
               <h2>Transactions</h2>
               <div class="table-wrap desktop-only"><table id="transactionsTable"></table></div>
               <div class="mobile-card-list" id="transactionsCards"></div>
+            </section>
+          </section>
+
+          <section class="tab-panel hidden" data-panel="support">
+            <section class="panel">
+              <div class="section-head">
+                <div>
+                  <h2>Support Tickets</h2>
+                  <p class="muted">View and respond to customer support tickets.</p>
+                </div>
+                <button type="button" id="reloadTicketsButton" class="secondary-button">Reload tickets</button>
+              </div>
+              <div class="table-wrap desktop-only"><table id="ticketsTable"></table></div>
+              <div class="mobile-card-list" id="ticketsCards"></div>
+              <div id="ticketMessages" class="hidden" style="margin-top:16px;padding:16px;background:#F8FBFA;border-radius:8px;border:1px solid #D9E0DD;">
+                <h3 id="ticketSubject">Ticket</h3>
+                <div id="ticketMessagesList"></div>
+                <div class="stack" style="margin-top:12px;">
+                  <textarea id="ticketReplyInput" rows="3" placeholder="Type your reply..." style="width:100%;padding:12px;border:1px solid #D9E0DD;border-radius:8px;"></textarea>
+                  <div class="action-row">
+                    <button type="button" id="closeTicketView" class="secondary-button">Close</button>
+                    <button type="button" id="sendTicketReply">Send Reply</button>
+                  </div>
+                </div>
+                <p class="error" id="ticketStatus"></p>
+              </div>
             </section>
           </section>
         </div>
