@@ -953,9 +953,9 @@ function roleLabel(value) {
 function allowedTabsForRole(role = state.role) {
   switch (role) {
     case "super_admin":
-      return ["overview", "products", "orders", "batches", "transactions", "admins", "support"];
+      return ["overview", "products", "orders", "batches", "transactions", "admins", "support", "analytics", "complaints"];
     case "catalog_admin":
-      return ["overview", "products", "orders", "transactions", "admins", "support"];
+      return ["overview", "products", "orders", "transactions", "admins", "support", "analytics", "complaints"];
     case "procurement_admin":
     case "courier_admin":
       return ["batches"];
@@ -1334,6 +1334,168 @@ async function closeTicket(ticketId) {
     await loadTickets();
   } catch (error) {
     setText("ticketStatus", error.message);
+  }
+}
+
+// ---- Analytics ----
+$("reloadAnalyticsButton").addEventListener("click", loadAnalytics);
+
+async function loadAnalytics() {
+  setText("analyticsSummary", "Loading...");
+  try {
+    const data = await request("/api/v1/admin/analytics/daily-sales");
+    const isSuper = state.role === "super_admin";
+    const daily = data.daily || [];
+    const totalOrders = data.total_orders || 0;
+    const totalRevenue = data.total_revenue || 0;
+
+    setText("analyticsSummary", `Total orders: ${format(totalOrders)}${isSuper ? ' · Total revenue: NGN ' + format(totalRevenue) : ''}`);
+
+    // Stats cards
+    const statsHtml = daily.slice(0, 7).map(d => `
+      <article class="stat">
+        <span>${new Date(d.date).toLocaleDateString()}</span>
+        <strong>${d.order_count} orders</strong>
+        ${isSuper && d.total_revenue ? `<span>NGN ${format(d.total_revenue)}</span>` : ''}
+      </article>
+    `).join("");
+    $("analyticsStats").innerHTML = statsHtml || '<p class="muted">No sales data yet.</p>';
+
+    // Simple bar chart
+    const chartContainer = $("salesChart");
+    if (daily.length === 0) {
+      chartContainer.innerHTML = '<p class="muted">No sales data to chart.</p>';
+      return;
+    }
+    const maxVal = Math.max(...daily.map(d => isSuper ? (d.total_revenue || 0) : d.order_count));
+    chartContainer.innerHTML = '<div style="display:flex;align-items:end;gap:4px;height:180px;padding:8px 0;">' +
+      daily.slice(0, 14).reverse().map(d => {
+        const val = isSuper ? (d.total_revenue || 0) : d.order_count;
+        const pct = maxVal > 0 ? (val / maxVal * 100) : 0;
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;">
+          <div style="width:100%;background:#FF4747;border-radius:4px 4px 0 0;height:${Math.max(pct, 2)}%;min-height:4px;" title="${new Date(d.date).toLocaleDateString()}: ${val}"></div>
+          <span style="font-size:9px;color:#8C8C8C;margin-top:4px;writing-mode:vertical-lr;">${new Date(d.date).toLocaleDateString().slice(0,5)}</span>
+        </div>`;
+      }).join('') + '</div>';
+
+    // Load profit/loss for super admin
+    if (isSuper) {
+      try {
+        const pl = await request("/api/v1/admin/analytics/profit-loss");
+        const entries = pl.profit_loss || [];
+        if (entries.length > 0) {
+          const totalProfit = entries.reduce((s, e) => s + (e.profit || 0), 0);
+          const totalRefunds = entries.reduce((s, e) => s + (e.refunds || 0), 0);
+          chartContainer.innerHTML += `
+            <div class="stats-grid" style="margin-top:16px;">
+              <article class="stat"><span>Net Profit</span><strong style="color:#12805F;">NGN ${format(totalProfit)}</strong></article>
+              <article class="stat"><span>Total Refunds</span><strong style="color:#B42318;">NGN ${format(totalRefunds)}</strong></article>
+              <article class="stat"><span>Complaints</span><strong>${entries.reduce((s, e) => s + (e.complaints || 0), 0)}</strong></article>
+            </div>`;
+        }
+      } catch {}
+    }
+  } catch (error) {
+    setText("analyticsSummary", error.message);
+  }
+}
+
+// ---- Complaints ----
+$("reloadComplaintsButton").addEventListener("click", loadComplaints);
+$("complaintForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  setText("complaintStatus", "");
+  try {
+    await request("/api/v1/admin/analytics/complaints", {
+      method: "POST",
+      body: {
+        order_id: form.get("order_id"),
+        product_id: form.get("product_id"),
+        description: form.get("description"),
+        refund_amount: Number(form.get("refund_amount") || 0)
+      }
+    });
+    event.currentTarget.reset();
+    setText("complaintStatus", "Complaint logged.");
+    $("complaintStatus").className = "success";
+    await loadComplaints();
+  } catch (error) {
+    $("complaintStatus").className = "error";
+    setText("complaintStatus", error.message);
+  }
+});
+
+async function loadComplaints() {
+  try {
+    const data = await request("/api/v1/admin/analytics/complaints");
+    renderComplaintsTable(data.complaints || []);
+  } catch (error) {
+    setText("complaintStatus", error.message);
+  }
+}
+
+function renderComplaintsTable(complaints) {
+  const table = $("complaintsTable");
+  if (!table) return;
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Product</th><th>User</th><th>Description</th><th>Refund</th><th>Status</th><th>Date</th><th>Actions</th></tr>`;
+  const tbody = document.createElement("tbody");
+  if (!complaints.length) {
+    tbody.innerHTML = `<tr><td colspan="7">No complaints yet.</td></tr>`;
+    table.append(thead, tbody);
+    renderComplaintCards(complaints);
+    return;
+  }
+  for (const c of complaints) {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${escapeHtml(c.product_title)}</td>
+      <td>${escapeHtml(c.user_email)}</td>
+      <td>${escapeHtml(c.description)}</td>
+      <td>NGN ${format(c.refund_amount)}</td>
+      <td><span class="status-pill ${c.status === 'resolved' ? 'active' : ''}">${escapeHtml(c.status)}</span></td>
+      <td>${format(c.created_at)}</td>
+      <td class="table-actions">${c.status === 'unresolved' ? `<button type="button" class="secondary-button" data-action="resolve-complaint" data-id="${c.id}">Resolve</button>` : '-'}</td>
+    `;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+  table.querySelectorAll("[data-action='resolve-complaint']").forEach(btn => {
+    btn.addEventListener("click", () => resolveComplaint(btn.dataset.id));
+  });
+  renderComplaintCards(complaints);
+}
+
+function renderComplaintCards(complaints) {
+  const container = $("complaintsCards");
+  if (!container) return;
+  if (!complaints.length) {
+    container.innerHTML = `<article class="mobile-card"><p class="mobile-card-meta">No complaints yet.</p></article>`;
+    return;
+  }
+  container.innerHTML = complaints.map(c => `
+    <article class="mobile-card">
+      <h3 class="mobile-card-title">${escapeHtml(c.product_title)}</h3>
+      <p class="mobile-card-meta">${escapeHtml(c.user_email)} · NGN ${format(c.refund_amount)}</p>
+      <p class="mobile-card-meta">${escapeHtml(c.description)}</p>
+      <p class="mobile-card-meta"><span class="status-pill ${c.status === 'resolved' ? 'active' : ''}">${escapeHtml(c.status)}</span> · ${format(c.created_at)}</p>
+      ${c.status === 'unresolved' ? `<div class="mobile-card-actions"><button type="button" class="secondary-button" data-action="resolve-complaint" data-id="${c.id}">Resolve</button></div>` : ''}
+    </article>
+  `).join("");
+  container.querySelectorAll("[data-action='resolve-complaint']").forEach(btn => {
+    btn.addEventListener("click", () => resolveComplaint(btn.dataset.id));
+  });
+}
+
+async function resolveComplaint(complaintId) {
+  if (!confirm("Mark this complaint as resolved?")) return;
+  try {
+    await request(`/api/v1/admin/analytics/complaints/${complaintId}/resolve`, { method: "POST" });
+    await loadComplaints();
+  } catch (error) {
+    setText("complaintStatus", error.message);
   }
 }
 
