@@ -84,6 +84,15 @@ $("loginButton").addEventListener("click", async () => {
 });
 
 $("refreshButton").addEventListener("click", loadDashboard);
+$("logoutButton").addEventListener("click", () => {
+  state.token = "";
+  state.role = "";
+  state.fullName = "";
+  localStorage.removeItem("across.admin.token");
+  localStorage.removeItem("across.admin.role");
+  localStorage.removeItem("across.admin.fullName");
+  renderSession();
+});
 $("reloadProductsButton").addEventListener("click", loadProducts);
 $("reloadBatchesButton").addEventListener("click", loadBatches);
 $("reloadAdminsButton").addEventListener("click", loadAdminDirectory);
