@@ -247,7 +247,7 @@ async function loadDashboard() {
     $("transactionCount").textContent = transactions.transactions.length;
     $("manifestCount").textContent = manifest.items.length;
     renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], orders.orders);
-    renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], transactions.transactions);
+    renderTable("transactionsTable", ["email", "order_status", "payment_status", "total_amount", "flutterwave_tx_ref", "flutterwave_transaction_id"], transactions.transactions);
     renderOrderCards(orders.orders);
     renderTransactionCards(transactions.transactions);
     await loadProducts();
@@ -256,7 +256,7 @@ async function loadDashboard() {
     $("transactionCount").textContent = "0";
     $("manifestCount").textContent = "0";
     renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], []);
-    renderTable("transactionsTable", ["email", "order_status", "escrow_status", "dispute_status", "total_amount", "flutterwave_tx_ref"], []);
+    renderTable("transactionsTable", ["email", "order_status", "payment_status", "total_amount", "flutterwave_tx_ref", "flutterwave_transaction_id"], []);
     renderOrderCards([]);
     renderTransactionCards([]);
   }
@@ -691,8 +691,8 @@ function renderTransactionCards(rows) {
       (row) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(row.email)}</h3>
-        <p class="mobile-card-meta">${escapeHtml(row.order_status)} Ã‚· escrow ${escapeHtml(row.escrow_status)}</p>
-        <p class="mobile-card-meta">Dispute ${escapeHtml(row.dispute_status)} Ã‚· ${format(row.total_amount)}</p>
+        <p class="mobile-card-meta">${escapeHtml(row.order_status)} - payment ${escapeHtml(row.payment_status)}</p>
+        <p class="mobile-card-meta">${escapeHtml(row.currency)} ${format(row.total_amount)}</p>
         <p class="mobile-card-meta">${escapeHtml(row.flutterwave_tx_ref || "-")}</p>
       </article>
     `
