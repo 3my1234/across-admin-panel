@@ -326,6 +326,8 @@ function renderBatchesTable() {
   }
   for (const batch of state.batches) {
     const row = document.createElement("tr");
+    const isProcurement = isProcurementAdmin() || isSuperAdmin();
+    const isCourier = isCourierAdmin() || isSuperAdmin();
     row.innerHTML = `
       <td>${escapeHtml(batch.batch_code)}</td>
       <td>${format(batch.batch_date)}</td>
@@ -336,6 +338,9 @@ function renderBatchesTable() {
       <td>${format(batch.total_ngn_collected)}</td>
       <td class="table-actions">
         <button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Update</button>
+        ${isProcurement ? `<button type="button" class="secondary-button" data-action="purchase-manifest" data-id="${batch.id}">Manifest</button>` : ''}
+        ${isCourier ? `<button type="button" class="secondary-button" data-action="confirm-arrival" data-id="${batch.id}">Arrival</button>` : ''}
+        ${isCourier ? `<button type="button" class="secondary-button" data-action="confirm-delivered" data-id="${batch.id}">Deliver</button>` : ''}
       </td>
     `;
     tbody.appendChild(row);
@@ -343,6 +348,15 @@ function renderBatchesTable() {
   table.append(thead, tbody);
   table.querySelectorAll("[data-action='edit-batch']").forEach((button) => {
     button.addEventListener("click", () => openBatchDialog(button.dataset.id));
+  });
+  table.querySelectorAll("[data-action='purchase-manifest']").forEach((button) => {
+    button.addEventListener("click", () => openPurchaseManifest(button.dataset.id));
+  });
+  table.querySelectorAll("[data-action='confirm-arrival']").forEach((button) => {
+    button.addEventListener("click", () => openConfirmArrival(button.dataset.id));
+  });
+  table.querySelectorAll("[data-action='confirm-delivered']").forEach((button) => {
+    button.addEventListener("click", () => openConfirmDelivered(button.dataset.id));
   });
   renderBatchCards(state.batches);
 }
@@ -1078,6 +1092,275 @@ function setActiveTab(tab, options = {}) {
     panel.classList.toggle("hidden", panel.dataset.panel !== nextTab || !knownTabs.has(panel.dataset.panel));
   });
 }
+
+// ---- Admin II: Purchase Manifest ----
+let currentManifestBatchId = null;
+
+function openPurchaseManifest(batchId) {
+  currentManifestBatchId = batchId;
+  const batch = state.batches.find(b => b.id === batchId);
+  setText("purchaseManifestMeta", `Loading manifest for ${batch ? batch.batch_code : batchId}...`);
+  $("closeManifestButton").classList.remove("hidden");
+  $("purchaseManifestStatus").className = "success";
+  setText("purchaseManifestStatus", "");
+  void loadPurchaseManifest(batchId);
+}
+
+$("closeManifestButton").addEventListener("click", () => {
+  currentManifestBatchId = null;
+  $("closeManifestButton").classList.add("hidden");
+  setText("purchaseManifestMeta", "Select a batch to view its purchase manifest.");
+  $("purchaseManifestTable").innerHTML = "";
+  $("purchaseManifestCards").innerHTML = "";
+});
+
+async function loadPurchaseManifest(batchId) {
+  try {
+    const data = await request(`/api/v1/admin/batches/${batchId}/purchase-manifest`);
+    const items = data.items || [];
+    const batch = state.batches.find(b => b.id === batchId);
+    setText("purchaseManifestMeta", `${batch ? batch.batch_code : batchId} · ${items.length} item(s)`);
+    renderPurchaseManifest(items);
+  } catch (error) {
+    setText("purchaseManifestMeta", "Failed to load manifest");
+    $("purchaseManifestStatus").className = "error";
+    setText("purchaseManifestStatus", error.message);
+  }
+}
+
+function renderPurchaseManifest(items) {
+  const table = $("purchaseManifestTable");
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Buyer</th><th>SKU</th><th>Title</th><th>Qty</th><th>Price</th><th>Status</th><th>Actions</th></tr>`;
+  const tbody = document.createElement("tbody");
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="7">No items in this batch.</td></tr>`;
+    table.append(thead, tbody);
+    $("purchaseManifestCards").innerHTML = "";
+    return;
+  }
+  for (const item of items) {
+    const row = document.createElement("tr");
+    const status = item.purchase_status || "pending";
+    row.innerHTML = `
+      <td>${escapeHtml(item.buyer_name)}</td>
+      <td>${escapeHtml(item.sku)}</td>
+      <td>${escapeHtml(item.title)}</td>
+      <td>${item.quantity}</td>
+      <td>NGN ${format(item.unit_price)}</td>
+      <td><span class="status-pill ${status === 'purchased' ? 'active' : status === 'failed' ? 'inactive' : ''}">${escapeHtml(status)}</span></td>
+      <td class="table-actions">
+        ${status === 'pending' ? `
+          <button type="button" class="secondary-button" data-action="mark-purchased" data-item-id="${item.item_id}">Purchased</button>
+          <button type="button" class="danger-button" data-action="mark-failed" data-item-id="${item.item_id}">Failed</button>
+        ` : `<span class="muted">${status === 'purchased' ? 'Done' : 'Failed'}</span>`}
+      </td>`;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+
+  // Mobile cards
+  $("purchaseManifestCards").innerHTML = items.map(item => {
+    const status = item.purchase_status || "pending";
+    return `<article class="mobile-card">
+      <h3 class="mobile-card-title">${escapeHtml(item.title)}</h3>
+      <p class="mobile-card-meta">${escapeHtml(item.buyer_name)} · ${item.sku} · ${item.quantity} × NGN ${format(item.unit_price)}</p>
+      <p class="mobile-card-meta"><span class="status-pill ${status === 'purchased' ? 'active' : status === 'failed' ? 'inactive' : ''}">${escapeHtml(status)}</span></p>
+      ${status === 'pending' ? `<div class="mobile-card-actions">
+        <button type="button" class="secondary-button" data-action="mark-purchased" data-item-id="${item.item_id}">Purchased</button>
+        <button type="button" class="danger-button" data-action="mark-failed" data-item-id="${item.item_id}">Failed</button>
+      </div>` : ''}
+    </article>`;
+  }).join("");
+
+  // Attach event listeners
+  table.querySelectorAll("[data-action='mark-purchased']").forEach(btn => {
+    btn.addEventListener("click", () => confirmPurchaseItem(btn.dataset.itemId, "purchased"));
+  });
+  table.querySelectorAll("[data-action='mark-failed']").forEach(btn => {
+    btn.addEventListener("click", () => confirmPurchaseItem(btn.dataset.itemId, "failed"));
+  });
+  $("purchaseManifestCards").querySelectorAll("[data-action='mark-purchased']").forEach(btn => {
+    btn.addEventListener("click", () => confirmPurchaseItem(btn.dataset.itemId, "purchased"));
+  });
+  $("purchaseManifestCards").querySelectorAll("[data-action='mark-failed']").forEach(btn => {
+    btn.addEventListener("click", () => confirmPurchaseItem(btn.dataset.itemId, "failed"));
+  });
+}
+
+async function confirmPurchaseItem(orderItemId, status) {
+  if (!currentManifestBatchId) return;
+  setText("purchaseManifestStatus", "");
+  try {
+    await request(`/api/v1/admin/batches/${currentManifestBatchId}/purchase-confirm`, {
+      method: "POST",
+      body: { items: [{ order_item_id: orderItemId, purchase_status: status, purchase_notes: "" }] }
+    });
+    $("purchaseManifestStatus").className = "success";
+    setText("purchaseManifestStatus", `Item marked as ${status}.`);
+    await loadPurchaseManifest(currentManifestBatchId);
+    await loadBatches();
+  } catch (error) {
+    $("purchaseManifestStatus").className = "error";
+    setText("purchaseManifestStatus", error.message);
+  }
+}
+
+// ---- Admin III: Confirm Arrival ----
+$("confirmArrivalForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const batchId = $("arrivalBatchId").value;
+  if (!batchId) return;
+  setText("confirmArrivalStatus", "");
+  try {
+    await request(`/api/v1/admin/batches/${batchId}/confirm-arrival`, {
+      method: "POST",
+      body: {
+        pickup_location: $("arrivalPickupLocation").value.trim(),
+        pickup_phone: $("arrivalPickupPhone").value.trim(),
+        notes: $("arrivalNotes").value.trim()
+      }
+    });
+    $("confirmArrivalStatus").className = "success";
+    setText("confirmArrivalStatus", "Arrival confirmed! Buyers have been notified.");
+    $("arrivalBatchId").value = "";
+    $("arrivalPickupLocation").value = "";
+    $("arrivalPickupPhone").value = "";
+    $("arrivalNotes").value = "";
+    setText("confirmArrivalMeta", "Mark a batch as arrived at local hub.");
+    await loadBatches();
+  } catch (error) {
+    $("confirmArrivalStatus").className = "error";
+    setText("confirmArrivalStatus", error.message);
+  }
+});
+
+function openConfirmArrival(batchId) {
+  const batch = state.batches.find(b => b.id === batchId);
+  $("arrivalBatchId").value = batchId;
+  setText("confirmArrivalMeta", `Confirm arrival for ${batch ? batch.batch_code : batchId}`);
+  $("arrivalPickupLocation").value = "";
+  $("arrivalPickupPhone").value = "";
+  $("arrivalNotes").value = "";
+  setText("confirmArrivalStatus", "");
+  $("confirmArrivalForm").scrollIntoView({ behavior: "smooth" });
+}
+
+// ---- Admin III: Confirm Delivered ----
+let currentDeliveredBatchId = null;
+let selectedDeliveredOrders = new Set();
+
+function openConfirmDelivered(batchId) {
+  currentDeliveredBatchId = batchId;
+  selectedDeliveredOrders = new Set();
+  const batch = state.batches.find(b => b.id === batchId);
+  setText("confirmDeliveredMeta", `Loading orders for ${batch ? batch.batch_code : batchId}...`);
+  $("confirmDeliveredButton").classList.add("hidden");
+  setText("confirmDeliveredStatus", "");
+  void loadDeliveredOrders(batchId);
+}
+
+async function loadDeliveredOrders(batchId) {
+  try {
+    const data = await request(`/api/v1/admin/batches/${batchId}/orders`);
+    const orders = data.orders || [];
+    const batch = state.batches.find(b => b.id === batchId);
+    setText("confirmDeliveredMeta", `${batch ? batch.batch_code : batchId} · ${orders.length} order(s)`);
+    renderDeliveredOrders(orders);
+  } catch (error) {
+    setText("confirmDeliveredMeta", "Failed to load orders");
+    $("confirmDeliveredStatus").className = "error";
+    setText("confirmDeliveredStatus", error.message);
+  }
+}
+
+function renderDeliveredOrders(orders) {
+  const table = $("deliveredOrdersTable");
+  table.innerHTML = "";
+  const thead = document.createElement("thead");
+  thead.innerHTML = `<tr><th>Select</th><th>Buyer</th><th>Items</th><th>Amount</th><th>Status</th><th>Tracking</th></tr>`;
+  const tbody = document.createElement("tbody");
+  if (!orders.length) {
+    tbody.innerHTML = `<tr><td colspan="6">No orders in this batch.</td></tr>`;
+    table.append(thead, tbody);
+    $("deliveredOrdersCards").innerHTML = "";
+    $("confirmDeliveredButton").classList.add("hidden");
+    return;
+  }
+
+  const deliverable = orders.filter(o => o.current_tracking_stage !== "Delivered" && o.current_tracking_stage !== "Completed");
+  if (deliverable.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6">All orders in this batch are already delivered or completed.</td></tr>`;
+    table.append(thead, tbody);
+    $("deliveredOrdersCards").innerHTML = "";
+    $("confirmDeliveredButton").classList.add("hidden");
+    return;
+  }
+
+  for (const order of deliverable) {
+    const row = document.createElement("tr");
+    const checked = selectedDeliveredOrders.has(order.id) ? "checked" : "";
+    row.innerHTML = `
+      <td><input type="checkbox" data-order-id="${order.id}" ${checked} /></td>
+      <td>${escapeHtml(order.user_name || order.user_email || "-")}</td>
+      <td>${escapeHtml(order.items_summary || `${order.item_count} item(s)`)}</td>
+      <td>NGN ${format(order.total_amount)}</td>
+      <td>${escapeHtml(order.order_status)}</td>
+      <td>${escapeHtml(order.current_tracking_stage || "-")}</td>`;
+    tbody.appendChild(row);
+  }
+  table.append(thead, tbody);
+
+  // Mobile cards
+  $("deliveredOrdersCards").innerHTML = deliverable.map(order => {
+    const checked = selectedDeliveredOrders.has(order.id) ? "checked" : "";
+    return `<article class="mobile-card">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" data-order-id="${order.id}" ${checked} />
+        <div>
+          <h3 class="mobile-card-title">${escapeHtml(order.items_summary || `${order.item_count} item(s)`)}</h3>
+          <p class="mobile-card-meta">${escapeHtml(order.user_name || order.user_email || "-")} · NGN ${format(order.total_amount)}</p>
+          <p class="mobile-card-meta">${escapeHtml(order.order_status)} · ${escapeHtml(order.current_tracking_stage || "-")}</p>
+        </div>
+      </label>
+    </article>`;
+  }).join("");
+
+  // Attach checkbox listeners
+  const updateSelected = () => {
+    const checkboxes = table.querySelectorAll("input[type='checkbox']");
+    selectedDeliveredOrders = new Set();
+    checkboxes.forEach(cb => { if (cb.checked) selectedDeliveredOrders.add(cb.dataset.orderId); });
+    $("confirmDeliveredButton").classList.toggle("hidden", selectedDeliveredOrders.size === 0);
+    $("confirmDeliveredButton").textContent = `Mark ${selectedDeliveredOrders.size} Selected as Delivered`;
+  };
+
+  table.querySelectorAll("input[type='checkbox']").forEach(cb => cb.addEventListener("change", updateSelected));
+  $("deliveredOrdersCards").querySelectorAll("input[type='checkbox']").forEach(cb => cb.addEventListener("change", updateSelected));
+  updateSelected();
+}
+
+$("confirmDeliveredButton").addEventListener("click", async () => {
+  if (selectedDeliveredOrders.size === 0) return;
+  if (!confirm(`Mark ${selectedDeliveredOrders.size} order(s) as delivered?`)) return;
+  setText("confirmDeliveredStatus", "");
+  try {
+    const data = await request("/api/v1/admin/batches/confirm-delivered", {
+      method: "POST",
+      body: { order_ids: Array.from(selectedDeliveredOrders) }
+    });
+    $("confirmDeliveredStatus").className = "success";
+    setText("confirmDeliveredStatus", `${data.count} order(s) marked as delivered. Buyers notified.`);
+    selectedDeliveredOrders = new Set();
+    $("confirmDeliveredButton").classList.add("hidden");
+    if (currentDeliveredBatchId) await loadDeliveredOrders(currentDeliveredBatchId);
+    await loadBatches();
+  } catch (error) {
+    $("confirmDeliveredStatus").className = "error";
+    setText("confirmDeliveredStatus", error.message);
+  }
+});
 
 function prettyBatchStatus(value) {
   return String(value || "")

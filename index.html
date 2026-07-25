@@ -212,6 +212,54 @@
               <div class="table-wrap desktop-only"><table id="batchesTable"></table></div>
               <div class="mobile-card-list" id="batchesCards"></div>
             </section>
+
+            <!-- Admin II: Purchase Manifest -->
+            <section class="panel" id="purchaseManifestPanel">
+              <div class="section-head">
+                <div>
+                  <h2>Purchase Manifest</h2>
+                  <p class="muted" id="purchaseManifestMeta">Select a batch to view its purchase manifest.</p>
+                </div>
+                <button type="button" id="closeManifestButton" class="secondary-button hidden">Close manifest</button>
+              </div>
+              <div class="table-wrap desktop-only"><table id="purchaseManifestTable"></table></div>
+              <div class="mobile-card-list" id="purchaseManifestCards"></div>
+              <p class="success" id="purchaseManifestStatus"></p>
+            </section>
+
+            <!-- Admin III: Confirm Arrival -->
+            <section class="panel" id="confirmArrivalPanel">
+              <div class="section-head">
+                <div>
+                  <h2>Confirm Arrival</h2>
+                  <p class="muted" id="confirmArrivalMeta">Mark a batch as arrived at local hub.</p>
+                </div>
+              </div>
+              <form id="confirmArrivalForm" class="stack">
+                <input type="hidden" name="batch_id" id="arrivalBatchId" />
+                <div class="form-grid">
+                  <label>Pickup Location <input name="pickup_location" id="arrivalPickupLocation" required placeholder="e.g. Lagos Hub" /></label>
+                  <label>Pickup Phone <input name="pickup_phone" id="arrivalPickupPhone" required placeholder="e.g. +234 800 000 0000" /></label>
+                </div>
+                <label>Notes <input name="notes" id="arrivalNotes" placeholder="Optional notes" /></label>
+                <button type="submit">Confirm Arrival</button>
+                <p class="success" id="confirmArrivalStatus"></p>
+              </form>
+            </section>
+
+            <!-- Admin III: Confirm Delivered -->
+            <section class="panel" id="confirmDeliveredPanel">
+              <div class="section-head">
+                <div>
+                  <h2>Mark Orders as Delivered</h2>
+                  <p class="muted" id="confirmDeliveredMeta">Select a batch to mark individual orders as delivered.</p>
+                </div>
+              </div>
+              <div class="table-wrap desktop-only"><table id="deliveredOrdersTable"></table></div>
+              <div class="mobile-card-list" id="deliveredOrdersCards"></div>
+              <button type="button" id="confirmDeliveredButton" class="hidden">Mark Selected as Delivered</button>
+              <p class="success" id="confirmDeliveredStatus"></p>
+            </section>
           </section>
 
           <section class="tab-panel hidden" data-panel="transactions">
