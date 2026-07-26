@@ -237,41 +237,46 @@ async function loadDashboard() {
   state.products = [];
   state.batches = [];
 
-  if (canSeeCommerce) {
-    const [orders, transactions, manifest] = await Promise.all([
-      request("/api/v1/admin/orders"),
-      request("/api/v1/admin/transactions"),
-      request("/api/v1/admin/manifest/pending")
-    ]);
-    $("orderCount").textContent = orders.orders.length;
-    $("transactionCount").textContent = transactions.transactions.length;
-    $("manifestCount").textContent = manifest.items.length;
-    renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], orders.orders);
-    renderTable("transactionsTable", ["email", "order_status", "payment_status", "total_amount", "flutterwave_tx_ref", "flutterwave_transaction_id"], transactions.transactions);
-    renderOrderCards(orders.orders);
-    renderTransactionCards(transactions.transactions);
-    await loadProducts();
-  } else {
-    $("orderCount").textContent = "0";
-    $("transactionCount").textContent = "0";
-    $("manifestCount").textContent = "0";
-    renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], []);
-    renderTable("transactionsTable", ["email", "order_status", "payment_status", "total_amount", "flutterwave_tx_ref", "flutterwave_transaction_id"], []);
-    renderOrderCards([]);
-    renderTransactionCards([]);
-  }
+  try {
+    if (canSeeCommerce) {
+      const [orders, transactions, manifest] = await Promise.all([
+        request("/api/v1/admin/orders"),
+        request("/api/v1/admin/transactions"),
+        request("/api/v1/admin/manifest/pending")
+      ]);
+      if ($("orderCount")) $("orderCount").textContent = orders.orders.length;
+      if ($("transactionCount")) $("transactionCount").textContent = transactions.transactions.length;
+      if ($("manifestCount")) $("manifestCount").textContent = manifest.items.length;
+      renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], orders.orders);
+      renderTable("transactionsTable", ["email", "order_status", "payment_status", "total_amount", "flutterwave_tx_ref", "flutterwave_transaction_id"], transactions.transactions);
+      renderOrderCards(orders.orders);
+      renderTransactionCards(transactions.transactions);
+      await loadProducts();
+    } else {
+      if ($("orderCount")) $("orderCount").textContent = "0";
+      if ($("transactionCount")) $("transactionCount").textContent = "0";
+      if ($("manifestCount")) $("manifestCount").textContent = "0";
+    }
 
-  if (canSeeDirectory) {
-    await loadAdminDirectory();
-  } else {
-    renderAdminsTable();
-    renderUsersTable();
-  }
+    if (canSeeDirectory) {
+      await loadAdminDirectory();
+    } else {
+      renderAdminsTable();
+      renderUsersTable();
+    }
 
-  if (canSeeOps) {
-    await loadBatches();
-  } else {
-    renderBatchesTable();
+    if (canSeeOps) {
+      await loadBatches();
+    } else {
+      renderBatchesTable();
+    }
+  } catch (error) {
+    // Log dashboard errors but don't log the user out
+    console.warn("Dashboard load error:", error.message);
+    if ($("batchStatus")) {
+      $("batchStatus").className = "error";
+      setText("batchStatus", "Some data could not be loaded: " + error.message);
+    }
   }
 }
 
