@@ -137,7 +137,7 @@ document.querySelectorAll(".nav-item").forEach((button) => {
     if (button.dataset.tab === "products") {
       loadProducts().catch((error) => setText("catalogStatus", error.message));
     } else if (button.dataset.tab === "batches") {
-      loadBatches().catch((error) => setText("catalogStatus", error.message));
+      loadBatches().catch((error) => setText("batchStatus", error.message));
     }
   });
 });
@@ -150,7 +150,7 @@ document.querySelectorAll(".mobile-nav-item").forEach((button) => {
     if (button.dataset.tab === "products") {
       loadProducts().catch((error) => setText("catalogStatus", error.message));
     } else if (button.dataset.tab === "batches") {
-      loadBatches().catch((error) => setText("catalogStatus", error.message));
+      loadBatches().catch((error) => setText("batchStatus", error.message));
     }
   });
 });
@@ -284,9 +284,14 @@ async function loadProducts() {
 
 async function loadBatches() {
   setText("batchStatus", "");
-  const data = await request("/api/v1/admin/batches");
-  state.batches = data.batches || [];
-  renderBatchesTable();
+  try {
+    const data = await request("/api/v1/admin/batches");
+    state.batches = data.batches || [];
+    renderBatchesTable();
+  } catch (error) {
+    $("batchStatus").className = "error";
+    setText("batchStatus", error.message);
+  }
 }
 
 async function loadAdminDirectory() {
