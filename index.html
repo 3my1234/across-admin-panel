@@ -4,6 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Atlantic Express Admin</title>
+    <link rel="preconnect" href="https://atlanticexpress-api.sportbanter.online" crossorigin />
+    <link rel="dns-prefetch" href="//atlanticexpress-api.sportbanter.online" />
+    <link rel="icon" href="data:," />
+    <style>
+      html.admin-session-restoring #authPanel,
+      html.admin-session-restoring #dashboard {
+        display: none !important;
+      }
+      html.admin-session-restoring body::before {
+        content: "Restoring secure session…";
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #f7faf9;
+        color: #52605c;
+        font: 600 14px/1.4 system-ui, sans-serif;
+      }
+    </style>
     <script>
       // Runs before first paint so a returning admin never sees the login form
       // while the persisted session is being verified.
@@ -12,6 +31,7 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -500,6 +520,5 @@
       </form>
     </dialog>
 
-    <script src="./app.js"></script>
   </body>
 </html>
