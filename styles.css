@@ -69,6 +69,10 @@ button:hover {
   display: none !important;
 }
 
+.admin-session-restoring #authPanel {
+  display: none !important;
+}
+
 .dashboard {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -267,6 +271,59 @@ textarea {
 
 .table-wrap {
   overflow-x: auto;
+  max-height: min(62vh, 680px);
+  overflow-y: auto;
+  border: 1px solid #e5e9e7;
+  border-radius: 10px;
+}
+
+.table-wrap thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+.list-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 420px) 1fr;
+  gap: 14px;
+  align-items: end;
+  margin: 12px 0;
+}
+
+.list-toolbar .muted {
+  margin: 0 0 10px;
+}
+
+.list-toggle:empty {
+  display: none;
+}
+
+.mobile-card-list {
+  max-height: min(68vh, 720px);
+  overflow-y: auto;
+}
+
+.selection-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.skeleton-line {
+  display: block;
+  width: min(100%, 560px);
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #edf1ef 25%, #f8faf9 50%, #edf1ef 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  to { background-position: -200% 0; }
 }
 
 table {
@@ -601,6 +658,10 @@ th {
   }
 
   .catalog-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .list-toolbar {
     grid-template-columns: 1fr;
   }
 

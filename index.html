@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Atlantic Express Admin</title>
+    <script>
+      // Runs before first paint so a returning admin never sees the login form
+      // while the persisted session is being verified.
+      if (localStorage.getItem("across.admin.token")) {
+        document.documentElement.classList.add("admin-session-restoring");
+      }
+    </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -60,8 +67,10 @@
               <p class="muted" id="sessionName"></p>
               <p class="muted" id="sessionRole"></p>
             </div>
-            <button id="refreshButton">Refresh</button>
-            <button id="logoutButton" class="danger-button" style="margin-left:8px;">Sign out</button>
+            <div class="action-row">
+              <button id="refreshButton">Refresh</button>
+              <button id="logoutButton" class="danger-button">Sign out</button>
+            </div>
           </header>
 
           <section class="tab-panel" data-panel="overview">
@@ -182,21 +191,36 @@
             </section>
             <section class="panel">
               <h2>Existing Admins</h2>
+              <div class="list-toolbar">
+                <input id="adminsSearch" type="search" placeholder="Search admins" autocomplete="off" />
+                <p class="muted" id="adminsSummary"></p>
+              </div>
               <div class="table-wrap desktop-only"><table id="adminsTable"></table></div>
               <div class="mobile-card-list" id="adminsCards"></div>
+              <button type="button" class="secondary-button list-toggle" data-list-toggle="admins"></button>
             </section>
             <section class="panel">
               <h2>Buyer Accounts</h2>
+              <div class="list-toolbar">
+                <input id="usersSearch" type="search" placeholder="Search buyers" autocomplete="off" />
+                <p class="muted" id="usersSummary"></p>
+              </div>
               <div class="table-wrap desktop-only"><table id="usersTable"></table></div>
               <div class="mobile-card-list" id="usersCards"></div>
+              <button type="button" class="secondary-button list-toggle" data-list-toggle="users"></button>
             </section>
           </section>
 
           <section class="tab-panel hidden" data-panel="orders">
             <section class="panel">
               <h2>Recent Orders</h2>
+              <div class="list-toolbar">
+                <input id="ordersSearch" type="search" placeholder="Search orders" autocomplete="off" />
+                <p class="muted" id="ordersSummary"></p>
+              </div>
               <div class="table-wrap desktop-only"><table id="ordersTable"></table></div>
               <div class="mobile-card-list" id="ordersCards"></div>
+              <button type="button" class="secondary-button list-toggle" data-list-toggle="orders"></button>
             </section>
           </section>
 
@@ -209,13 +233,17 @@
                 </div>
                 <button type="button" id="reloadBatchesButton" class="secondary-button">Reload batches</button>
               </div>
+              <div class="list-toolbar">
+                <input id="batchesSearch" type="search" placeholder="Search batches" autocomplete="off" />
+                <p class="muted" id="batchesSummary"></p>
+              </div>
               <p class="error" id="batchStatus"></p>
               <div class="table-wrap desktop-only"><table id="batchesTable"></table></div>
               <div class="mobile-card-list" id="batchesCards"></div>
+              <button type="button" class="secondary-button list-toggle" data-list-toggle="batches"></button>
             </section>
 
-            <!-- Admin II: Purchase Manifest -->
-            <section class="panel" id="purchaseManifestPanel">
+            <section class="panel hidden" id="purchaseManifestPanel">
               <div class="section-head">
                 <div>
                   <h2>Purchase Manifest</h2>
@@ -223,42 +251,52 @@
                 </div>
                 <button type="button" id="closeManifestButton" class="secondary-button hidden">Close manifest</button>
               </div>
+              <div class="list-toolbar">
+                <input id="manifestSearch" type="search" placeholder="Search buyer, SKU, title, or status" autocomplete="off" />
+                <p class="muted" id="manifestSummary"></p>
+              </div>
               <div class="table-wrap desktop-only"><table id="purchaseManifestTable"></table></div>
               <div class="mobile-card-list" id="purchaseManifestCards"></div>
+              <button type="button" id="loadMoreManifestButton" class="secondary-button hidden">Load more</button>
               <p class="success" id="purchaseManifestStatus"></p>
             </section>
 
-            <!-- Admin III: Confirm Arrival -->
-            <section class="panel" id="confirmArrivalPanel">
+            <section class="panel hidden" id="confirmArrivalPanel">
               <div class="section-head">
                 <div>
                   <h2>Confirm Arrival</h2>
-                  <p class="muted" id="confirmArrivalMeta">Mark a batch as arrived at local hub.</p>
+                  <p class="muted" id="confirmArrivalMeta">Select a batch to confirm its arrival.</p>
                 </div>
               </div>
               <form id="confirmArrivalForm" class="stack">
-                <input type="hidden" name="batch_id" id="arrivalBatchId" />
+                <input type="hidden" id="arrivalBatchId" />
                 <div class="form-grid">
-                  <label>Pickup Location <input name="pickup_location" id="arrivalPickupLocation" required placeholder="e.g. Lagos Hub" /></label>
-                  <label>Pickup Phone <input name="pickup_phone" id="arrivalPickupPhone" required placeholder="e.g. +234 800 000 0000" /></label>
+                  <label>Pickup Location <input id="arrivalPickupLocation" required placeholder="e.g. Lagos Hub" /></label>
+                  <label>Pickup Phone <input id="arrivalPickupPhone" required placeholder="e.g. +234 800 000 0000" /></label>
                 </div>
-                <label>Notes <input name="notes" id="arrivalNotes" placeholder="Optional notes" /></label>
-                <button type="submit">Confirm Arrival</button>
+                <label>Notes <input id="arrivalNotes" placeholder="Optional notes" /></label>
+                <button type="submit">Confirm arrival and notify buyers</button>
                 <p class="success" id="confirmArrivalStatus"></p>
               </form>
             </section>
 
-            <!-- Admin III: Confirm Delivered -->
-            <section class="panel" id="confirmDeliveredPanel">
+            <section class="panel hidden" id="confirmDeliveredPanel">
               <div class="section-head">
                 <div>
                   <h2>Mark Orders as Delivered</h2>
-                  <p class="muted" id="confirmDeliveredMeta">Select a batch to mark individual orders as delivered.</p>
+                  <p class="muted" id="confirmDeliveredMeta">Select a batch to load its deliverable orders.</p>
                 </div>
+              </div>
+              <div class="list-toolbar">
+                <input id="deliveredOrdersSearch" type="search" placeholder="Search buyer, package, or status" autocomplete="off" />
+                <p class="muted" id="deliveredOrdersSummary"></p>
               </div>
               <div class="table-wrap desktop-only"><table id="deliveredOrdersTable"></table></div>
               <div class="mobile-card-list" id="deliveredOrdersCards"></div>
-              <button type="button" id="confirmDeliveredButton" class="hidden">Mark Selected as Delivered</button>
+              <div class="action-row">
+                <button type="button" id="loadMoreDeliveredButton" class="secondary-button hidden">Load more</button>
+                <button type="button" id="confirmDeliveredButton" class="hidden">Mark selected as delivered</button>
+              </div>
               <p class="success" id="confirmDeliveredStatus"></p>
             </section>
           </section>
@@ -266,8 +304,13 @@
           <section class="tab-panel hidden" data-panel="transactions">
             <section class="panel">
               <h2>Transactions</h2>
+              <div class="list-toolbar">
+                <input id="transactionsSearch" type="search" placeholder="Search transactions" autocomplete="off" />
+                <p class="muted" id="transactionsSummary"></p>
+              </div>
               <div class="table-wrap desktop-only"><table id="transactionsTable"></table></div>
               <div class="mobile-card-list" id="transactionsCards"></div>
+              <button type="button" class="secondary-button list-toggle" data-list-toggle="transactions"></button>
             </section>
           </section>
 
