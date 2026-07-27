@@ -312,6 +312,11 @@ textarea {
   cursor: pointer;
 }
 
+.draft-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
 .skeleton-line {
   display: block;
   width: min(100%, 560px);

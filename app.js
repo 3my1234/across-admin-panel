@@ -1,6 +1,7 @@
 ﻿const state = {
   apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
   token: localStorage.getItem("across.admin.token") || "",
+  adminId: localStorage.getItem("across.admin.adminId") || "",
   role: localStorage.getItem("across.admin.role") || "",
   fullName: localStorage.getItem("across.admin.fullName") || "",
   products: [],
@@ -75,12 +76,15 @@ $("loginButton").addEventListener("click", async () => {
       auth: false
     });
     state.token = data.access_token;
+    state.adminId = data.admin_id || "";
     state.role = data.role || "";
     state.fullName = data.full_name || "";
     localStorage.setItem("across.admin.token", state.token);
+    localStorage.setItem("across.admin.adminId", state.adminId);
     localStorage.setItem("across.admin.role", state.role);
     localStorage.setItem("across.admin.fullName", state.fullName);
     hydrateAdminCache();
+    initializeAdminDrafts();
     renderSession();
     await loadDashboard({ force: true });
   } catch (error) {
@@ -192,6 +196,7 @@ $("productForm").addEventListener("submit", async (event) => {
       }
     });
     formElement.reset();
+    clearFormDraft(formElement);
     updateSkuPreview();
     $("productStatus").className = "success";
     setText("productStatus", `Product added with SKU ${product.sku}. It will appear in the mobile catalog on refresh.`);
@@ -220,6 +225,7 @@ $("adminForm").addEventListener("submit", async (event) => {
       }
     });
     formElement.reset();
+    clearFormDraft(formElement);
     $("adminStatus").className = "success";
     setText("adminStatus", "Admin created.");
   } catch (error) {
@@ -1046,10 +1052,13 @@ async function restoreSession() {
   try {
     const session = await request("/api/v1/admin/session");
     state.role = session.role || "";
+    state.adminId = session.admin_id || "";
     state.fullName = session.full_name || "";
     localStorage.setItem("across.admin.role", state.role);
+    localStorage.setItem("across.admin.adminId", state.adminId);
     localStorage.setItem("across.admin.fullName", state.fullName);
     hydrateAdminCache();
+    initializeAdminDrafts();
     renderSession();
     await loadDashboard({ force: true });
   } catch (error) {
@@ -1069,12 +1078,14 @@ async function restoreSession() {
 
 function logout() {
   state.token = "";
+  state.adminId = "";
   state.role = "";
   state.fullName = "";
-  for (const key of ["token", "role", "fullName", "activeTab"]) {
+  for (const key of ["token", "adminId", "role", "fullName", "activeTab"]) {
     localStorage.removeItem(`across.admin.${key}`);
   }
   clearAdminCache();
+  clearAdminDrafts();
   renderSession();
 }
 
@@ -1226,6 +1237,106 @@ function renderListFailure(name, error) {
     cards.innerHTML = `<article class="mobile-card"><p class="error">Unable to load data: ${escapeHtml(error.message)}</p></article>`;
   }
   setText(summaryId, "Data unavailable.");
+}
+
+const ADMIN_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const ADMIN_DRAFT_FORM_IDS = ["productForm", "adminForm", "confirmArrivalForm", "complaintForm"];
+
+function adminDraftKey(formId) {
+  return `across.admin.draft.v1:${state.apiUrl}:${state.adminId}:${formId}`;
+}
+
+function isDraftSafeField(field) {
+  const type = String(field.type || "").toLowerCase();
+  const identity = String(field.name || field.id || "").toLowerCase();
+  return !field.disabled
+    && !["password", "file", "hidden", "submit", "button"].includes(type)
+    && !/(password|secret|token|card|cvv|pin)/.test(identity);
+}
+
+function serializeFormDraft(form) {
+  const values = {};
+  for (const field of Array.from(form.elements)) {
+    if (!isDraftSafeField(field)) continue;
+    const key = field.name || field.id;
+    if (!key) continue;
+    values[key] = field.type === "checkbox" ? field.checked : field.value;
+  }
+  return values;
+}
+
+function restoreFormDraft(form) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(adminDraftKey(form.id)) || "null");
+    if (!saved || Date.now() - saved.savedAt > ADMIN_DRAFT_TTL_MS) {
+      localStorage.removeItem(adminDraftKey(form.id));
+      return;
+    }
+    let restored = 0;
+    for (const field of Array.from(form.elements)) {
+      if (!isDraftSafeField(field)) continue;
+      const key = field.name || field.id;
+      if (!key || !(key in saved.values)) continue;
+      if (field.type === "checkbox") field.checked = Boolean(saved.values[key]);
+      else field.value = String(saved.values[key] ?? "");
+      restored += 1;
+    }
+    if (restored) setDraftHint(form, `Draft restored from ${new Date(saved.savedAt).toLocaleString()}.`);
+  } catch {
+    localStorage.removeItem(adminDraftKey(form.id));
+  }
+}
+
+function saveFormDraft(form) {
+  const values = serializeFormDraft(form);
+  const hasContent = Object.values(values).some((value) => value !== "" && value !== false);
+  if (!hasContent) {
+    clearFormDraft(form);
+    return;
+  }
+  try {
+    localStorage.setItem(adminDraftKey(form.id), JSON.stringify({ savedAt: Date.now(), values }));
+    setDraftHint(form, "Draft saved on this device.");
+  } catch {
+    setDraftHint(form, "Draft could not be saved on this device.");
+  }
+}
+
+function clearFormDraft(form) {
+  if (!form?.id || !state.adminId) return;
+  localStorage.removeItem(adminDraftKey(form.id));
+  form.querySelector("[data-draft-hint]")?.remove();
+}
+
+function setDraftHint(form, message) {
+  let hint = form.querySelector("[data-draft-hint]");
+  if (!hint) {
+    hint = document.createElement("p");
+    hint.dataset.draftHint = "true";
+    hint.className = "muted draft-hint";
+    form.appendChild(hint);
+  }
+  hint.textContent = message;
+}
+
+function initializeAdminDrafts() {
+  if (!state.adminId) return;
+  for (const formId of ADMIN_DRAFT_FORM_IDS) {
+    const form = $(formId);
+    if (!form || form.dataset.draftBound === "true") continue;
+    form.dataset.draftBound = "true";
+    restoreFormDraft(form);
+    const persist = debounce(() => saveFormDraft(form), 350);
+    form.addEventListener("input", persist);
+    form.addEventListener("change", persist);
+  }
+}
+
+function clearAdminDrafts() {
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith("across.admin.draft.v1:")) localStorage.removeItem(key);
+  }
 }
 
 function debounce(fn, waitMs) {
@@ -1437,6 +1548,7 @@ $("confirmArrivalForm").addEventListener("submit", async (event) => {
       }
     });
     event.currentTarget.reset();
+    clearFormDraft(event.currentTarget);
     setText("confirmArrivalMeta", "Select a batch to confirm its arrival.");
     setText("confirmArrivalStatus", "Arrival confirmed and buyers notified.");
     await loadNamedList("batches", { reset: true });
@@ -1884,6 +1996,7 @@ $("complaintForm").addEventListener("submit", async (event) => {
       }
     });
     event.currentTarget.reset();
+    clearFormDraft(event.currentTarget);
     setText("complaintStatus", "Complaint logged.");
     $("complaintStatus").className = "success";
     await loadComplaints();
