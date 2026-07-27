@@ -22,6 +22,7 @@
 };
 
 const $ = (id) => document.getElementById(id);
+const CACHE_TTL_MS = 5 * 60 * 1000;
 const setText = (id, value) => {
   const element = $(id);
   if (element) element.textContent = value;
@@ -79,8 +80,9 @@ $("loginButton").addEventListener("click", async () => {
     localStorage.setItem("across.admin.token", state.token);
     localStorage.setItem("across.admin.role", state.role);
     localStorage.setItem("across.admin.fullName", state.fullName);
+    hydrateAdminCache();
     renderSession();
-    await loadDashboard();
+    await loadDashboard({ force: true });
   } catch (error) {
     setText("authError", error.message);
   }
@@ -227,11 +229,20 @@ $("adminForm").addEventListener("submit", async (event) => {
 });
 
 async function loadDashboard({ force = false } = {}) {
+  const results = await Promise.allSettled([
+    loadOverview(),
+    loadTabData(state.activeTab, { force })
+  ]);
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) throw failure.reason;
+}
+
+async function loadOverview() {
   const overview = await request("/api/v1/admin/overview");
   setText("orderCount", overview.order_count ?? 0);
   setText("transactionCount", overview.transaction_count ?? 0);
   setText("manifestCount", overview.manifest_count ?? overview.batch_count ?? 0);
-  await loadTabData(state.activeTab, { force });
+  writeAdminCache("overview", overview);
 }
 
 async function loadTabData(tab, { force = false } = {}) {
@@ -255,7 +266,7 @@ async function loadProducts({ append = false, reset = false } = {}) {
   if (reset) page.cursor = "";
   const seq = ++page.requestSeq;
   page.loading = true;
-  if (!append) setListLoading("products", true);
+  if (!append && !state.products.length) setListLoading("products", true);
   try {
     const params = new URLSearchParams({ limit: "25" });
     if (state.productSearch) params.set("search", state.productSearch);
@@ -267,6 +278,12 @@ async function loadProducts({ append = false, reset = false } = {}) {
     if (!append) page.total = Number(data.page?.total || state.products.length);
     page.hasMore = Boolean(data.page?.has_more);
     renderProductsTable();
+    if (!state.productSearch) {
+      writeAdminCache("products", { rows: state.products, page: { ...page, loading: false } });
+    }
+  } catch (error) {
+    renderListFailure("products", error);
+    throw error;
   } finally {
     if (seq === page.requestSeq) page.loading = false;
   }
@@ -287,7 +304,7 @@ async function loadNamedList(name, { append = false, reset = false } = {}) {
   if (reset) view.cursor = "";
   const seq = ++view.requestSeq;
   view.loading = true;
-  if (!append) setListLoading(name, true);
+  if (!append && !state[name].length) setListLoading(name, true);
   try {
     const [endpoint, key] = listEndpoints[name];
     const params = new URLSearchParams({ limit: "25" });
@@ -300,6 +317,12 @@ async function loadNamedList(name, { append = false, reset = false } = {}) {
     if (!append) view.total = Number(data.page?.total || state[name].length);
     view.hasMore = Boolean(data.page?.has_more);
     renderNamedList(name);
+    if (!view.query) {
+      writeAdminCache(name, { rows: state[name], page: { ...view, loading: false } });
+    }
+  } catch (error) {
+    renderListFailure(name, error);
+    throw error;
   } finally {
     if (seq === view.requestSeq) view.loading = false;
   }
@@ -1026,8 +1049,9 @@ async function restoreSession() {
     state.fullName = session.full_name || "";
     localStorage.setItem("across.admin.role", state.role);
     localStorage.setItem("across.admin.fullName", state.fullName);
+    hydrateAdminCache();
     renderSession();
-    await loadDashboard();
+    await loadDashboard({ force: true });
   } catch (error) {
     if (error.status === 401) {
       logout();
@@ -1050,6 +1074,7 @@ function logout() {
   for (const key of ["token", "role", "fullName", "activeTab"]) {
     localStorage.removeItem(`across.admin.${key}`);
   }
+  clearAdminCache();
   renderSession();
 }
 
@@ -1132,6 +1157,75 @@ function showListError(name, error) {
     $(statusId).className = "error";
     setText(statusId, error.message);
   }
+}
+
+function adminCacheKey(name) {
+  return `across.admin.cache.v1:${state.apiUrl}:${state.role}:${name}`;
+}
+
+function writeAdminCache(name, value) {
+  try {
+    sessionStorage.setItem(adminCacheKey(name), JSON.stringify({ savedAt: Date.now(), value }));
+  } catch {
+    // Cache failures must never block live data.
+  }
+}
+
+function readAdminCache(name) {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(adminCacheKey(name)) || "null");
+    if (!cached || Date.now() - cached.savedAt > CACHE_TTL_MS) return null;
+    return cached.value;
+  } catch {
+    return null;
+  }
+}
+
+function hydrateAdminCache() {
+  const overview = readAdminCache("overview");
+  if (overview) {
+    setText("orderCount", overview.order_count ?? 0);
+    setText("transactionCount", overview.transaction_count ?? 0);
+    setText("manifestCount", overview.manifest_count ?? overview.batch_count ?? 0);
+  }
+  const products = readAdminCache("products");
+  if (products?.rows) {
+    state.products = products.rows;
+    Object.assign(state.productPage, products.page, { loading: false, requestSeq: 0 });
+    renderProductsTable();
+  }
+  for (const name of Object.keys(listEndpoints)) {
+    const cached = readAdminCache(name);
+    if (!cached?.rows) continue;
+    state[name] = cached.rows;
+    Object.assign(state.listViews[name], cached.page, { loading: false, requestSeq: 0 });
+    renderNamedList(name);
+  }
+}
+
+function clearAdminCache() {
+  for (let index = sessionStorage.length - 1; index >= 0; index -= 1) {
+    const key = sessionStorage.key(index);
+    if (key?.startsWith("across.admin.cache.v1:")) sessionStorage.removeItem(key);
+  }
+}
+
+function renderListFailure(name, error) {
+  const rows = name === "products" ? state.products : state[name];
+  const summaryId = name === "products" ? "catalogSummary" : `${name}Summary`;
+  if (rows?.length) {
+    setText(summaryId, `Showing cached data. Refresh failed: ${error.message}`);
+    return;
+  }
+  const table = $(`${name}Table`);
+  if (table) {
+    table.innerHTML = `<tbody><tr><td colspan="9">Unable to load data: ${escapeHtml(error.message)}</td></tr></tbody>`;
+  }
+  const cards = $(`${name}Cards`);
+  if (cards) {
+    cards.innerHTML = `<article class="mobile-card"><p class="error">Unable to load data: ${escapeHtml(error.message)}</p></article>`;
+  }
+  setText(summaryId, "Data unavailable.");
 }
 
 function debounce(fn, waitMs) {
