@@ -1006,6 +1006,12 @@ function roleLabel(value) {
   }
 }
 
+function sessionRoleLabel(value) {
+  const role = String(value || "").trim().toLowerCase();
+  if (!role) return "";
+  return `${roleLabel(role)} · ${role}`;
+}
+
 function allowedTabsForRole(role = state.role) {
   switch (role) {
     case "super_admin":
@@ -1034,7 +1040,7 @@ function configureRoleUi() {
   const sessionName = $("sessionName");
   const sessionRole = $("sessionRole");
   if (sessionName) sessionName.textContent = state.fullName || "Signed in";
-  if (sessionRole) sessionRole.textContent = roleLabel(state.role);
+  if (sessionRole) sessionRole.textContent = sessionRoleLabel(state.role);
   setActiveTab(state.activeTab, { persist: false });
 }
 
