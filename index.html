@@ -281,25 +281,6 @@
               <p class="success" id="purchaseManifestStatus"></p>
             </section>
 
-            <section class="panel hidden" id="confirmArrivalPanel">
-              <div class="section-head">
-                <div>
-                  <h2>Confirm Arrival</h2>
-                  <p class="muted" id="confirmArrivalMeta">Select a batch to confirm its arrival.</p>
-                </div>
-              </div>
-              <form id="confirmArrivalForm" class="stack">
-                <input type="hidden" id="arrivalBatchId" />
-                <div class="form-grid">
-                  <label>Pickup Location <input id="arrivalPickupLocation" required placeholder="e.g. Lagos Hub" /></label>
-                  <label>Pickup Phone <input id="arrivalPickupPhone" required placeholder="e.g. +234 800 000 0000" /></label>
-                </div>
-                <label>Notes <input id="arrivalNotes" placeholder="Optional notes" /></label>
-                <button type="submit">Confirm arrival and notify buyers</button>
-                <p class="success" id="confirmArrivalStatus"></p>
-              </form>
-            </section>
-
             <section class="panel hidden" id="confirmDeliveredPanel">
               <div class="section-head">
                 <div>
@@ -461,19 +442,6 @@
         <p class="muted" id="editBatchMeta"></p>
         <div class="form-grid">
           <label>
-            Status
-            <select name="status" required>
-              <option value="collecting_funds">Collecting Funds</option>
-              <option value="settled">Settled</option>
-              <option value="funds_sent_to_china">Funds Sent to China</option>
-              <option value="purchasing">Purchasing</option>
-              <option value="enroute_nigeria">Enroute Nigeria</option>
-              <option value="arrived_local">Arrived Local</option>
-              <option value="sorted">Sorted</option>
-              <option value="completed">Completed</option>
-            </select>
-          </label>
-          <label>
             Transport Mode
             <select name="transport_mode" required>
               <option value="air">Air</option>
@@ -494,6 +462,59 @@
           <button type="submit">Save changes</button>
         </div>
         <p class="error" id="editBatchStatus"></p>
+      </form>
+    </dialog>
+
+    <dialog id="batchTransitionDialog" class="modal">
+      <form id="batchTransitionForm" class="panel modal-panel">
+        <div class="section-head">
+          <div>
+            <h2 id="batchTransitionTitle">Advance Batch</h2>
+            <p class="muted" id="batchTransitionMeta"></p>
+          </div>
+          <button type="button" id="closeBatchTransitionDialog" class="icon-button" aria-label="Close">Close</button>
+        </div>
+        <input type="hidden" name="batch_id" />
+        <input type="hidden" name="action" />
+        <input type="hidden" name="expected_version" />
+        <div class="form-grid">
+          <label class="hidden" id="transitionAmountField">
+            Amount transferred
+            <input name="amount" type="number" min="0.01" step="0.01" />
+          </label>
+          <label class="hidden" id="transitionCurrencyField">
+            Currency
+            <select name="currency">
+              <option value="NGN">NGN</option>
+              <option value="CNY">CNY</option>
+            </select>
+          </label>
+          <label class="hidden" id="transitionReferenceField">
+            Transfer reference
+            <input name="reference" autocomplete="off" />
+          </label>
+          <label class="hidden" id="transitionLocationField">
+            Arrival location
+            <input name="location" placeholder="e.g. Lagos Hub" />
+          </label>
+          <label class="hidden" id="transitionPickupLocationField">
+            Pickup location
+            <input name="pickup_location" placeholder="e.g. Lagos Hub" />
+          </label>
+          <label class="hidden" id="transitionPickupPhoneField">
+            Pickup phone
+            <input name="pickup_phone" placeholder="e.g. +234 800 000 0000" />
+          </label>
+        </div>
+        <label>
+          Operational notes
+          <textarea name="notes" rows="3" placeholder="Optional context recorded in the batch audit trail"></textarea>
+        </label>
+        <div class="action-row">
+          <button type="button" id="cancelBatchTransitionButton" class="secondary-button">Cancel</button>
+          <button type="submit" id="submitBatchTransitionButton">Confirm action</button>
+        </div>
+        <p class="error" id="batchTransitionStatus"></p>
       </form>
     </dialog>
 

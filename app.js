@@ -132,6 +132,9 @@ $("editProductForm").elements.image_urls.addEventListener("input", () => {
 $("closeBatchDialog").addEventListener("click", closeBatchDialog);
 $("cancelBatchButton").addEventListener("click", closeBatchDialog);
 $("editBatchForm").addEventListener("submit", saveBatchEdits);
+$("closeBatchTransitionDialog").addEventListener("click", closeBatchTransitionDialog);
+$("cancelBatchTransitionButton").addEventListener("click", closeBatchTransitionDialog);
+$("batchTransitionForm").addEventListener("submit", submitBatchTransition);
 $("closeResetAdminDialog").addEventListener("click", closeResetAdminDialog);
 $("cancelResetAdminButton").addEventListener("click", closeResetAdminDialog);
 $("resetAdminForm").addEventListener("submit", saveResetAdminPassword);
@@ -359,13 +362,14 @@ function renderBatchesTable() {
       <th>Location</th>
       <th>Orders</th>
       <th>Collected</th>
+      <th>Procurement Funds</th>
       <th>Actions</th>
     </tr>
   `;
   const tbody = document.createElement("tbody");
   const batches = state.batches;
   if (!batches.length) {
-    tbody.innerHTML = `<tr><td colspan="8">No batches yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9">No batches yet.</td></tr>`;
     table.append(thead, tbody);
     renderBatchCards([]);
     updateListControls("batches", state.batches);
@@ -373,8 +377,6 @@ function renderBatchesTable() {
   }
   for (const batch of batches) {
     const row = document.createElement("tr");
-    const canProcure = isProcurementAdmin() || isSuperAdmin();
-    const canDeliver = isCourierAdmin() || isSuperAdmin();
     row.innerHTML = `
       <td>${escapeHtml(batch.batch_code)}</td>
       <td>${format(batch.batch_date)}</td>
@@ -383,11 +385,12 @@ function renderBatchesTable() {
       <td>${escapeHtml(batch.current_location || "-")}</td>
       <td>${format(batch.order_count)}</td>
       <td>${format(batch.total_ngn_collected)}</td>
+      <td>${batch.procurement_funds_amount
+        ? `${escapeHtml(batch.procurement_funds_currency || "NGN")} ${format(batch.procurement_funds_amount)} · ${escapeHtml(batch.procurement_funds_reference || "-")}`
+        : "-"}</td>
       <td class="table-actions">
-        <button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Update</button>
-        ${canProcure ? `<button type="button" class="secondary-button" data-action="purchase-manifest" data-id="${batch.id}">Manifest</button>` : ""}
-        ${canDeliver ? `<button type="button" class="secondary-button" data-action="confirm-arrival" data-id="${batch.id}">Arrival</button>` : ""}
-        ${canDeliver ? `<button type="button" class="secondary-button" data-action="confirm-delivered" data-id="${batch.id}">Deliver</button>` : ""}
+        ${isSuperAdmin() ? `<button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Details</button>` : ""}
+        ${renderBatchActionButtons(batch)}
       </td>
     `;
     tbody.appendChild(row);
@@ -569,19 +572,18 @@ function renderBatchCards(rows) {
   }
   container.innerHTML = rows
     .map((batch) => {
-      const canProcure = isProcurementAdmin() || isSuperAdmin();
-      const canDeliver = isCourierAdmin() || isSuperAdmin();
       return `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(batch.batch_code)}</h3>
         <p class="mobile-card-meta">${escapeHtml(format(batch.batch_date))} · ${escapeHtml(prettyBatchStatus(batch.status))}</p>
         <p class="mobile-card-meta">${escapeHtml(prettyTransportMode(batch.transport_mode))} · ${escapeHtml(batch.current_location || "-")}</p>
         <p class="mobile-card-meta">${format(batch.order_count)} orders · NGN ${format(batch.total_ngn_collected)}</p>
+        ${batch.procurement_funds_amount
+          ? `<p class="mobile-card-meta">Procurement funds: ${escapeHtml(batch.procurement_funds_currency || "NGN")} ${format(batch.procurement_funds_amount)} · ${escapeHtml(batch.procurement_funds_reference || "-")}</p>`
+          : ""}
         <div class="mobile-card-actions">
-           <button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Update</button>
-           ${canProcure ? `<button type="button" class="secondary-button" data-action="purchase-manifest" data-id="${batch.id}">Manifest</button>` : ""}
-           ${canDeliver ? `<button type="button" class="secondary-button" data-action="confirm-arrival" data-id="${batch.id}">Arrival</button>` : ""}
-           ${canDeliver ? `<button type="button" class="secondary-button" data-action="confirm-delivered" data-id="${batch.id}">Deliver</button>` : ""}
+           ${isSuperAdmin() ? `<button type="button" class="secondary-button" data-action="edit-batch" data-id="${batch.id}">Details</button>` : ""}
+           ${renderBatchActionButtons(batch)}
          </div>
        </article>
     `;
@@ -777,7 +779,6 @@ function openBatchDialog(batchId) {
   if (!batch) return;
   const form = $("editBatchForm");
   form.elements.id.value = batch.id;
-  form.elements.status.value = batch.status || "collecting_funds";
   form.elements.transport_mode.value = batch.transport_mode || "air";
   form.elements.current_location.value = batch.current_location || "";
   form.elements.notes.value = batch.notes || "";
@@ -860,7 +861,6 @@ async function saveBatchEdits(event) {
     await request(`/api/v1/admin/batches/${batchId}`, {
       method: "PATCH",
       body: {
-        status: String(form.get("status") || ""),
         transport_mode: String(form.get("transport_mode") || ""),
         current_location: String(form.get("current_location") || ""),
         notes: String(form.get("notes") || "")
@@ -1017,7 +1017,7 @@ function allowedTabsForRole(role = state.role) {
     case "super_admin":
       return ["overview", "products", "orders", "batches", "transactions", "admins", "support", "analytics", "complaints"];
     case "catalog_admin":
-      return ["overview", "products", "orders", "transactions", "admins", "support", "analytics", "complaints"];
+      return ["overview", "products", "orders", "batches", "transactions", "admins", "support", "analytics", "complaints"];
     case "procurement_admin":
     case "courier_admin":
       return ["batches"];
@@ -1035,7 +1035,6 @@ function configureRoleUi() {
     panel.classList.toggle("hidden", !allowedTabs.has(panel.dataset.panel));
   });
   $("purchaseManifestPanel")?.classList.toggle("hidden", !(isProcurementAdmin() || isSuperAdmin()));
-  $("confirmArrivalPanel")?.classList.toggle("hidden", !(isCourierAdmin() || isSuperAdmin()));
   $("confirmDeliveredPanel")?.classList.toggle("hidden", !(isCourierAdmin() || isSuperAdmin()));
   const sessionName = $("sessionName");
   const sessionRole = $("sessionRole");
@@ -1246,7 +1245,7 @@ function renderListFailure(name, error) {
 }
 
 const ADMIN_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const ADMIN_DRAFT_FORM_IDS = ["productForm", "adminForm", "confirmArrivalForm", "complaintForm"];
+const ADMIN_DRAFT_FORM_IDS = ["productForm", "adminForm", "complaintForm"];
 
 function adminDraftKey(formId) {
   return `across.admin.draft.v1:${state.apiUrl}:${state.adminId}:${formId}`;
@@ -1415,16 +1414,117 @@ const manifestView = { batchId: "", items: [], cursor: "", total: 0, hasMore: fa
 const deliveryView = { batchId: "", orders: [], cursor: "", total: 0, hasMore: false, query: "", loading: false };
 const selectedDeliveredOrders = new Set();
 
+const batchActionDefinitions = {
+  collecting_funds: [{ action: "close_collection", label: "Close collection", roles: ["catalog_admin"] }],
+  closed: [{ action: "reconcile", label: "Reconcile payments", roles: ["catalog_admin"] }],
+  settled: [{ action: "send_procurement_funds", label: "Send procurement funds", roles: ["super_admin"] }],
+  funds_sent_to_procurement: [{ action: "acknowledge_procurement_funds", label: "Acknowledge funds", roles: ["procurement_admin"] }],
+  procurement_acknowledged: [{ action: "start_procurement", label: "Start procurement", roles: ["procurement_admin"] }],
+  purchasing: [{ action: "complete_procurement", label: "Complete procurement", roles: ["procurement_admin"] }],
+  procurement_complete: [{ action: "dispatch", label: "Dispatch from China", roles: ["procurement_admin"] }],
+  enroute_nigeria: [{ action: "confirm_arrival", label: "Confirm arrival", roles: ["courier_admin"] }],
+  arrived_local: [{ action: "ready_for_pickup", label: "Ready for pickup", roles: ["courier_admin"] }]
+};
+
+function canUseBatchAction(definition) {
+  return isSuperAdmin() || definition.roles.includes(state.role);
+}
+
+function renderBatchActionButtons(batch) {
+  const definitions = batchActionDefinitions[batch.status] || [];
+  const transitionButtons = definitions
+    .filter(canUseBatchAction)
+    .map((definition) => `<button type="button" data-batch-transition="${definition.action}" data-id="${batch.id}">${escapeHtml(definition.label)}</button>`);
+  const canViewManifest = (isProcurementAdmin() || isSuperAdmin())
+    && ["procurement_acknowledged", "purchasing", "procurement_complete", "enroute_nigeria", "arrived_local", "ready_for_pickup", "completed"].includes(batch.status);
+  if (canViewManifest) {
+    transitionButtons.push(`<button type="button" class="secondary-button" data-action="purchase-manifest" data-id="${batch.id}">Manifest</button>`);
+  }
+  if ((isCourierAdmin() || isSuperAdmin()) && batch.status === "ready_for_pickup") {
+    transitionButtons.push(`<button type="button" class="secondary-button" data-action="confirm-delivered" data-id="${batch.id}">Deliver</button>`);
+  }
+  return transitionButtons.join("");
+}
+
 function bindBatchWorkflowButtons(root) {
+  root.querySelectorAll("[data-batch-transition]").forEach((button) => {
+    button.addEventListener("click", () => openBatchTransitionDialog(button.dataset.id, button.dataset.batchTransition));
+  });
   root.querySelectorAll("[data-action='purchase-manifest']").forEach((button) => {
     button.addEventListener("click", () => openPurchaseManifest(button.dataset.id));
-  });
-  root.querySelectorAll("[data-action='confirm-arrival']").forEach((button) => {
-    button.addEventListener("click", () => openConfirmArrival(button.dataset.id));
   });
   root.querySelectorAll("[data-action='confirm-delivered']").forEach((button) => {
     button.addEventListener("click", () => openConfirmDelivered(button.dataset.id));
   });
+}
+
+function openBatchTransitionDialog(batchId, action) {
+  const batch = state.batches.find((item) => item.id === batchId);
+  const definition = (batchActionDefinitions[batch?.status] || []).find((item) => item.action === action);
+  if (!batch || !definition || !canUseBatchAction(definition)) return;
+  const form = $("batchTransitionForm");
+  form.reset();
+  form.elements.batch_id.value = batch.id;
+  form.elements.action.value = action;
+  form.elements.expected_version.value = String(batch.version || 0);
+  setText("batchTransitionTitle", definition.label);
+  setText("batchTransitionMeta", `${batch.batch_code} · ${prettyBatchStatus(batch.status)} · version ${batch.version || 1}`);
+  setText("batchTransitionStatus", "");
+  const needsFunds = action === "send_procurement_funds";
+  const needsArrival = action === "confirm_arrival";
+  const needsPickup = action === "ready_for_pickup";
+  $("transitionAmountField").classList.toggle("hidden", !needsFunds);
+  $("transitionCurrencyField").classList.toggle("hidden", !needsFunds);
+  $("transitionReferenceField").classList.toggle("hidden", !needsFunds);
+  $("transitionLocationField").classList.toggle("hidden", !needsArrival);
+  $("transitionPickupLocationField").classList.toggle("hidden", !needsPickup);
+  $("transitionPickupPhoneField").classList.toggle("hidden", !needsPickup);
+  form.elements.amount.required = needsFunds;
+  form.elements.reference.required = needsFunds;
+  form.elements.location.required = needsArrival;
+  form.elements.pickup_location.required = needsPickup;
+  form.elements.pickup_phone.required = needsPickup;
+  $("submitBatchTransitionButton").textContent = definition.label;
+  $("batchTransitionDialog").showModal();
+}
+
+function closeBatchTransitionDialog() {
+  $("batchTransitionDialog").close();
+}
+
+async function submitBatchTransition(event) {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  const submitButton = formElement.querySelector('button[type="submit"]');
+  const form = new FormData(formElement);
+  const batchId = String(form.get("batch_id") || "");
+  if (!batchId) return;
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await request(`/api/v1/admin/batches/${batchId}/transitions`, {
+      method: "POST",
+      body: {
+        action: String(form.get("action") || ""),
+        expected_version: Number(form.get("expected_version") || 0),
+        amount: Number(form.get("amount") || 0),
+        currency: String(form.get("currency") || "NGN"),
+        reference: String(form.get("reference") || "").trim(),
+        location: String(form.get("location") || "").trim(),
+        pickup_location: String(form.get("pickup_location") || "").trim(),
+        pickup_phone: String(form.get("pickup_phone") || "").trim(),
+        notes: String(form.get("notes") || "").trim()
+      }
+    });
+    closeBatchTransitionDialog();
+    await loadNamedList("batches", { reset: true });
+    $("batchStatus").className = "success";
+    setText("batchStatus", "Batch advanced successfully.");
+  } catch (error) {
+    $("batchTransitionStatus").className = "error";
+    setText("batchTransitionStatus", error.message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 function batchLabel(batchId) {
@@ -1464,31 +1564,39 @@ async function loadPurchaseManifest({ append = false, reset = false } = {}) {
 function renderPurchaseManifest() {
   const items = manifestView.items;
   const table = $("purchaseManifestTable");
+  const activeBatch = state.batches.find((batch) => batch.id === manifestView.batchId);
+  const canEditManifest = activeBatch?.status === "purchasing";
   const rows = items.map((item) => {
     const status = item.purchase_status || "pending";
+    const resolution = item.exception_resolution || "none";
+    const canResolve = canEditManifest && status === "failed" && ["none", "pending"].includes(resolution);
     return `<tr>
       <td>${escapeHtml(item.buyer_name)}</td><td>${escapeHtml(item.sku)}</td>
       <td>${escapeHtml(item.title)}</td><td>${format(item.quantity)}</td>
       <td>NGN ${format(item.unit_price)}</td>
       <td><span class="status-pill ${status === "purchased" ? "active" : status === "failed" ? "inactive" : ""}">${escapeHtml(status)}</span></td>
-      <td>${status === "pending" ? `<div class="table-actions">
+      <td>${escapeHtml(status === "failed" ? `${resolution}: ${item.purchase_notes || ""}` : "-")}</td>
+      <td>${canEditManifest && status === "pending" ? `<div class="table-actions">
         <button type="button" class="secondary-button" data-purchase-status="purchased" data-item-id="${item.item_id}">Purchased</button>
         <button type="button" class="danger-button" data-purchase-status="failed" data-item-id="${item.item_id}">Failed</button>
-      </div>` : "Done"}</td>
+      </div>` : canResolve ? `<button type="button" class="secondary-button" data-purchase-status="failed" data-item-id="${item.item_id}">Resolve exception</button>` : "Done"}</td>
     </tr>`;
   }).join("");
-  table.innerHTML = `<thead><tr><th>Buyer</th><th>SKU</th><th>Title</th><th>Qty</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>${rows || `<tr><td colspan="7">No matching manifest items.</td></tr>`}</tbody>`;
+  table.innerHTML = `<thead><tr><th>Buyer</th><th>SKU</th><th>Title</th><th>Qty</th><th>Price</th><th>Status</th><th>Exception</th><th>Actions</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="8">No matching manifest items.</td></tr>`}</tbody>`;
   $("purchaseManifestCards").innerHTML = items.map((item) => {
     const status = item.purchase_status || "pending";
+    const resolution = item.exception_resolution || "none";
+    const canResolve = canEditManifest && status === "failed" && ["none", "pending"].includes(resolution);
     return `<article class="mobile-card">
       <h3 class="mobile-card-title">${escapeHtml(item.title)}</h3>
       <p class="mobile-card-meta">${escapeHtml(item.buyer_name)} · ${escapeHtml(item.sku)} · ${format(item.quantity)} × NGN ${format(item.unit_price)}</p>
       <p class="mobile-card-meta">${escapeHtml(status)}</p>
-      ${status === "pending" ? `<div class="mobile-card-actions">
+      ${status === "failed" ? `<p class="mobile-card-meta">${escapeHtml(`${resolution}: ${item.purchase_notes || ""}`)}</p>` : ""}
+      ${canEditManifest && status === "pending" ? `<div class="mobile-card-actions">
         <button type="button" class="secondary-button" data-purchase-status="purchased" data-item-id="${item.item_id}">Purchased</button>
         <button type="button" class="danger-button" data-purchase-status="failed" data-item-id="${item.item_id}">Failed</button>
-      </div>` : ""}
+      </div>` : canResolve ? `<div class="mobile-card-actions"><button type="button" class="secondary-button" data-purchase-status="failed" data-item-id="${item.item_id}">Resolve exception</button></div>` : ""}
     </article>`;
   }).join("");
   for (const root of [table, $("purchaseManifestCards")]) {
@@ -1502,10 +1610,31 @@ function renderPurchaseManifest() {
 }
 
 async function confirmPurchaseItem(itemId, purchaseStatus) {
+  let purchaseNotes = "";
+  let exceptionResolution = "none";
+  if (purchaseStatus === "failed") {
+    purchaseNotes = window.prompt("Why could this item not be procured?")?.trim() || "";
+    if (!purchaseNotes) return;
+    exceptionResolution = window.prompt(
+      "Resolution: pending, refunded, substituted, or cancelled",
+      "pending"
+    )?.trim().toLowerCase() || "";
+    if (!["pending", "refunded", "substituted", "cancelled"].includes(exceptionResolution)) {
+      showManifestError(new Error("Choose pending, refunded, substituted, or cancelled."));
+      return;
+    }
+  }
   try {
     await request(`/api/v1/admin/batches/${manifestView.batchId}/purchase-confirm`, {
       method: "POST",
-      body: { items: [{ order_item_id: itemId, purchase_status: purchaseStatus, purchase_notes: "" }] }
+      body: {
+        items: [{
+          order_item_id: itemId,
+          purchase_status: purchaseStatus,
+          purchase_notes: purchaseNotes,
+          exception_resolution: exceptionResolution
+        }]
+      }
     });
     setText("purchaseManifestStatus", `Item marked as ${purchaseStatus}.`);
     await loadPurchaseManifest({ reset: true });
@@ -1532,37 +1661,6 @@ $("manifestSearch").addEventListener("input", debounce(() => {
   manifestView.query = $("manifestSearch").value.trim();
   loadPurchaseManifest({ reset: true }).catch(showManifestError);
 }, 250));
-
-function openConfirmArrival(batchId) {
-  $("arrivalBatchId").value = batchId;
-  setText("confirmArrivalMeta", `Confirm arrival for ${batchLabel(batchId)}.`);
-  setText("confirmArrivalStatus", "");
-  $("confirmArrivalPanel").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-$("confirmArrivalForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const batchId = $("arrivalBatchId").value;
-  if (!batchId) return;
-  try {
-    await request(`/api/v1/admin/batches/${batchId}/confirm-arrival`, {
-      method: "POST",
-      body: {
-        pickup_location: $("arrivalPickupLocation").value.trim(),
-        pickup_phone: $("arrivalPickupPhone").value.trim(),
-        notes: $("arrivalNotes").value.trim()
-      }
-    });
-    event.currentTarget.reset();
-    clearFormDraft(event.currentTarget);
-    setText("confirmArrivalMeta", "Select a batch to confirm its arrival.");
-    setText("confirmArrivalStatus", "Arrival confirmed and buyers notified.");
-    await loadNamedList("batches", { reset: true });
-  } catch (error) {
-    $("confirmArrivalStatus").className = "error";
-    setText("confirmArrivalStatus", error.message);
-  }
-});
 
 function openConfirmDelivered(batchId) {
   deliveryView.batchId = batchId;
@@ -1643,7 +1741,7 @@ $("confirmDeliveredButton").addEventListener("click", async () => {
   try {
     const data = await request("/api/v1/admin/batches/confirm-delivered", {
       method: "POST",
-      body: { order_ids: [...selectedDeliveredOrders] }
+      body: { batch_id: deliveryView.batchId, order_ids: [...selectedDeliveredOrders] }
     });
     selectedDeliveredOrders.clear();
     setText("confirmDeliveredStatus", `${data.count || 0} orders marked delivered; buyers notified.`);
