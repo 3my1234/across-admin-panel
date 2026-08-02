@@ -305,6 +305,24 @@
           <section class="tab-panel hidden" data-panel="transactions">
             <section class="panel">
               <h2>Transactions</h2>
+              <form id="paymentReconciliationForm" class="reconciliation-panel hidden">
+                <div>
+                  <h3>Recover a confirmed Flutterwave payment</h3>
+                  <p class="muted">For a successful charge that did not reach tracking. Flutterwave is verified before any order is updated.</p>
+                </div>
+                <div class="form-grid">
+                  <label>Order ID
+                    <input name="order_id" required autocomplete="off" placeholder="Order UUID" />
+                  </label>
+                  <label>Transaction reference
+                    <input name="tx_ref" required autocomplete="off" placeholder="ACROSS-..." />
+                  </label>
+                </div>
+                <div class="reconciliation-actions">
+                  <button type="submit" id="reconcilePaymentButton">Verify and reconcile</button>
+                  <p id="paymentReconciliationStatus" aria-live="polite"></p>
+                </div>
+              </form>
               <div class="list-toolbar">
                 <input id="transactionsSearch" type="search" placeholder="Search transactions" autocomplete="off" />
                 <p class="muted" id="transactionsSummary"></p>

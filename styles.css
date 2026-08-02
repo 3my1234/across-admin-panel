@@ -269,6 +269,33 @@ textarea {
   gap: 12px;
 }
 
+.reconciliation-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf4;
+}
+
+.reconciliation-panel h3,
+.reconciliation-panel p {
+  margin: 0;
+}
+
+.reconciliation-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.reconciliation-actions p {
+  min-height: 20px;
+  font-weight: 800;
+}
+
 .table-wrap {
   overflow-x: auto;
   max-height: min(62vh, 680px);

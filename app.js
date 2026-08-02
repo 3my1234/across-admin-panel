@@ -138,6 +138,7 @@ $("batchTransitionForm").addEventListener("submit", submitBatchTransition);
 $("closeResetAdminDialog").addEventListener("click", closeResetAdminDialog);
 $("cancelResetAdminButton").addEventListener("click", closeResetAdminDialog);
 $("resetAdminForm").addEventListener("submit", saveResetAdminPassword);
+$("paymentReconciliationForm")?.addEventListener("submit", reconcileFlutterwavePayment);
 const resetAdminPasswordInput = document.querySelector("#resetAdminForm input[name='password']");
 const toggleResetAdminPassword = $("toggleResetAdminPassword");
 if (resetAdminPasswordInput && toggleResetAdminPassword) {
@@ -1036,11 +1037,50 @@ function configureRoleUi() {
   });
   $("purchaseManifestPanel")?.classList.toggle("hidden", !(isProcurementAdmin() || isSuperAdmin()));
   $("confirmDeliveredPanel")?.classList.toggle("hidden", !(isCourierAdmin() || isSuperAdmin()));
+  $("paymentReconciliationForm")?.classList.toggle("hidden", !isSuperAdmin());
   const sessionName = $("sessionName");
   const sessionRole = $("sessionRole");
   if (sessionName) sessionName.textContent = state.fullName || "Signed in";
   if (sessionRole) sessionRole.textContent = sessionRoleLabel(state.role);
   setActiveTab(state.activeTab, { persist: false });
+}
+
+async function reconcileFlutterwavePayment(event) {
+  event.preventDefault();
+  if (!isSuperAdmin()) return;
+  const form = event.currentTarget;
+  const button = $("reconcilePaymentButton");
+  const status = $("paymentReconciliationStatus");
+  const values = new FormData(form);
+  const orderId = String(values.get("order_id") || "").trim();
+  const txRef = String(values.get("tx_ref") || "").trim();
+  if (!orderId || !txRef) return;
+
+  button.disabled = true;
+  button.textContent = "Verifying…";
+  status.className = "muted";
+  status.textContent = "Checking the transaction directly with Flutterwave…";
+  try {
+    const result = await request("/api/v1/admin/payments/flutterwave/reconcile", {
+      method: "POST",
+      body: { order_id: orderId, tx_ref: txRef }
+    });
+    if (result.payment_state === "pending") {
+      status.className = "error";
+      status.textContent = `Flutterwave reports ${result.gateway_status || "pending"}; no order data was changed.`;
+      return;
+    }
+    status.className = "success";
+    status.textContent = `Payment verified. Order ${result.order_id} is now available in tracking and its daily batch.`;
+    state.transactions = [];
+    await Promise.allSettled([loadOverview(), loadNamedList("transactions", { reset: true })]);
+  } catch (error) {
+    status.className = "error";
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Verify and reconcile";
+  }
 }
 
 function renderSession({ restoring = false } = {}) {
