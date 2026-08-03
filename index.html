@@ -266,13 +266,13 @@
             <section class="panel hidden" id="purchaseManifestPanel">
               <div class="section-head">
                 <div>
-                  <h2>Purchase Manifest</h2>
-                  <p class="muted" id="purchaseManifestMeta">Select a batch to view its purchase manifest.</p>
+                  <h2>Batch Product Checklist</h2>
+                  <p class="muted" id="purchaseManifestMeta">Select a closed or active batch to view its ordered products.</p>
                 </div>
                 <button type="button" id="closeManifestButton" class="secondary-button hidden">Close manifest</button>
               </div>
               <div class="list-toolbar">
-                <input id="manifestSearch" type="search" placeholder="Search buyer, SKU, title, or status" autocomplete="off" />
+                <input id="manifestSearch" type="search" placeholder="Search product, SKU, supplier, hub, package, or buyer" autocomplete="off" />
                 <p class="muted" id="manifestSummary"></p>
               </div>
               <div class="table-wrap desktop-only"><table id="purchaseManifestTable"></table></div>
@@ -489,6 +489,7 @@
           <div>
             <h2 id="batchTransitionTitle">Advance Batch</h2>
             <p class="muted" id="batchTransitionMeta"></p>
+            <p id="batchTransitionGuidance"></p>
           </div>
           <button type="button" id="closeBatchTransitionDialog" class="icon-button" aria-label="Close">Close</button>
         </div>
@@ -523,6 +524,10 @@
             Pickup phone
             <input name="pickup_phone" placeholder="e.g. +234 800 000 0000" />
           </label>
+          <label class="hidden checkbox-row" id="transitionManifestCheckField">
+            <input name="manifest_checked" type="checkbox" />
+            I checked the received products against this batch's product checklist.
+          </label>
         </div>
         <label>
           Operational notes
@@ -533,6 +538,37 @@
           <button type="submit" id="submitBatchTransitionButton">Confirm action</button>
         </div>
         <p class="error" id="batchTransitionStatus"></p>
+      </form>
+    </dialog>
+
+    <dialog id="manifestExceptionDialog" class="modal">
+      <form id="manifestExceptionForm" class="panel modal-panel">
+        <div class="section-head">
+          <div>
+            <h2>Product unavailable</h2>
+            <p class="muted" id="manifestExceptionMeta"></p>
+          </div>
+          <button type="button" id="closeManifestExceptionDialog" class="icon-button" aria-label="Close">Close</button>
+        </div>
+        <input type="hidden" name="item_id" />
+        <label>
+          Why is this product unavailable?
+          <textarea name="purchase_notes" rows="3" required placeholder="Give a clear reason for the other admins and customer-support team"></textarea>
+        </label>
+        <label>
+          Resolution
+          <select name="exception_resolution" required>
+            <option value="pending">Pending decision</option>
+            <option value="refunded">Refunded</option>
+            <option value="substituted">Substituted</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </label>
+        <div class="action-row">
+          <button type="button" id="cancelManifestExceptionButton" class="secondary-button">Cancel</button>
+          <button type="submit">Save unavailable product</button>
+        </div>
+        <p class="error" id="manifestExceptionStatus"></p>
       </form>
     </dialog>
 
