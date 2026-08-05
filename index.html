@@ -30,8 +30,8 @@
         document.documentElement.classList.add("admin-session-restoring");
       }
     </script>
-    <link rel="stylesheet" href="./styles.53465a1.css" />
-    <script src="./app.53465a1.js" defer></script>
+    <link rel="stylesheet" href="./styles.5986141.css" />
+    <script src="./app.ac599b5.js" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -88,6 +88,18 @@
               <p class="muted" id="sessionRole"></p>
             </div>
             <div class="action-row">
+              <div class="admin-notification-wrap">
+                <button id="adminNotificationButton" class="icon-button notification-button" type="button" aria-label="Admin notifications">
+                  Alerts <span id="adminNotificationBadge" class="notification-badge hidden">0</span>
+                </button>
+                <section id="adminNotificationPanel" class="notification-panel hidden" aria-label="Recent admin activity">
+                  <div class="notification-panel-header">
+                    <strong>New activity</strong>
+                    <button id="clearAdminNotifications" class="link-button" type="button">Mark all read</button>
+                  </div>
+                  <div id="adminNotificationList" class="notification-list"></div>
+                </section>
+              </div>
               <button id="refreshButton">Refresh</button>
               <button id="logoutButton" class="danger-button">Sign out</button>
             </div>
