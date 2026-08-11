@@ -31,7 +31,7 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.021cd47.css" />
-    <script src="./app.021cd47.js" defer></script>
+    <script src="./app.28f4c61.js" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -266,7 +266,7 @@
                 <button type="button" id="reloadBatchesButton" class="secondary-button">Reload batches</button>
               </div>
               <div class="list-toolbar">
-                <input id="batchesSearch" type="search" placeholder="Search batches" autocomplete="off" />
+                <input id="batchesSearch" type="search" placeholder="Search batch, package, SKU, product, or buyer" autocomplete="off" />
                 <p class="muted" id="batchesSummary"></p>
               </div>
               <p class="error" id="batchStatus"></p>
@@ -281,7 +281,11 @@
                   <h2>Batch Product Checklist</h2>
                   <p class="muted" id="purchaseManifestMeta">Select a closed or active batch to view its ordered products.</p>
                 </div>
-                <button type="button" id="closeManifestButton" class="secondary-button hidden">Close manifest</button>
+                <div class="action-row">
+                  <button type="button" id="printManifestButton" class="secondary-button hidden">Print / save PDF</button>
+                  <button type="button" id="downloadManifestButton" class="secondary-button hidden">Download CSV</button>
+                  <button type="button" id="closeManifestButton" class="secondary-button hidden">Close manifest</button>
+                </div>
               </div>
               <div class="list-toolbar">
                 <input id="manifestSearch" type="search" placeholder="Search product, SKU, supplier, hub, package, or buyer" autocomplete="off" />
