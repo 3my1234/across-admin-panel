@@ -190,6 +190,21 @@ const productForm = $("productForm");
 productForm.elements.title.addEventListener("input", updateSkuPreview);
 productForm.elements.category.addEventListener("change", updateSkuPreview);
 
+function validateProductPricing(form) {
+  const regularPrice = Number(form.get("local_selling_price") || 0);
+  const originalPrice = Number(form.get("compare_at_price") || 0);
+  const isFlashSale = form.get("is_flash_sale") === "on";
+  const flashPrice = Number(form.get("flash_sale_price") || 0);
+  if (regularPrice <= 0) throw new Error("Regular selling price must be greater than zero.");
+  if (originalPrice > 0 && originalPrice <= regularPrice) {
+    throw new Error("Original price must be higher than the regular selling price.");
+  }
+  if (isFlashSale && (flashPrice <= 0 || flashPrice >= regularPrice)) {
+    throw new Error("Flash sale price must be greater than zero and lower than the regular selling price.");
+  }
+  return { regularPrice, originalPrice, isFlashSale, flashPrice };
+}
+
 $("productForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -198,6 +213,7 @@ $("productForm").addEventListener("submit", async (event) => {
   setText("productStatus", "");
   if (submitButton) submitButton.disabled = true;
   try {
+    const pricing = validateProductPricing(form);
     const category = String(form.get("category") || "").trim();
     const imageUrls = String(form.get("image_urls") || "")
       .split("\n")
@@ -211,13 +227,13 @@ $("productForm").addEventListener("submit", async (event) => {
         title: form.get("title"),
         description: form.get("description"),
         category_path: category ? [category] : [],
-        local_selling_price: Number(form.get("local_selling_price") || 0),
-        compare_at_price: Number(form.get("compare_at_price") || 0),
+        local_selling_price: pricing.regularPrice,
+        compare_at_price: pricing.originalPrice,
         cost_price_rmb: Number(form.get("cost_price_rmb") || 0),
         exchange_rate_snapshot: Number(form.get("exchange_rate_snapshot") || 1),
         inventory_count: Number(form.get("inventory_count") || 0),
-		is_flash_sale: form.get("is_flash_sale") === "on",
-		flash_sale_price: Number(form.get("flash_sale_price") || 0),
+		is_flash_sale: pricing.isFlashSale,
+		flash_sale_price: pricing.flashPrice,
         image_urls: [...uploadedUrls, ...imageUrls],
         factory_name: form.get("factory_name"),
         factory_location: form.get("factory_location")
@@ -718,8 +734,9 @@ function renderProductsTable() {
       <th>SKU</th>
       <th>Title</th>
       <th>Category</th>
-      <th>Price</th>
-      <th>Slash</th>
+      <th>Regular Price</th>
+      <th>Crossed-out Original</th>
+      <th>Flash Price</th>
       <th>Stock</th>
       <th>Status</th>
       <th>Actions</th>
@@ -727,7 +744,7 @@ function renderProductsTable() {
   `;
   const tbody = document.createElement("tbody");
   if (!visibleProducts.length) {
-    tbody.innerHTML = `<tr><td colspan="9">${state.products.length ? "No products match this search." : "No products uploaded yet."}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10">${state.products.length ? "No products match this search." : "No products uploaded yet."}</td></tr>`;
     table.append(thead, tbody);
     renderProductCards(visibleProducts);
     return;
@@ -745,6 +762,7 @@ function renderProductsTable() {
       <td>${escapeHtml(category)}</td>
       <td>${format(product.local_selling_price)}</td>
       <td>${product.compare_at_price ? format(product.compare_at_price) : "-"}</td>
+      <td>${product.is_flash_sale ? format(product.flash_sale_price) : "-"}</td>
       <td>${format(product.inventory_count)}</td>
       <td><span class="status-pill ${statusClass}">${statusLabel}</span></td>
       <td class="table-actions">
@@ -785,7 +803,7 @@ function renderProductCards(products) {
             <div>
               <h3 class="mobile-card-title">${escapeHtml(product.title)}</h3>
               <p class="mobile-card-meta">${escapeHtml(product.sku)} · ${escapeHtml(category)}</p>
-              <p class="mobile-card-meta">${format(product.local_selling_price)}${product.compare_at_price ? ` · slash ${format(product.compare_at_price)}` : ""}</p>
+              <p class="mobile-card-meta">Regular ${format(product.local_selling_price)}${product.compare_at_price ? ` · original ${format(product.compare_at_price)}` : ""}${product.is_flash_sale ? ` · flash ${format(product.flash_sale_price)}` : ""}</p>
               <p class="mobile-card-meta">Stock ${format(product.inventory_count)} · <span class="status-pill ${statusClass}">${statusLabel}</span></p>
             </div>
           </div>
@@ -933,6 +951,7 @@ async function saveProductEdits(event) {
   setText("editProductStatus", "");
   if (submitButton) submitButton.disabled = true;
   try {
+    const pricing = validateProductPricing(form);
     const currentImageUrls = parseImageUrls(String(form.get("image_urls") || ""));
     const uploadedUrls = await uploadProductImages(
       form.getAll("image_files").filter((file) => file instanceof File && file.size > 0),
@@ -943,12 +962,12 @@ async function saveProductEdits(event) {
       body: {
         title: String(form.get("title") || "").trim(),
         description: String(form.get("description") || ""),
-        local_selling_price: Number(form.get("local_selling_price") || 0),
-        compare_at_price: Number(form.get("compare_at_price") || 0),
+        local_selling_price: pricing.regularPrice,
+        compare_at_price: pricing.originalPrice,
         inventory_count: Number(form.get("inventory_count") || 0),
         is_active: form.get("is_active") === "on",
-		is_flash_sale: form.get("is_flash_sale") === "on",
-		flash_sale_price: Number(form.get("flash_sale_price") || 0),
+		is_flash_sale: pricing.isFlashSale,
+		flash_sale_price: pricing.flashPrice,
         image_urls: [...uploadedUrls, ...currentImageUrls]
       }
     });

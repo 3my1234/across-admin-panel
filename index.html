@@ -31,7 +31,7 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.021cd47.css" />
-    <script src="./app.28f4c61.js?v=20260813" defer></script>
+    <script src="./app.28f4c61.js?v=20260813b" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -144,8 +144,8 @@
                   <option>Kids</option>
                 </select>
               </label>
-              <label>Price NGN <input name="local_selling_price" type="number" min="1" required /></label>
-              <label>Slash Price NGN <input name="compare_at_price" type="number" min="0" /></label>
+              <label>Regular Selling Price NGN <input name="local_selling_price" type="number" min="1" required /></label>
+              <label>Crossed-out Original Price NGN (optional) <input name="compare_at_price" type="number" min="0" placeholder="Must be higher than regular price" /></label>
               <label>Cost RMB <input name="cost_price_rmb" type="number" min="0" step="0.01" /></label>
               <label>Exchange Rate <input name="exchange_rate_snapshot" type="number" min="1" value="220" required /></label>
               <label>Inventory <input name="inventory_count" type="number" min="0" value="10" /></label>
@@ -155,7 +155,7 @@
                 <input name="is_flash_sale" type="checkbox" />
                 Flash Sale - mark as super hot deal
               </label>
-              <label>Flash Sale Price NGN <input name="flash_sale_price" type="number" min="0" step="1" placeholder="Lower promo price" /></label>
+              <label>Flash Sale Price NGN <input name="flash_sale_price" type="number" min="0" step="1" placeholder="Charged during flash sale; lower than regular" /></label>
             </div>
             <label>Description <textarea name="description" rows="3"></textarea></label>
             <label>Upload product images <input name="image_files" type="file" accept="image/*" multiple /></label>
@@ -168,7 +168,7 @@
             <div class="section-head">
               <div>
                 <h2>Product Catalog</h2>
-                <p class="muted">All uploaded products. Edit prices, promo slash, or inventory. Delete permanently removes the product and its images.</p>
+                <p class="muted">Regular price is normally charged. The optional original price is crossed out for an ordinary discount. During a flash sale, the flash price is charged and the regular price is crossed out.</p>
               </div>
               <button type="button" id="reloadProductsButton" class="secondary-button">Reload catalog</button>
             </div>
@@ -438,8 +438,8 @@
         <p class="muted" id="editProductMeta"></p>
         <div class="form-grid">
           <label>Title <input name="title" required /></label>
-          <label>Price NGN <input name="local_selling_price" type="number" min="1" step="1" required /></label>
-          <label>Slash Price NGN <input name="compare_at_price" type="number" min="0" step="1" /></label>
+          <label>Regular Selling Price NGN <input name="local_selling_price" type="number" min="1" step="1" required /></label>
+          <label>Crossed-out Original Price NGN (optional) <input name="compare_at_price" type="number" min="0" step="1" placeholder="Must be higher than regular price" /></label>
           <label>Inventory <input name="inventory_count" type="number" min="0" step="1" required /></label>
         </div>
         <label>Description <textarea name="description" rows="3"></textarea></label>
@@ -457,7 +457,7 @@
           <input name="is_flash_sale" type="checkbox" />
           Flash Sale - super hot deal
         </label>
-        <label>Flash Sale Price NGN <input name="flash_sale_price" type="number" min="0" step="1" placeholder="Lower promo price" /></label>
+        <label>Flash Sale Price NGN <input name="flash_sale_price" type="number" min="0" step="1" placeholder="Charged during flash sale; lower than regular" /></label>
         <div class="action-row">
           <button type="button" id="cancelEditButton" class="secondary-button">Cancel</button>
           <button type="submit">Save changes</button>
