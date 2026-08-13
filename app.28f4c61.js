@@ -216,6 +216,8 @@ $("productForm").addEventListener("submit", async (event) => {
         cost_price_rmb: Number(form.get("cost_price_rmb") || 0),
         exchange_rate_snapshot: Number(form.get("exchange_rate_snapshot") || 1),
         inventory_count: Number(form.get("inventory_count") || 0),
+		is_flash_sale: form.get("is_flash_sale") === "on",
+		flash_sale_price: Number(form.get("flash_sale_price") || 0),
         image_urls: [...uploadedUrls, ...imageUrls],
         factory_name: form.get("factory_name"),
         factory_location: form.get("factory_location")
@@ -871,6 +873,8 @@ function openEditDialog(productId) {
   form.elements.compare_at_price.value = product.compare_at_price || "";
   form.elements.inventory_count.value = product.inventory_count || 0;
   form.elements.is_active.checked = Boolean(product.is_active);
+	form.elements.is_flash_sale.checked = Boolean(product.is_flash_sale);
+	form.elements.flash_sale_price.value = product.flash_sale_price || "";
   form.elements.image_files.value = "";
   form.elements.image_urls.value = (product.image_urls || []).join("\n");
   renderEditImagePreview(product.image_urls || []);
@@ -943,6 +947,8 @@ async function saveProductEdits(event) {
         compare_at_price: Number(form.get("compare_at_price") || 0),
         inventory_count: Number(form.get("inventory_count") || 0),
         is_active: form.get("is_active") === "on",
+		is_flash_sale: form.get("is_flash_sale") === "on",
+		flash_sale_price: Number(form.get("flash_sale_price") || 0),
         image_urls: [...uploadedUrls, ...currentImageUrls]
       }
     });
