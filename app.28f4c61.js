@@ -1529,21 +1529,54 @@ function debounce(fn, waitMs) {
 
 async function uploadProductImages(files, statusId = "productStatus") {
   const urls = [];
-  for (const file of files) {
+  for (const sourceFile of files) {
+    const file = await normalizeProductImage(sourceFile, statusId);
+    const mimeType = String(file.type || "").toLowerCase();
+    if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+      throw new Error(`${file.name} is not supported. Use JPG, PNG, or WebP so product images display on every supported phone.`);
+    }
     setText(statusId, `Uploading ${file.name}...`);
     const presign = await request("/api/v1/admin/uploads/presign", {
       method: "POST",
       body: {
         filename: file.name,
-        mimeType: file.type || "image/jpeg",
+        mimeType,
         kind: "image",
         scope: "products"
       }
     });
-    await putFile(presign.uploadUrl, file, file.type || "image/jpeg");
+    await putFile(presign.uploadUrl, file, mimeType);
     urls.push(presign.viewUrl || presign.publicUrl);
   }
   return urls.filter(Boolean);
+}
+
+async function normalizeProductImage(file, statusId) {
+  const mimeType = String(file.type || "").toLowerCase();
+  const isAvif = mimeType === "image/avif" || /\.avif$/i.test(file.name || "");
+  if (!isAvif) return file;
+
+  setText(statusId, `Converting ${file.name} for phone compatibility...`);
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+    const maxSide = 2400;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("image converter unavailable");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.88));
+    if (!blob) throw new Error("image conversion failed");
+    const portableName = String(file.name || "product.avif").replace(/\.avif$/i, "") + ".webp";
+    return new File([blob], portableName, { type: "image/webp", lastModified: Date.now() });
+  } catch {
+    throw new Error(`${file.name} could not be converted. Please save it as JPG, PNG, or WebP and upload it again.`);
+  } finally {
+    if (bitmap && typeof bitmap.close === "function") bitmap.close();
+  }
 }
 
 async function putFile(uploadUrl, file, mimeType) {

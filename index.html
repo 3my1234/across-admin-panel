@@ -31,7 +31,7 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.021cd47.css" />
-    <script src="./app.28f4c61.js?v=20260813b" defer></script>
+    <script src="./app.28f4c61.js?v=20260814b" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -158,7 +158,7 @@
               <label>Flash Sale Price NGN <input name="flash_sale_price" type="number" min="0" step="1" placeholder="Charged during flash sale; lower than regular" /></label>
             </div>
             <label>Description <textarea name="description" rows="3"></textarea></label>
-            <label>Upload product images <input name="image_files" type="file" accept="image/*" multiple /></label>
+            <label>Upload product images <input name="image_files" type="file" accept="image/jpeg,image/png,image/webp,image/avif,.avif" multiple /></label>
             <label>Image URLs <textarea name="image_urls" rows="3" placeholder="Optional: one existing image URL per line"></textarea></label>
             <button>Add product</button>
             <p class="success" id="productStatus"></p>
@@ -447,7 +447,7 @@
           <p class="field-title">Current Images</p>
           <div class="image-preview-list" id="editImagePreviewList"></div>
         </div>
-        <label>Upload replacement/additional images <input name="image_files" type="file" accept="image/*" multiple /></label>
+        <label>Upload replacement/additional images <input name="image_files" type="file" accept="image/jpeg,image/png,image/webp,image/avif,.avif" multiple /></label>
         <label>Image URLs <textarea name="image_urls" rows="4" placeholder="One image URL per line"></textarea></label>
         <label class="checkbox-row">
           <input name="is_active" type="checkbox" />
