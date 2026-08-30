@@ -367,8 +367,13 @@ function renderAdminNotifications() {
           renderAdminNotifications();
         }
         $("adminNotificationPanel")?.classList.add("hidden");
-        setActiveTab("batches");
-        await loadBatches();
+        if (item.event_type === "support_ticket_created") {
+          setActiveTab("support");
+          await loadTickets();
+        } else {
+          setActiveTab("batches");
+          await loadBatches();
+        }
       } catch (error) {
         if (error.status === 401) logout();
       }
@@ -396,6 +401,7 @@ async function loadTabData(tab, { force = false } = {}) {
       loadNamedList("users", { reset: force || !state.users.length })
     ]);
   }
+  if (tab === "support") return loadTickets();
 }
 
 async function loadProducts({ append = false, reset = false } = {}) {

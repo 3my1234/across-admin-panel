@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Atlantic Express Provider Portal</title>
+  <link rel="stylesheet" href="./provider.css?v=20260830a" />
+  <script src="./provider.js?v=20260830a" defer></script>
+</head>
+<body>
+  <header class="provider-header">
+    <div><span class="eyebrow">Atlantic Express</span><h1>Provider Portal</h1></div>
+    <div class="header-actions"><span id="providerStatus">Secure provider access</span><button id="signOut" class="secondary hidden">Sign out</button></div>
+  </header>
+  <main>
+    <section id="authPanel" class="card auth-card">
+      <div><span class="eyebrow">For verified partners</span><h2>Manage services and enquiries</h2><p>Use the same verified Atlantic Express account you use in the buyer app.</p></div>
+      <div class="auth-switch"><button type="button" data-auth-view="login" class="active">Sign in</button><button type="button" data-auth-view="signup" class="secondary">Create account</button></div>
+      <form id="loginForm" class="form-grid compact" data-auth-panel="login">
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <button type="submit">Sign in</button><button type="button" id="resendVerification" class="link-button">Resend verification email</button><p id="loginMessage" class="message"></p>
+      </form>
+      <form id="signupForm" class="form-grid compact hidden" data-auth-panel="signup">
+        <label>Full name<input name="full_name" autocomplete="name" required /></label><label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Phone<input name="phone" type="tel" autocomplete="tel" required /></label><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <button type="submit">Create provider account</button><p id="signupMessage" class="message"></p>
+      </form>
+    </section>
+
+    <section id="portal" class="hidden dashboard-grid">
+      <aside class="card side-card">
+        <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
+        <nav><button data-view="overview" class="active">Overview</button><button data-view="listings">Listings</button><button data-view="requests">Bookings & enquiries</button></nav>
+      </aside>
+      <div class="workspace">
+        <section id="onboardingCard" class="card hidden">
+          <h2>Create your provider profile</h2><p>Your profile and listings are reviewed before buyers can see them.</p>
+          <form id="onboardingForm" class="form-grid">
+            <label>Business name<input name="business_name" required /></label><label>Contact email<input name="contact_email" type="email" required /></label>
+            <label>Contact phone<input name="contact_phone" inputmode="tel" required /></label><label>Website<input name="website_url" type="url" /></label>
+            <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State<input name="state" required /></label>
+            <label class="wide">About your business<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
+          </form>
+        </section>
+
+        <section data-view-panel="overview" class="card">
+          <div class="section-heading"><div><span class="eyebrow">Account</span><h2>Provider overview</h2></div><button id="refreshPortal" class="secondary">Refresh</button></div>
+          <div class="metrics"><article><span>Verification</span><strong id="metricVerification">—</strong></article><article><span>Subscription</span><strong id="metricSubscription">—</strong></article><article><span>Listings</span><strong id="metricListings">0</strong></article><article><span>Open requests</span><strong id="metricRequests">0</strong></article></div>
+          <div id="accountGuidance" class="notice"></div>
+          <section id="verificationDocuments" class="verification-box hidden">
+            <div class="section-heading"><div><span class="eyebrow">Business verification</span><h3>Verification documents</h3></div></div>
+            <p>Upload a clear government ID, business registration, or proof of address. PDF, JPG, PNG, and WebP are accepted.</p>
+            <form id="verificationForm" class="form-grid compact">
+              <label>Document type<select name="document_type" required><option value="government_id">Government ID</option><option value="business_registration">Business registration</option><option value="address_proof">Proof of address</option></select></label>
+              <label>Document<input id="verificationFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required /></label>
+              <button type="submit">Upload document</button><p id="verificationMessage" class="message"></p>
+            </form>
+            <div id="verificationRows" class="stack-list"></div>
+          </section>
+          <div id="plans" class="plans"></div>
+        </section>
+
+        <section data-view-panel="listings" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Inventory</span><h2>Service listings</h2></div><button id="toggleListingForm">Add listing</button></div>
+          <form id="listingForm" class="form-grid hidden">
+            <label>Type<select name="listing_type" required><option value="hotel">Hotel</option><option value="short_let">Short let</option><option value="car_rental">Car rental</option><option value="car_wash">Car wash / appointment</option><option value="shop_rental">Shop rental</option><option value="property">Property enquiry</option><option value="land">Land enquiry</option></select></label>
+            <label>Title<input name="title" required /></label><label>Category<input name="category" /></label><label>City<input name="city" required /></label>
+            <label>State<input name="state" required /></label><label>Street / area<input name="address_line" /></label><label>Price NGN<input name="price" type="number" min="0" step="0.01" /></label>
+            <label>Pricing unit<input name="pricing_unit" placeholder="night, day, appointment" /></label><label>Capacity<input name="capacity" type="number" min="1" value="1" /></label>
+            <label>Contact email<input name="contact_email" type="email" /></label><label>Contact phone<input name="contact_phone" inputmode="tel" /></label>
+            <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
+            <label class="wide">Images<input id="listingImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload clear JPG, PNG, or WebP images. Multiple images are supported.</small></label>
+            <div id="uploadProgress" class="wide message"></div><button type="submit">Save draft</button>
+          </form>
+          <div class="toolbar"><input id="listingSearch" type="search" placeholder="Search listings" /><select id="listingStatus"><option value="">All statuses</option><option>draft</option><option>pending</option><option>approved</option><option>rejected</option></select></div>
+          <div id="listingRows" class="stack-list"></div>
+          <button id="loadMoreListings" type="button" class="secondary hidden">Load more listings</button>
+        </section>
+
+        <section data-view-panel="requests" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Operations</span><h2>Bookings and enquiries</h2></div><button id="refreshRequests" class="secondary">Refresh</button></div>
+          <div class="toolbar"><input id="requestSearch" type="search" placeholder="Search buyer, listing, or status" /><select id="requestStatus"><option value="">All statuses</option><option>pending</option><option>accepted</option><option>rejected</option><option>completed</option></select></div><div id="requestRows" class="stack-list"></div>
+          <button id="loadMoreRequests" type="button" class="secondary hidden">Load more requests</button>
+        </section>
+        <p id="portalMessage" class="message"></p>
+      </div>
+    </section>
+
+    <dialog id="availabilityDialog">
+      <form id="availabilityForm" class="form-grid compact">
+        <div class="section-heading"><div><span class="eyebrow">Booking inventory</span><h2 id="availabilityTitle">Add availability</h2></div><button type="button" id="closeAvailability" class="secondary">Close</button></div>
+        <input name="listing_id" type="hidden" />
+        <label>Available from<input name="starts_at" type="datetime-local" required /></label>
+        <label>Available until<input name="ends_at" type="datetime-local" required /></label>
+        <label>Capacity<input name="capacity" type="number" min="1" value="1" required /></label>
+        <button type="submit">Save availability</button>
+        <p id="availabilityMessage" class="message"></p>
+      </form>
+    </dialog>
+  </main>
+</body>
+</html>
