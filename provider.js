@@ -38,11 +38,19 @@
 
   async function signup(event) {
     event.preventDefault(); const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true; setMessage("Creating your account…", false, "signupMessage");
+    const payload = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const payload = Object.fromEntries(new FormData(event.currentTarget));
       const data = await api("/auth/signup", { method: "POST", body: JSON.stringify(payload) });
       setMessage(data.message || "Account created. Verify your email, then sign in here.", true, "signupMessage"); event.currentTarget.reset();
-    } catch (error) { setMessage(error.message, false, "signupMessage"); } finally { button.disabled = false; }
+    } catch (error) {
+      if (error.status === 409) {
+        switchAuth("login");
+        document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
+        setMessage("An account already uses this email. Verify the email we sent, then sign in. If the message is missing, select Resend verification email.", false, "loginMessage");
+      } else {
+        setMessage(error.message, false, "signupMessage");
+      }
+    } finally { button.disabled = false; }
   }
 
   async function resendVerification() {
