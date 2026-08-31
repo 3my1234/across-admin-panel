@@ -29,19 +29,19 @@
   }
 
   async function login(event) {
-    event.preventDefault(); const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true; setMessage("Signing in…", false, "loginMessage");
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true; setMessage("Signing in…", false, "loginMessage");
     try {
-      const data = await api("/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+      const data = await api("/auth/login", { method: "POST", body: JSON.stringify(Object.fromEntries(new FormData(form))) });
       state.token = data.access_token; localStorage.setItem("atlantic.provider.token", state.token); setMessage("", false, "loginMessage"); await boot();
     } catch (error) { setMessage(error.message, false, "loginMessage"); } finally { button.disabled = false; }
   }
 
   async function signup(event) {
-    event.preventDefault(); const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true; setMessage("Creating your account…", false, "signupMessage");
-    const payload = Object.fromEntries(new FormData(event.currentTarget));
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true; setMessage("Creating your account…", false, "signupMessage");
+    const payload = Object.fromEntries(new FormData(form));
     try {
       const data = await api("/auth/signup", { method: "POST", body: JSON.stringify(payload) });
-      setMessage(data.message || "Account created. Verify your email, then sign in here.", true, "signupMessage"); event.currentTarget.reset();
+      setMessage(data.message || "Account created. Verify your email, then sign in here.", true, "signupMessage"); form.reset();
     } catch (error) {
       if (error.status === 409) {
         switchAuth("login");
@@ -76,8 +76,8 @@
   }
 
   async function onboard(event) {
-    event.preventDefault(); const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true;
-    try { await api("/providers/onboarding", { method: "POST", body: JSON.stringify({ ...Object.fromEntries(new FormData(event.currentTarget)), country_code: "NG" }) }); setMessage("Provider profile submitted for verification.", true); await boot(); }
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    try { await api("/providers/onboarding", { method: "POST", body: JSON.stringify({ ...Object.fromEntries(new FormData(form)), country_code: "NG" }) }); setMessage("Provider profile submitted for verification.", true); await boot(); }
     catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
 
@@ -116,29 +116,31 @@
   }
   async function uploadVerificationDocument(event) {
     event.preventDefault();
-    const button = event.currentTarget.querySelector("button[type=submit]");
+    const form = event.currentTarget;
+    const button = form.querySelector("button[type=submit]");
     const file = $("verificationFile").files[0];
     if (!file) return setMessage("Choose a document first.", false, "verificationMessage");
+    const documentType = new FormData(form).get("document_type");
     button.disabled = true;
     try {
       setMessage("Uploading document...", false, "verificationMessage");
       const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "verification" }) });
       const put = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
       if (!put.ok) throw new Error(`Document upload failed (${put.status})`);
-      await api("/providers/me/verification-documents", { method: "POST", body: JSON.stringify({ document_type: new FormData(event.currentTarget).get("document_type"), document_url: signed.view_url }) });
-      event.currentTarget.reset(); setMessage("Document submitted for review.", true, "verificationMessage"); await loadVerificationDocuments();
+      await api("/providers/me/verification-documents", { method: "POST", body: JSON.stringify({ document_type: documentType, document_url: signed.view_url }) });
+      form.reset(); setMessage("Document submitted for review.", true, "verificationMessage"); await loadVerificationDocuments();
     } catch (error) { setMessage(error.message, false, "verificationMessage"); } finally { button.disabled = false; }
   }
 
   async function saveListing(event) {
-    event.preventDefault(); const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true;
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
-      const values = Object.fromEntries(new FormData(event.currentTarget)); const files = [...$("listingImages").files];
+      const values = Object.fromEntries(new FormData(form)); const files = [...$("listingImages").files];
       if (!files.length) throw new Error("Add at least one clear listing image.");
       const media_urls = await uploadImages(files);
       const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), currency_code: "NGN", country_code: "NG", media_urls, attributes: {} };
       await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
-      event.currentTarget.reset(); event.currentTarget.classList.add("hidden"); setMessage("Draft saved. Submit it when the details are ready for review.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
+      form.reset(); form.classList.add("hidden"); setMessage("Draft saved. Submit it when the details are ready for review.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
 
@@ -159,7 +161,7 @@
 
   function openAvailability(id, title) { const form = $("availabilityForm"); form.reset(); form.elements.listing_id.value = id; $("availabilityTitle").textContent = `Availability · ${title}`; setMessage("", false, "availabilityMessage"); $("availabilityDialog").showModal(); }
   async function saveAvailability(event) {
-    event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget)); const button = event.currentTarget.querySelector("button[type=submit]"); button.disabled = true;
+    event.preventDefault(); const form = event.currentTarget; const values = Object.fromEntries(new FormData(form)); const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try { await api(`/providers/me/listings/${values.listing_id}/availability`, { method: "POST", body: JSON.stringify({ starts_at: new Date(values.starts_at).toISOString(), ends_at: new Date(values.ends_at).toISOString(), capacity: Number(values.capacity), status: "open" }) }); setMessage("Availability saved.", true, "availabilityMessage"); setTimeout(() => $("availabilityDialog").close(), 500); }
     catch (error) { setMessage(error.message, false, "availabilityMessage"); } finally { button.disabled = false; }
   }
