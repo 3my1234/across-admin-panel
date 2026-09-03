@@ -7,7 +7,7 @@
     return ["super_admin", "catalog_admin"].includes(role) && !tabs.includes("providers") ? [...tabs.slice(0, 2), "providers", ...tabs.slice(2)] : tabs;
   };
   const originalLoadTabData = loadTabData;
-  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true })]) : originalLoadTabData(tab, options);
+  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true }), loadMerchantProducts({ reset: true })]) : originalLoadTabData(tab, options);
 
   state.providers = [];
   state.providerListings = [];
@@ -15,6 +15,9 @@
   state.providerHasMore = false;
   state.providerListingCursor = "";
   state.providerListingHasMore = false;
+  state.merchantProducts = [];
+  state.merchantProductCursor = "";
+  state.merchantProductHasMore = false;
 
   function queryParams(searchID, statusID, cursor) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
@@ -44,6 +47,16 @@
       state.providerListingCursor = data.next_cursor || ""; state.providerListingHasMore = Boolean(data.has_more);
       renderProviderListings(); setText("providerListingStatus", `${state.providerListings.length} listings loaded.`);
     } catch (error) { setText("providerListingStatus", error.message); }
+  }
+
+  async function loadMerchantProducts({ reset = false } = {}) {
+    setText("merchantProductModerationStatus", "Loading merchant products...");
+    try {
+      const data = await request(`/api/v1/admin/merchant-products?${queryParams("merchantProductSearch", "merchantProductStatus", reset ? "" : state.merchantProductCursor)}`);
+      state.merchantProducts = reset ? (data.items || []) : [...state.merchantProducts, ...(data.items || [])];
+      state.merchantProductCursor = data.page?.next_cursor || ""; state.merchantProductHasMore = Boolean(data.page?.has_more);
+      renderMerchantProducts(); setText("merchantProductModerationStatus", `${state.merchantProducts.length} merchant products loaded.`);
+    } catch (error) { setText("merchantProductModerationStatus", error.message); }
   }
 
   function renderProviders() {
@@ -93,6 +106,16 @@
     try { await request(`/api/v1/admin/provider-listings/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadProviderListings({ reset: true }); }
     catch (error) { setText("providerListingStatus", error.message); }
   }
+  function renderMerchantProducts() {
+    $("merchantProductsTable").innerHTML = `<thead><tr><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td>${item.image_urls?.[0] ? `<img class="product-image" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>NGN ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="6">No matching merchant products.</td></tr>`}</tbody>`;
+    $("loadMoreMerchantProductsButton")?.classList.toggle("hidden", !state.merchantProductHasMore);
+    $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProduct(button.dataset.id, button.dataset.productStatus));
+  }
+  async function moderateMerchantProduct(id, status) {
+    const notes = prompt(`${status} product. Add a moderation note (optional):`, ""); if (notes === null) return;
+    try { await request(`/api/v1/admin/merchant-products/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadMerchantProducts({ reset: true }); }
+    catch (error) { setText("merchantProductModerationStatus", error.message); }
+  }
   async function saveProviderPlan(event) {
     event.preventDefault(); const form = new FormData(event.currentTarget);
     try { await request("/api/v1/admin/provider-subscription-plans", { method: "POST", body: { code: form.get("code"), name: form.get("name"), description: form.get("description"), amount_ngn: Number(form.get("amount_ngn")), listing_limit: Number(form.get("listing_limit")), flutterwave_plan_id: form.get("flutterwave_plan_id") ? Number(form.get("flutterwave_plan_id")) : null, features: { verified_badge: true, public_contact: true } } }); setText("providerPlanStatus", "Subscription plan saved."); event.currentTarget.reset(); }
@@ -108,5 +131,9 @@
   $("providerListingSearch")?.addEventListener("input", debounce(() => loadProviderListings({ reset: true }), 300));
   $("providerListingModerationStatus")?.addEventListener("change", () => loadProviderListings({ reset: true }));
   $("providerPlanForm")?.addEventListener("submit", saveProviderPlan);
+  $("reloadMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts({ reset: true }));
+  $("loadMoreMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts());
+  $("merchantProductSearch")?.addEventListener("input", debounce(() => loadMerchantProducts({ reset: true }), 300));
+  $("merchantProductStatus")?.addEventListener("change", () => loadMerchantProducts({ reset: true }));
   setNavVisibility();
 })();

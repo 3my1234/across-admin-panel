@@ -32,7 +32,7 @@
     </script>
     <link rel="stylesheet" href="./styles.021cd47.css" />
     <script src="./app.28f4c61.js?v=20260816a" defer></script>
-    <script src="./provider-admin.js?v=20260830a" defer></script>
+    <script src="./provider-admin.js?v=20260903a" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -337,6 +337,11 @@
               <p class="error" id="providerListingStatus"></p>
               <div class="table-wrap"><table id="providerListingsTable"></table></div>
               <button type="button" id="loadMoreProviderListingsButton" class="secondary-button hidden">Load more listings</button>
+            </section>
+            <section class="panel">
+              <div class="section-head"><div><h2>Merchant Product Moderation</h2><p class="muted">Review physical products, images, prices, discounts, and inventory before publication.</p></div><button type="button" id="reloadMerchantProductsButton" class="secondary-button">Reload products</button></div>
+              <div class="filter-grid"><label>Search products <input id="merchantProductSearch" type="search" placeholder="Product, SKU, or merchant" autocomplete="off" /></label><label>Status <select id="merchantProductStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
+              <p class="error" id="merchantProductModerationStatus"></p><div class="table-wrap"><table id="merchantProductsTable"></table></div><button type="button" id="loadMoreMerchantProductsButton" class="secondary-button hidden">Load more products</button>
             </section>
             <section class="panel">
               <h2>Monthly Subscription Plans</h2>

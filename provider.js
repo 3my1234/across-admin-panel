@@ -5,8 +5,9 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
-    provider: null, plans: [], listings: [], requests: [], documents: [],
-    listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false
+    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [],
+    listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
+    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, editingProductID: ""
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = (value) => new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -61,7 +62,7 @@
   }
 
   function signOut() {
-    state.token = ""; state.provider = null; state.listings = []; state.requests = []; state.documents = [];
+    state.token = ""; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = [];
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden");
   }
 
@@ -71,7 +72,7 @@
     try { state.provider = await api("/providers/me"); $("onboardingCard").classList.add("hidden"); }
     catch (error) { if (error.status === 404) { state.provider = null; $("onboardingCard").classList.remove("hidden"); } else throw error; }
     await loadPlans();
-    if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments()]);
+    if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true })]);
     renderOverview();
   }
 
@@ -93,11 +94,11 @@
     document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe));
   }
 
-  async function uploadImages(files) {
+  async function uploadImages(files, progressTarget = "uploadProgress") {
     if (files.length > 20) throw new Error("A listing can have at most 20 images.");
     const urls = [];
     for (let index = 0; index < files.length; index += 1) {
-      const file = files[index]; setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, "uploadProgress");
+      const file = files[index]; setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
       const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing" }) });
       const put = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
       if (!put.ok) throw new Error(`Image upload failed (${put.status})`); urls.push(signed.view_url);
@@ -138,10 +139,48 @@
       const values = Object.fromEntries(new FormData(form)); const files = [...$("listingImages").files];
       if (!files.length) throw new Error("Add at least one clear listing image.");
       const media_urls = await uploadImages(files);
-      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), currency_code: "NGN", country_code: "NG", media_urls, attributes: {} };
+      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude: values.latitude === "" ? null : Number(values.latitude), longitude: values.longitude === "" ? null : Number(values.longitude), service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, currency_code: "NGN", country_code: "NG", media_urls, attributes: {} };
       await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
       form.reset(); form.classList.add("hidden"); setMessage("Draft saved. Submit it when the details are ready for review.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
+  }
+
+  async function saveProduct(event) {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    try {
+      const values = Object.fromEntries(new FormData(form)); const files = [...$("productImages").files];
+      const existing = state.products.find(item => item.id === state.editingProductID);
+      if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
+      const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
+      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null };
+      const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
+      await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); state.editingProductID = ""; form.reset(); form.classList.add("hidden"); setMessage("Product saved. Submit it for review when ready.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
+    } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
+  }
+  async function loadProducts({ reset = false } = {}) {
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); const search = $("productSearch").value.trim(), status = $("productStatus").value; if (search) params.set("search", search); if (status) params.set("status", status); if (!reset && state.productCursor) params.set("cursor", state.productCursor);
+    const data = await api(`/providers/me/products?${params}`); state.products = reset ? (data.items || []) : [...state.products, ...(data.items || [])]; state.productCursor = data.page?.next_cursor || ""; state.productHasMore = Boolean(data.page?.has_more); renderProducts(); renderOverview();
+  }
+  function renderProducts() {
+    $("productRows").innerHTML = state.products.length ? state.products.map((item) => `<article class="list-row listing-row">${item.image_urls?.[0] ? `<img class="listing-thumb" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.moderation_status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.sku)} · ${money(item.local_selling_price)} · ${item.inventory_count} in stock</p>${item.moderation_notes ? `<p>${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions"><button class="secondary" data-edit-product="${item.id}">Edit</button>${["draft","rejected"].includes(item.moderation_status) ? `<button data-submit-product="${item.id}">Submit for review</button>` : ""}<button class="secondary" data-archive-product="${item.id}">Archive</button></div></article>`).join("") : "<p>No matching products.</p>";
+    $("loadMoreProducts").classList.toggle("hidden", !state.productHasMore);
+    document.querySelectorAll("[data-submit-product]").forEach((button) => button.onclick = async () => { button.disabled = true; try { await api(`/providers/me/products/${button.dataset.submitProduct}/submit`, { method: "POST" }); setMessage("Product submitted for moderation.", true); await loadProducts({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
+    document.querySelectorAll("[data-edit-product]").forEach((button) => button.onclick = () => editProduct(button.dataset.editProduct));
+    document.querySelectorAll("[data-archive-product]").forEach((button) => button.onclick = async () => { if (!confirm("Archive this product?")) return; button.disabled = true; try { await api(`/providers/me/products/${button.dataset.archiveProduct}`, { method: "DELETE" }); await loadProducts({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
+  }
+  function editProduct(id) {
+    const item = state.products.find(product => product.id === id); if (!item) return; const form = $("productForm"); state.editingProductID = id; form.classList.remove("hidden"); form.elements.title.value = item.title || ""; form.elements.sku.value = item.sku || ""; form.elements.description.value = item.description || ""; form.elements.category.value = item.category_path?.[0] || ""; form.elements.local_selling_price.value = item.local_selling_price || ""; form.elements.compare_at_price.value = item.compare_at_price || ""; form.elements.inventory_count.value = item.inventory_count ?? 0; form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale); form.elements.flash_sale_price.value = item.flash_sale_price || ""; form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  async function loadMerchantOrders({ reset = false } = {}) {
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); if (!reset && state.merchantOrderCursor) params.set("cursor", state.merchantOrderCursor); const data = await api(`/providers/me/merchant-orders?${params}`); state.merchantOrders = reset ? (data.items || []) : [...state.merchantOrders, ...(data.items || [])]; state.merchantOrderCursor = data.page?.next_cursor || ""; state.merchantOrderHasMore = Boolean(data.page?.has_more); renderMerchantOrders();
+  }
+  function renderMerchantOrders() {
+    $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => `<article class="list-row"><div><span class="badge">${escapeHtml(human(order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3><p>${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p>${(order.items || []).map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}<p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div></article>`).join("") : "<p>No paid local product orders yet.</p>"; $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) return setMessage("Location is unavailable in this browser.");
+    const button = $("useCurrentLocation"); button.disabled = true; navigator.geolocation.getCurrentPosition(({ coords }) => { const form = $("listingForm"); form.elements.latitude.value = coords.latitude.toFixed(6); form.elements.longitude.value = coords.longitude.toFixed(6); setMessage("Current location added to this service draft.", true); button.disabled = false; }, (error) => { setMessage(error.message || "Could not read current location."); button.disabled = false; }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
   async function loadListings({ reset = false } = {}) {
@@ -179,16 +218,17 @@
 
   function renderOverview() {
     const p = state.provider, verification = p?.verification_status || "Not submitted", subscription = p?.subscription?.status || "None";
-    $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscription); $("metricListings").textContent = state.listings.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
+    $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscription); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
     $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : subscription !== "active" ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
     renderPlans();
   }
   function switchView(view) { document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view)); document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== view)); }
   function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
 
-  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close());
+  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close());
   $("toggleListingForm").addEventListener("click", () => $("listingForm").classList.toggle("hidden")); $("listingSearch").addEventListener("input", debounce(() => loadListings({ reset: true }))); $("listingStatus").addEventListener("change", () => loadListings({ reset: true })); $("loadMoreListings").addEventListener("click", () => loadListings());
   $("requestSearch").addEventListener("input", debounce(() => loadRequests({ reset: true }))); $("requestStatus").addEventListener("change", () => loadRequests({ reset: true })); $("loadMoreRequests").addEventListener("click", () => loadRequests()); $("refreshPortal").addEventListener("click", boot); $("refreshRequests").addEventListener("click", () => loadRequests({ reset: true }));
+  $("toggleProductForm").addEventListener("click", () => $("productForm").classList.toggle("hidden")); $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true }))); $("productStatus").addEventListener("change", () => loadProducts({ reset: true })); $("loadMoreProducts").addEventListener("click", () => loadProducts()); $("refreshMerchantOrders").addEventListener("click", () => loadMerchantOrders({ reset: true })); $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders()); $("useCurrentLocation").addEventListener("click", useCurrentLocation);
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
   boot().catch((error) => setMessage(error.message));
 })();

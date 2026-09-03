@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atlantic Express Provider Portal</title>
   <link rel="stylesheet" href="./provider.css?v=20260830a" />
-  <script src="./provider.js?v=20260831b" defer></script>
+  <script src="./provider.js?v=20260903a" defer></script>
 </head>
 <body>
   <header class="provider-header">
@@ -31,7 +31,7 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" class="active">Overview</button><button data-view="listings">Listings</button><button data-view="requests">Bookings & enquiries</button></nav>
+        <nav><button data-view="overview" class="active">Overview</button><button data-view="products">Products</button><button data-view="merchant-orders">Product orders</button><button data-view="listings">Services</button><button data-view="requests">Bookings & enquiries</button></nav>
       </aside>
       <div class="workspace">
         <section id="onboardingCard" class="card hidden">
@@ -42,6 +42,26 @@
             <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State<input name="state" required /></label>
             <label class="wide">About your business<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
           </form>
+        </section>
+
+        <section data-view-panel="products" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Merchant catalogue</span><h2>Physical products</h2><p>Products are reviewed before buyers can see them.</p></div><button id="toggleProductForm">Add product</button></div>
+          <form id="productForm" class="form-grid hidden">
+            <label>Product name<input name="title" required /></label><label>Your SKU<input name="sku" placeholder="Optional unique stock code" /></label>
+            <label>Selling price NGN<input name="local_selling_price" type="number" min="0.01" step="0.01" required /></label><label>Crossed-out price NGN<input name="compare_at_price" type="number" min="0" step="0.01" /></label>
+            <label>Inventory<input name="inventory_count" type="number" min="0" value="1" required /></label><label>Category<input name="category" placeholder="Phones, clothing, solar" required /></label>
+            <label><input name="is_flash_sale" type="checkbox" /> Flash sale</label><label>Flash price NGN<input name="flash_sale_price" type="number" min="0" step="0.01" /></label>
+            <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
+            <label class="wide">Product images<input id="productImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload 1-20 accurate images. Existing images remain when editing unless replacements are selected.</small></label>
+            <div id="productUploadProgress" class="wide message"></div><button type="submit">Save product draft</button>
+          </form>
+          <div class="toolbar"><input id="productSearch" type="search" placeholder="Search product or SKU" /><select id="productStatus"><option value="">All statuses</option><option>draft</option><option>pending</option><option>approved</option><option>rejected</option><option>suspended</option></select></div>
+          <div id="productRows" class="stack-list"></div><button id="loadMoreProducts" type="button" class="secondary hidden">Load more products</button>
+        </section>
+
+        <section data-view-panel="merchant-orders" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Local fulfilment</span><h2>Paid product orders</h2><p>Pack from these immutable buyer and product snapshots.</p></div><button id="refreshMerchantOrders" class="secondary">Refresh</button></div>
+          <div id="merchantOrderRows" class="stack-list"></div><button id="loadMoreMerchantOrders" type="button" class="secondary hidden">Load more orders</button>
         </section>
 
         <section data-view-panel="overview" class="card">
@@ -69,6 +89,9 @@
             <label>State<input name="state" required /></label><label>Street / area<input name="address_line" /></label><label>Price NGN<input name="price" type="number" min="0" step="0.01" /></label>
             <label>Pricing unit<input name="pricing_unit" placeholder="night, day, appointment" /></label><label>Capacity<input name="capacity" type="number" min="1" value="1" /></label>
             <label>Contact email<input name="contact_email" type="email" /></label><label>Contact phone<input name="contact_phone" inputmode="tel" /></label>
+            <label>Latitude<input name="latitude" type="number" min="-90" max="90" step="0.000001" /></label><label>Longitude<input name="longitude" type="number" min="-180" max="180" step="0.000001" /></label>
+            <label>Service radius km<input name="service_radius_km" type="number" min="1" max="500" value="25" /></label><label><input name="is_mobile_service" type="checkbox" /> Travels to customer</label>
+            <label><input name="is_available_now" type="checkbox" /> Available now</label><button id="useCurrentLocation" type="button" class="secondary">Use current location</button>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
             <label class="wide">Images<input id="listingImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload clear JPG, PNG, or WebP images. Multiple images are supported.</small></label>
             <div id="uploadProgress" class="wide message"></div><button type="submit">Save draft</button>
