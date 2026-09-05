@@ -32,7 +32,7 @@
     </script>
     <link rel="stylesheet" href="./styles.021cd47.css" />
     <script src="./app.28f4c61.js?v=20260816a" defer></script>
-    <script src="./provider-admin.js?v=20260903a" defer></script>
+    <script src="./provider-admin.js?v=20260905a" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -71,6 +71,7 @@
             <button class="nav-item active" data-tab="overview">Overview</button>
             <button class="nav-item" data-tab="products">Products</button>
             <button class="nav-item" data-tab="providers">Providers</button>
+            <button class="nav-item" data-tab="merchant-fulfillments">Merchant Fulfilment</button>
             <button class="nav-item" data-tab="orders">Orders</button>
             <button class="nav-item" data-tab="batches">Batches</button>
             <button class="nav-item" data-tab="transactions">Transactions</button>
@@ -359,6 +360,18 @@
             </section>
           </section>
 
+          <section class="tab-panel hidden" data-panel="merchant-fulfillments">
+            <section class="panel">
+              <div class="section-head"><div><h2>Merchant Fulfilment Oversight</h2><p class="muted">Track local and cross-border merchant orders. Admin III acts only after a merchant hands an order to Atlantic Express.</p></div><button type="button" id="reloadMerchantFulfillmentsButton" class="secondary-button">Reload</button></div>
+              <div class="filter-grid">
+                <label>Search <input id="merchantFulfillmentSearch" type="search" placeholder="Merchant, package, or tracking number" autocomplete="off" /></label>
+                <label>Route <select id="merchantFulfillmentRoute"><option value="">All routes</option><option value="merchant_local">Local</option><option value="merchant_cross_border">Cross-border</option></select></label>
+                <label>Status <input id="merchantFulfillmentStatusFilter" placeholder="e.g. handed_to_atlantic" /></label>
+              </div>
+              <p class="error" id="merchantFulfillmentStatus"></p><div class="table-wrap"><table id="merchantFulfillmentsTable"></table></div><button type="button" id="loadMoreMerchantFulfillmentsButton" class="secondary-button hidden">Load more</button>
+            </section>
+          </section>
+
           <section class="tab-panel hidden" data-panel="transactions">
             <section class="panel">
               <h2>Transactions</h2>
@@ -461,6 +474,7 @@
             <button class="mobile-nav-item active" data-tab="overview">Overview</button>
             <button class="mobile-nav-item" data-tab="products">Products</button>
             <button class="mobile-nav-item" data-tab="providers">Providers</button>
+            <button class="mobile-nav-item" data-tab="merchant-fulfillments">Fulfilment</button>
             <button class="mobile-nav-item" data-tab="orders">Orders</button>
             <button class="mobile-nav-item" data-tab="batches">Batches</button>
             <button class="mobile-nav-item" data-tab="transactions">Transactions</button>

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atlantic Express Provider Portal</title>
   <link rel="stylesheet" href="./provider.css?v=20260830a" />
-  <script src="./provider.js?v=20260903a" defer></script>
+  <script src="./provider.js?v=20260905a" defer></script>
 </head>
 <body>
   <header class="provider-header">
@@ -51,6 +51,12 @@
             <label>Selling price NGN<input name="local_selling_price" type="number" min="0.01" step="0.01" required /></label><label>Crossed-out price NGN<input name="compare_at_price" type="number" min="0" step="0.01" /></label>
             <label>Inventory<input name="inventory_count" type="number" min="0" value="1" required /></label><label>Category<input name="category" placeholder="Phones, clothing, solar" required /></label>
             <label><input name="is_flash_sale" type="checkbox" /> Flash sale</label><label>Flash price NGN<input name="flash_sale_price" type="number" min="0" step="0.01" /></label>
+            <label>Fulfilment route<select name="fulfillment_mode" required><option value="merchant_local">Available locally</option><option value="merchant_cross_border">Imported by merchant</option></select></label><label>Stock state<select name="stock_state" required><option value="in_stock">In stock</option><option value="preorder">Pre-order</option><option value="made_to_order">Made to order</option></select></label>
+            <label>Stock country code<input name="inventory_country_code" maxlength="2" value="NG" required /></label><label>Stock city<input name="inventory_city" required /></label>
+            <label class="wide">Stock / pickup location<input name="inventory_location" required /></label>
+            <label>Handling time (hours)<input name="handling_time_hours" type="number" min="0" value="24" required /></label><label>Estimated delivery (days)<span class="field-pair"><input name="delivery_min_days" type="number" min="0" value="1" required /><input name="delivery_max_days" type="number" min="0" value="3" required /></span></label>
+            <label class="wide">Delivery methods (comma separated)<input name="delivery_methods" value="delivery,pickup" required /></label><label class="wide">Returns policy<textarea name="return_policy" rows="3" required></textarea></label>
+            <label class="wide"><input name="atlantic_last_mile" type="checkbox" /> Hand imported orders to Atlantic Express for Nigerian last-mile delivery</label>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
             <label class="wide">Product images<input id="productImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload 1-20 accurate images. Existing images remain when editing unless replacements are selected.</small></label>
             <div id="productUploadProgress" class="wide message"></div><button type="submit">Save product draft</button>
@@ -60,8 +66,10 @@
         </section>
 
         <section data-view-panel="merchant-orders" class="card hidden">
-          <div class="section-heading"><div><span class="eyebrow">Local fulfilment</span><h2>Paid product orders</h2><p>Pack from these immutable buyer and product snapshots.</p></div><button id="refreshMerchantOrders" class="secondary">Refresh</button></div>
+          <div class="section-heading"><div><span class="eyebrow">Merchant fulfilment</span><h2>Paid product orders</h2><p>Local orders are processed immediately. Imported orders can be grouped into your own manifests.</p></div><button id="refreshMerchantOrders" class="secondary">Refresh</button></div>
           <div id="merchantOrderRows" class="stack-list"></div><button id="loadMoreMerchantOrders" type="button" class="secondary hidden">Load more orders</button>
+          <hr /><div class="section-heading"><div><span class="eyebrow">Cross-border operations</span><h2>Merchant manifests</h2><p>Each manifest contains only your paid imported orders and is suitable for printing.</p></div><button id="createManifest" type="button">Create from selected orders</button></div>
+          <div id="manifestRows" class="stack-list"></div><button id="loadMoreManifests" type="button" class="secondary hidden">Load more manifests</button>
         </section>
 
         <section data-view-panel="overview" class="card">
