@@ -1619,6 +1619,10 @@ function setActiveTab(tab, options = {}) {
   document.querySelectorAll(".nav-item, .mobile-nav-item").forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === nextTab);
   });
+  const activeDesktopNavItem = document.querySelector(`.nav-item[data-tab="${nextTab}"]`);
+  if (activeDesktopNavItem) {
+    requestAnimationFrame(() => activeDesktopNavItem.scrollIntoView({ block: "nearest" }));
+  }
   document.querySelectorAll(".tab-panel").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.panel !== nextTab || !knownTabs.has(panel.dataset.panel));
   });
