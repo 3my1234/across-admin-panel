@@ -5,6 +5,7 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
+    account: null,
     provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [],
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
     productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: ""
@@ -62,15 +63,26 @@
   }
 
   function signOut() {
-    state.token = ""; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = [];
+    state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = [];
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden");
+    $("providerStatus").textContent = "Secure provider access";
   }
 
   async function boot() {
     if (!state.token) return signOut();
-    $("authPanel").classList.add("hidden"); $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden"); setMessage("");
-    try { state.provider = await api("/providers/me"); $("onboardingCard").classList.add("hidden"); }
-    catch (error) { if (error.status === 404) { state.provider = null; $("onboardingCard").classList.remove("hidden"); } else throw error; }
+    $("authPanel").classList.add("hidden"); $("portal").classList.add("hidden"); $("signOut").classList.add("hidden");
+    $("providerStatus").textContent = "Restoring provider session..."; setMessage("");
+    try {
+      const profileData = await api("/profile");
+      state.account = profileData.profile || profileData.user || profileData;
+      try { state.provider = await api("/providers/me"); $("onboardingCard").classList.add("hidden"); }
+      catch (error) { if (error.status === 404) { state.provider = null; $("onboardingCard").classList.remove("hidden"); } else throw error; }
+    } catch (error) {
+      if (error.status === 401) return signOut();
+      throw error;
+    }
+    $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden");
+    $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
     await loadPlans();
     if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true })]);
     renderOverview();

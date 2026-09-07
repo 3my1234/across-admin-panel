@@ -106,6 +106,8 @@ button:hover {
   gap: 8px;
   flex: 1;
   min-height: 0;
+  align-content: start;
+  grid-auto-rows: max-content;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: 8px;

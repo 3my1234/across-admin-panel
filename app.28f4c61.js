@@ -1657,7 +1657,7 @@ function renderBatchActionButtons(batch) {
   if (canViewManifest) {
     transitionButtons.push(`<button type="button" class="secondary-button" data-action="purchase-manifest" data-id="${batch.id}">View product checklist</button>`);
   }
-  if (isCourierAdmin() && batch.status === "ready_for_pickup") {
+  if (isCourierAdmin() && batch.status === "ready_for_pickup" && Number(batch.deliverable_order_count || 0) > 0) {
     transitionButtons.push(`<button type="button" class="secondary-button" data-action="confirm-delivered" data-id="${batch.id}">Deliver</button>`);
   }
   return transitionButtons.join("");
@@ -2617,4 +2617,3 @@ async function resolveComplaint(complaintId) {
     setText("complaintStatus", error.message);
   }
 }
-
