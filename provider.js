@@ -46,9 +46,20 @@
       setMessage(data.message || "Account created. Verify your email, then sign in here.", true, "signupMessage"); form.reset();
     } catch (error) {
       if (error.status === 409) {
-        switchAuth("login");
-        document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
-        setMessage("An account already uses this email. Verify the email we sent, then sign in. If the message is missing, select Resend verification email.", false, "loginMessage");
+        const conflict = String(error.message || "").toLowerCase();
+        if (conflict.includes("phone")) {
+          setMessage(
+            "This phone number is already linked to another Atlantic Express account. Use that account, or enter a different phone number.",
+            false,
+            "signupMessage",
+          );
+        } else if (conflict.includes("email")) {
+          switchAuth("login");
+          document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
+          setMessage("An account already uses this email. Verify the email we sent, then sign in. If the message is missing, select Resend verification email.", false, "loginMessage");
+        } else {
+          setMessage(error.message || "That account information is already in use.", false, "signupMessage");
+        }
       } else {
         setMessage(error.message, false, "signupMessage");
       }

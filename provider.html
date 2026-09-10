@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atlantic Express Provider Portal</title>
   <link rel="stylesheet" href="./provider.css?v=20260830a" />
-  <script src="./provider.js?v=20260907a" defer></script>
+  <script src="./provider.js?v=20260910a" defer></script>
 </head>
 <body>
   <header class="provider-header">
@@ -23,7 +23,7 @@
       </form>
       <form id="signupForm" class="form-grid compact hidden" data-auth-panel="signup">
         <label>Full name<input name="full_name" autocomplete="name" required /></label><label>Email<input name="email" type="email" autocomplete="email" required /></label>
-        <label>Phone<input name="phone" type="tel" autocomplete="tel" required /></label><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <label>Phone<input name="phone" type="tel" autocomplete="tel" required /><small>Use a phone number that is not linked to another Atlantic Express account.</small></label><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
         <button type="submit">Create provider account</button><p id="signupMessage" class="message"></p>
       </form>
     </section>
