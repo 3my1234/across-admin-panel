@@ -20,9 +20,13 @@
     const headers = { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
     if (state.token) headers.Authorization = `Bearer ${state.token}`;
     const response = await fetch(`${API}${path}`, { ...options, headers });
-    const data = response.status === 204 ? null : await response.json().catch(() => null);
+    const raw = response.status === 204 ? "" : await response.text();
+    let data = null;
+    if (raw) { try { data = JSON.parse(raw); } catch (_) { data = null; } }
     if (!response.ok) {
-      const error = new Error(data?.message || data?.error || `Request failed (${response.status})`);
+      const safeText = raw && !raw.trim().startsWith("<") ? raw.trim().slice(0, 300) : "";
+      const fallback = response.status === 402 ? "An active monthly provider subscription is required." : `Request failed (${response.status})`;
+      const error = new Error(data?.message || data?.error?.message || data?.error || safeText || fallback);
       error.status = response.status;
       if (response.status === 401 && state.token) signOut();
       throw error;
@@ -106,15 +110,39 @@
   }
 
   async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; renderPlans(); }
+  function hasActiveSubscription() {
+    const subscription = state.provider?.subscription;
+    const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : NaN;
+    return subscription?.status === "active" && Number.isFinite(periodEnd) && periodEnd > Date.now();
+  }
+  function openSubscription() { switchView("subscription"); document.querySelector('[data-view="subscription"]')?.focus(); }
+  function requireSubscription(kind = "products") {
+    if (hasActiveSubscription()) return true;
+    setMessage(`Choose and activate a monthly plan before creating ${kind}.`);
+    openSubscription();
+    return false;
+  }
   async function subscribe(planId) {
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
-    try { const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, redirect_url: location.href }) }); if (!data.checkout_link) throw new Error("Checkout link unavailable"); location.href = data.checkout_link; }
+    try { const returnURL = new URL(location.href); returnURL.searchParams.set("subscription_return", "1"); const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, redirect_url: returnURL.toString() }) }); if (!data.checkout_link) throw new Error("Checkout link unavailable"); location.href = data.checkout_link; }
     catch (error) { setMessage(error.message); }
   }
   function renderPlans() {
-    const active = state.provider?.subscription?.status === "active";
-    $("plans").innerHTML = state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || state.provider.verification_status !== "approved" ? "disabled" : ""}>${active ? "Subscription active" : "Choose plan"}</button></article>`).join("") : "<p>No subscription plan is available yet.</p>";
+    const active = hasActiveSubscription();
+    const approved = state.provider?.verification_status === "approved";
+    $("subscriptionGuidance").innerHTML = active ? `<strong>Subscription active.</strong> You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
+    $("plans").innerHTML = state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : "Subscribe securely"}</button></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
     document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe));
+    renderSubscriptionGates();
+  }
+  function renderSubscriptionGates() {
+    const active = hasActiveSubscription();
+    [["productSubscriptionGate", "products"], ["listingSubscriptionGate", "services"]].forEach(([id, label]) => {
+      const node = $(id); if (!node) return;
+      node.classList.toggle("hidden", active);
+      node.innerHTML = active ? "" : `<div><strong>Monthly subscription required</strong><p>Activate a plan before creating ${label}. No image will be uploaded until access is active.</p></div><button type="button" data-open-subscription>View plans & subscribe</button>`;
+    });
+    document.querySelectorAll("[data-open-subscription]").forEach((button) => button.onclick = openSubscription);
   }
 
   async function uploadImages(files, progressTarget = "uploadProgress") {
@@ -157,7 +185,7 @@
   }
 
   async function saveListing(event) {
-    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    event.preventDefault(); if (!requireSubscription("services")) return; const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form)); const files = [...$("listingImages").files];
       if (!files.length) throw new Error("Add at least one clear listing image.");
@@ -169,7 +197,7 @@
   }
 
   async function saveProduct(event) {
-    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    event.preventDefault(); if (!requireSubscription("products")) return; const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form)); const files = [...$("productImages").files];
       const existing = state.products.find(item => item.id === state.editingProductID);
@@ -261,10 +289,10 @@
   function switchView(view) { document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view)); document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== view)); }
   function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
 
-  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close());
-  $("toggleListingForm").addEventListener("click", () => $("listingForm").classList.toggle("hidden")); $("listingSearch").addEventListener("input", debounce(() => loadListings({ reset: true }))); $("listingStatus").addEventListener("change", () => loadListings({ reset: true })); $("loadMoreListings").addEventListener("click", () => loadListings());
+  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", async () => { try { state.provider = await api("/providers/me"); renderOverview(); setMessage("Subscription status refreshed.", true); } catch (error) { setMessage(error.message); } });
+  $("toggleListingForm").addEventListener("click", () => { if (requireSubscription("services")) $("listingForm").classList.toggle("hidden"); }); $("listingSearch").addEventListener("input", debounce(() => loadListings({ reset: true }))); $("listingStatus").addEventListener("change", () => loadListings({ reset: true })); $("loadMoreListings").addEventListener("click", () => loadListings());
   $("requestSearch").addEventListener("input", debounce(() => loadRequests({ reset: true }))); $("requestStatus").addEventListener("change", () => loadRequests({ reset: true })); $("loadMoreRequests").addEventListener("click", () => loadRequests()); $("refreshPortal").addEventListener("click", boot); $("refreshRequests").addEventListener("click", () => loadRequests({ reset: true }));
-  $("toggleProductForm").addEventListener("click", () => $("productForm").classList.toggle("hidden")); $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true }))); $("productStatus").addEventListener("change", () => loadProducts({ reset: true })); $("loadMoreProducts").addEventListener("click", () => loadProducts()); $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }),loadManifests({reset:true})])); $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders()); $("loadMoreManifests").addEventListener("click",()=>loadManifests()); $("createManifest").addEventListener("click",createManifest); $("useCurrentLocation").addEventListener("click", useCurrentLocation);
+  $("toggleProductForm").addEventListener("click", () => { if (requireSubscription("products")) $("productForm").classList.toggle("hidden"); }); $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true }))); $("productStatus").addEventListener("change", () => loadProducts({ reset: true })); $("loadMoreProducts").addEventListener("click", () => loadProducts()); $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }),loadManifests({reset:true})])); $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders()); $("loadMoreManifests").addEventListener("click",()=>loadManifests()); $("createManifest").addEventListener("click",createManifest); $("useCurrentLocation").addEventListener("click", useCurrentLocation);
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
   boot().catch((error) => setMessage(error.message));
 })();

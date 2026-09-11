@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atlantic Express Provider Portal</title>
-  <link rel="stylesheet" href="./provider.css?v=20260830a" />
-  <script src="./provider.js?v=20260910a" defer></script>
+  <link rel="stylesheet" href="./provider.css?v=20260910a" />
+  <script src="./provider.js?v=20260910b" defer></script>
 </head>
 <body>
   <header class="provider-header">
@@ -31,7 +31,7 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" class="active">Overview</button><button data-view="products">Products</button><button data-view="merchant-orders">Product orders</button><button data-view="listings">Services</button><button data-view="requests">Bookings & enquiries</button></nav>
+        <nav><button data-view="overview" class="active">Overview</button><button data-view="subscription">Subscription</button><button data-view="products">Products</button><button data-view="merchant-orders">Product orders</button><button data-view="listings">Services</button><button data-view="requests">Bookings & enquiries</button></nav>
       </aside>
       <div class="workspace">
         <section id="onboardingCard" class="card hidden">
@@ -46,6 +46,7 @@
 
         <section data-view-panel="products" class="card hidden">
           <div class="section-heading"><div><span class="eyebrow">Merchant catalogue</span><h2>Physical products</h2><p>Products are reviewed before buyers can see them.</p></div><button id="toggleProductForm">Add product</button></div>
+          <div id="productSubscriptionGate" class="subscription-gate hidden"></div>
           <form id="productForm" class="form-grid hidden">
             <label>Product name<input name="title" required /></label><label>Your SKU<input name="sku" placeholder="Optional unique stock code" /></label>
             <label>Selling price NGN<input name="local_selling_price" type="number" min="0.01" step="0.01" required /></label><label>Crossed-out price NGN<input name="compare_at_price" type="number" min="0" step="0.01" /></label>
@@ -59,7 +60,8 @@
             <label class="wide"><input name="atlantic_last_mile" type="checkbox" /> Hand imported orders to Atlantic Express for Nigerian last-mile delivery</label>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
             <label class="wide">Product images<input id="productImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload 1-20 accurate images. Existing images remain when editing unless replacements are selected.</small></label>
-            <div id="productUploadProgress" class="wide message"></div><button type="submit">Save product draft</button>
+            <p class="wide form-note"><strong>Private draft:</strong> saving does not publish this product. Check the details, then submit it for Atlantic Express review.</p>
+            <div id="productUploadProgress" class="wide message"></div><button type="submit">Save private draft</button>
           </form>
           <div class="toolbar"><input id="productSearch" type="search" placeholder="Search product or SKU" /><select id="productStatus"><option value="">All statuses</option><option>draft</option><option>pending</option><option>approved</option><option>rejected</option><option>suspended</option></select></div>
           <div id="productRows" class="stack-list"></div><button id="loadMoreProducts" type="button" class="secondary hidden">Load more products</button>
@@ -86,11 +88,17 @@
             </form>
             <div id="verificationRows" class="stack-list"></div>
           </section>
+        </section>
+
+        <section data-view-panel="subscription" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Provider access</span><h2>Monthly subscription</h2><p>An active plan is required before you can save products or service listings.</p></div><button id="refreshSubscription" class="secondary">Refresh</button></div>
+          <div id="subscriptionGuidance" class="notice"></div>
           <div id="plans" class="plans"></div>
         </section>
 
         <section data-view-panel="listings" class="card hidden">
           <div class="section-heading"><div><span class="eyebrow">Inventory</span><h2>Service listings</h2></div><button id="toggleListingForm">Add listing</button></div>
+          <div id="listingSubscriptionGate" class="subscription-gate hidden"></div>
           <form id="listingForm" class="form-grid hidden">
             <label>Type<select name="listing_type" required><option value="hotel">Hotel</option><option value="short_let">Short let</option><option value="car_rental">Car rental</option><option value="car_wash">Car wash / appointment</option><option value="shop_rental">Shop rental</option><option value="property">Property enquiry</option><option value="land">Land enquiry</option></select></label>
             <label>Title<input name="title" required /></label><label>Category<input name="category" /></label><label>City<input name="city" required /></label>
@@ -102,7 +110,8 @@
             <label><input name="is_available_now" type="checkbox" /> Available now</label><button id="useCurrentLocation" type="button" class="secondary">Use current location</button>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
             <label class="wide">Images<input id="listingImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload clear JPG, PNG, or WebP images. Multiple images are supported.</small></label>
-            <div id="uploadProgress" class="wide message"></div><button type="submit">Save draft</button>
+            <p class="wide form-note"><strong>Private draft:</strong> saving does not publish this listing. Submit it for review when it is complete.</p>
+            <div id="uploadProgress" class="wide message"></div><button type="submit">Save private draft</button>
           </form>
           <div class="toolbar"><input id="listingSearch" type="search" placeholder="Search listings" /><select id="listingStatus"><option value="">All statuses</option><option>draft</option><option>pending</option><option>approved</option><option>rejected</option></select></div>
           <div id="listingRows" class="stack-list"></div>
