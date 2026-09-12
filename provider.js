@@ -14,6 +14,7 @@
   const money = (value) => new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
   const human = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const debounce = (fn, wait = 300) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; };
+  const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
   const setMessage = (text, ok = false, target = "portalMessage") => { const node = $(target); if (!node) return; node.textContent = text || ""; node.className = `message${ok ? " success" : ""}`; };
 
   async function api(path, options = {}) {
@@ -101,6 +102,7 @@
     await loadPlans();
     if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true })]);
     renderOverview();
+    void handleSubscriptionReturn();
   }
 
   async function onboard(event) {
@@ -116,6 +118,39 @@
     return subscription?.status === "active" && Number.isFinite(periodEnd) && periodEnd > Date.now();
   }
   function openSubscription() { switchView("subscription"); document.querySelector('[data-view="subscription"]')?.focus(); }
+  function clearSubscriptionReturn() {
+    const url = new URL(location.href);
+    ["subscription_return", "status", "tx_ref", "transaction_id"].forEach((key) => url.searchParams.delete(key));
+    history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+  async function handleSubscriptionReturn() {
+    const params = new URLSearchParams(location.search);
+    if (params.get("subscription_return") !== "1" || !state.provider) return;
+    openSubscription();
+    const checkoutStatus = String(params.get("status") || "").toLowerCase();
+    if (["cancelled", "canceled", "failed"].includes(checkoutStatus)) {
+      setMessage("Subscription checkout was not completed. No plan was activated; you can try again when ready.");
+      clearSubscriptionReturn();
+      return;
+    }
+    setMessage("Confirming your subscription securely with Flutterwave...", true);
+    try {
+      for (let attempt = 0; attempt < 7 && !hasActiveSubscription(); attempt += 1) {
+        if (attempt > 0) await delay(2000);
+        state.provider = await api("/providers/me");
+        renderOverview();
+      }
+      if (hasActiveSubscription()) {
+        setMessage("Subscription activated. Product and service drafts are now unlocked.", true);
+      } else {
+        setMessage("Flutterwave confirmation is still processing. Do not pay again. Use Refresh subscription shortly to check the same payment.");
+      }
+    } catch (error) {
+      setMessage(`We could not refresh the subscription yet: ${error.message}. Do not pay again; use Refresh subscription shortly.`);
+    } finally {
+      clearSubscriptionReturn();
+    }
+  }
   function requireSubscription(kind = "products") {
     if (hasActiveSubscription()) return true;
     setMessage(`Choose and activate a monthly plan before creating ${kind}.`);
@@ -124,8 +159,10 @@
   }
   async function subscribe(planId) {
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
+    document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
+    setMessage("Opening secure Flutterwave checkout...", true);
     try { const returnURL = new URL(location.href); returnURL.searchParams.set("subscription_return", "1"); const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, redirect_url: returnURL.toString() }) }); if (!data.checkout_link) throw new Error("Checkout link unavailable"); location.href = data.checkout_link; }
-    catch (error) { setMessage(error.message); }
+    catch (error) { setMessage(error.message); renderPlans(); }
   }
   function renderPlans() {
     const active = hasActiveSubscription();
@@ -282,8 +319,10 @@
 
   function renderOverview() {
     const p = state.provider, verification = p?.verification_status || "Not submitted", subscription = p?.subscription?.status || "None";
-    $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscription); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
-    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : subscription !== "active" ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
+    const subscriptionActive = hasActiveSubscription();
+    const subscriptionLabel = subscriptionActive ? "Active" : subscription === "active" ? "Expired" : subscription;
+    $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscriptionLabel); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
+    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
     renderPlans();
   }
   function switchView(view) { document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view)); document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== view)); }
