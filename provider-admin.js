@@ -8,7 +8,7 @@
     return ["super_admin", "catalog_admin"].includes(role) && !withFulfilment.includes("providers") ? [...withFulfilment.slice(0, 2), "providers", ...withFulfilment.slice(2)] : withFulfilment;
   };
   const originalLoadTabData = loadTabData;
-  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true }), loadMerchantProducts({ reset: true })]) : tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
+  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true }), loadMerchantProducts({ reset: true }), loadProviderPlans()]) : tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
 
   state.providers = [];
   state.providerListings = [];
@@ -22,6 +22,7 @@
   state.merchantFulfillments = [];
   state.merchantFulfillmentCursor = "";
   state.merchantFulfillmentHasMore = false;
+  state.providerPlans = [];
 
   function queryParams(searchID, statusID, cursor) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
@@ -172,10 +173,48 @@
       await request("/api/v1/admin/provider-subscription-plans", { method: "POST", body: { code: form.get("code"), name: form.get("name"), description: form.get("description"), amount_ngn: Number(form.get("amount_ngn")), listing_limit: Number(form.get("listing_limit")), flutterwave_plan_id: form.get("flutterwave_plan_id") ? Number(form.get("flutterwave_plan_id")) : null, features: { verified_badge: true, public_contact: true } } });
       setText("providerPlanStatus", "Subscription plan saved. Providers can now refresh their Subscription page.");
       formElement.reset();
+      await loadProviderPlans();
     } catch (error) {
       setText("providerPlanStatus", error.message);
     } finally {
       if (submitButton) submitButton.disabled = false;
+    }
+  }
+
+  async function loadProviderPlans() {
+    setText("providerPlansStatus", "Loading subscription plans...");
+    try {
+      const data = await request("/api/v1/admin/provider-subscription-plans");
+      state.providerPlans = data.items || [];
+      renderProviderPlans();
+      setText("providerPlansStatus", `${state.providerPlans.filter((plan) => plan.is_active).length} active subscription plan${state.providerPlans.filter((plan) => plan.is_active).length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setText("providerPlansStatus", error.message);
+    }
+  }
+
+  function renderProviderPlans() {
+    const table = $("providerPlansTable");
+    if (!table) return;
+    table.innerHTML = `<thead><tr><th>Plan</th><th>Price</th><th>Listings</th><th>Flutterwave</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerPlans.map((plan) => `<tr>
+      <td><strong>${escapeHtml(plan.name)}</strong><br><span class="muted">${escapeHtml(plan.code)}</span></td>
+      <td>NGN ${Number(plan.amount_ngn || 0).toLocaleString()} / ${escapeHtml(plan.billing_interval || "month")}</td>
+      <td>${Number(plan.listing_limit || 0).toLocaleString()}</td>
+      <td>${escapeHtml(String(plan.flutterwave_plan_id || "Not configured"))}</td>
+      <td><span class="status-pill ${plan.is_active ? "active" : "inactive"}">${plan.is_active ? "ACTIVE" : "REMOVED"}</span></td>
+      <td>${plan.is_active ? `<button type="button" class="danger-button" data-deactivate-plan="${plan.id}">Remove from sale</button>` : "-"}</td>
+    </tr>`).join("") || `<tr><td colspan="6">No subscription plans configured.</td></tr>`}</tbody>`;
+    table.querySelectorAll("[data-deactivate-plan]").forEach((button) => button.addEventListener("click", () => deactivateProviderPlan(button.dataset.deactivatePlan)));
+  }
+
+  async function deactivateProviderPlan(planID) {
+    if (!confirm("Remove this plan from sale? Existing paid subscriptions will remain valid until their paid period ends.")) return;
+    setText("providerPlansStatus", "Removing subscription plan from sale...");
+    try {
+      await request(`/api/v1/admin/provider-subscription-plans/${planID}`, { method: "DELETE" });
+      await loadProviderPlans();
+    } catch (error) {
+      setText("providerPlansStatus", error.message);
     }
   }
 
@@ -188,6 +227,7 @@
   $("providerListingSearch")?.addEventListener("input", debounce(() => loadProviderListings({ reset: true }), 300));
   $("providerListingModerationStatus")?.addEventListener("change", () => loadProviderListings({ reset: true }));
   $("providerPlanForm")?.addEventListener("submit", saveProviderPlan);
+  $("reloadProviderPlansButton")?.addEventListener("click", loadProviderPlans);
   $("reloadMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts({ reset: true }));
   $("loadMoreMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts());
   $("merchantProductSearch")?.addEventListener("input", debounce(() => loadMerchantProducts({ reset: true }), 300));

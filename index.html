@@ -32,7 +32,7 @@
     </script>
     <link rel="stylesheet" href="./styles.021cd47.css?v=20260907a" />
     <script src="./app.28f4c61.js?v=20260907a" defer></script>
-    <script src="./provider-admin.js?v=20260912a" defer></script>
+    <script src="./provider-admin.js?v=20260912b" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -345,8 +345,13 @@
               <p class="error" id="merchantProductModerationStatus"></p><div class="table-wrap"><table id="merchantProductsTable"></table></div><button type="button" id="loadMoreMerchantProductsButton" class="secondary-button hidden">Load more products</button>
             </section>
             <section class="panel">
-              <h2>Monthly Subscription Plans</h2>
-              <p class="muted">Create the matching monthly plan in Flutterwave first, then save its numeric plan ID here.</p>
+              <div class="section-head">
+                <div>
+                  <h2>Monthly Subscription Plans</h2>
+                  <p class="muted">Create the matching monthly plan in Flutterwave first, then save its numeric plan ID here.</p>
+                </div>
+                <button type="button" id="reloadProviderPlansButton" class="secondary-button">Reload plans</button>
+              </div>
               <form id="providerPlanForm" class="form-grid">
                 <label>Code <input name="code" placeholder="starter" required /></label>
                 <label>Name <input name="name" placeholder="Starter" required /></label>
@@ -356,7 +361,9 @@
                 <label>Description <input name="description" /></label>
                 <button type="submit">Save plan</button>
               </form>
-              <p id="providerPlanStatus" class="success"></p>
+          <p id="providerPlanStatus" class="success"></p>
+          <p id="providerPlansStatus" class="muted"></p>
+              <div class="table-wrap"><table id="providerPlansTable"></table></div>
             </section>
           </section>
 
