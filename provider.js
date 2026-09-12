@@ -2,6 +2,7 @@
   "use strict";
   const API = "https://atlanticexpress-api.sportbanter.online/api/v1";
   const PAGE_SIZE = 25;
+  const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const $ = (id) => document.getElementById(id);
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
@@ -16,6 +17,15 @@
   const debounce = (fn, wait = 300) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; };
   const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
   const setMessage = (text, ok = false, target = "portalMessage") => { const node = $(target); if (!node) return; node.textContent = text || ""; node.className = `message${ok ? " success" : ""}`; };
+  function readPendingSubscription() {
+    try {
+      const value = JSON.parse(localStorage.getItem(PENDING_SUBSCRIPTION_KEY) || "null");
+      return value && typeof value === "object" ? value : null;
+    } catch (_) { return null; }
+  }
+  function savePendingSubscription(value) { localStorage.setItem(PENDING_SUBSCRIPTION_KEY, JSON.stringify(value)); }
+  function clearPendingSubscription() { localStorage.removeItem(PENDING_SUBSCRIPTION_KEY); }
+  function hasPendingSubscription() { return Boolean(readPendingSubscription()) || state.provider?.subscription?.status === "pending"; }
 
   async function api(path, options = {}) {
     const headers = { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
@@ -123,32 +133,79 @@
     ["subscription_return", "status", "tx_ref", "transaction_id"].forEach((key) => url.searchParams.delete(key));
     history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
   }
+  async function confirmPendingSubscription(overrides = {}) {
+    const pending = { ...(readPendingSubscription() || {}), ...overrides };
+    const payload = {
+      tx_ref: String(pending.tx_ref || "").trim(),
+      transaction_id: String(pending.transaction_id || "").trim(),
+    };
+    const result = await api("/providers/me/subscription-confirm", { method: "POST", body: JSON.stringify(payload) });
+    state.provider = await api("/providers/me");
+    renderOverview();
+    const paymentState = hasActiveSubscription() ? "settled" : String(result?.payment_state || "pending");
+    if (paymentState === "settled" || paymentState === "not_found") clearPendingSubscription();
+    else savePendingSubscription({ ...pending, ...payload, updated_at: new Date().toISOString() });
+    return paymentState;
+  }
   async function handleSubscriptionReturn() {
     const params = new URLSearchParams(location.search);
-    if (params.get("subscription_return") !== "1" || !state.provider) return;
+    const isReturn = params.get("subscription_return") === "1";
+    const stored = readPendingSubscription();
+    if ((!isReturn && !stored) || !state.provider || hasActiveSubscription()) {
+      if (hasActiveSubscription()) clearPendingSubscription();
+      return;
+    }
     openSubscription();
     const checkoutStatus = String(params.get("status") || "").toLowerCase();
     if (["cancelled", "canceled", "failed"].includes(checkoutStatus)) {
       setMessage("Subscription checkout was not completed. No plan was activated; you can try again when ready.");
+      clearPendingSubscription();
       clearSubscriptionReturn();
       return;
     }
+    const returnData = {
+      tx_ref: params.get("tx_ref") || stored?.tx_ref || "",
+      transaction_id: params.get("transaction_id") || stored?.transaction_id || "",
+    };
+    savePendingSubscription({ ...(stored || {}), ...returnData, updated_at: new Date().toISOString() });
     setMessage("Confirming your subscription securely with Flutterwave...", true);
     try {
       for (let attempt = 0; attempt < 7 && !hasActiveSubscription(); attempt += 1) {
         if (attempt > 0) await delay(2000);
-        state.provider = await api("/providers/me");
-        renderOverview();
+        if (await confirmPendingSubscription(returnData) === "settled") break;
       }
       if (hasActiveSubscription()) {
         setMessage("Subscription activated. Product and service drafts are now unlocked.", true);
       } else {
-        setMessage("Flutterwave confirmation is still processing. Do not pay again. Use Refresh subscription shortly to check the same payment.");
+        setMessage("The paid checkout is still being verified. Do not pay again. Select Check payment status shortly to reconcile this same payment.");
       }
     } catch (error) {
-      setMessage(`We could not refresh the subscription yet: ${error.message}. Do not pay again; use Refresh subscription shortly.`);
+      setMessage(`We could not verify the subscription yet: ${error.message}. Do not pay again; select Check payment status shortly.`);
     } finally {
-      clearSubscriptionReturn();
+      if (isReturn) clearSubscriptionReturn();
+    }
+  }
+  async function refreshSubscriptionStatus() {
+    try {
+      if (!hasActiveSubscription() && state.provider?.verification_status === "approved") {
+        setMessage("Checking your existing payment with Flutterwave...", true);
+        const paymentState = await confirmPendingSubscription();
+        if (paymentState === "settled") {
+          setMessage("Subscription activated. Product and service drafts are now unlocked.", true);
+          return;
+        }
+        if (paymentState === "not_found") {
+          setMessage("No pending subscription payment was found. Select Subscribe securely when you are ready.");
+          return;
+        }
+        setMessage("Payment is still awaiting confirmation. Do not pay again; check again shortly.");
+        return;
+      }
+      state.provider = await api("/providers/me");
+      renderOverview();
+      setMessage(hasActiveSubscription() ? "Subscription is active." : "Subscription status refreshed.", hasActiveSubscription());
+    } catch (error) {
+      setMessage(`We could not verify the subscription yet: ${error.message}. Do not pay again; check again shortly.`);
     }
   }
   function requireSubscription(kind = "products") {
@@ -160,15 +217,33 @@
   async function subscribe(planId) {
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
     document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
-    setMessage("Opening secure Flutterwave checkout...", true);
-    try { const returnURL = new URL(location.href); returnURL.searchParams.set("subscription_return", "1"); const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, redirect_url: returnURL.toString() }) }); if (!data.checkout_link) throw new Error("Checkout link unavailable"); location.href = data.checkout_link; }
+    const pending = hasPendingSubscription();
+    setMessage(pending ? "Checking your existing payment with Flutterwave..." : "Opening secure Flutterwave checkout...", true);
+    try {
+      if (pending) {
+        const paymentState = await confirmPendingSubscription();
+        if (paymentState === "settled") setMessage("Subscription activated. Product and service drafts are now unlocked.", true);
+        else if (paymentState === "not_found") setMessage("No pending payment was found. Select Subscribe securely again to begin a new checkout.");
+        else setMessage("This payment is still awaiting confirmation. Do not pay again; check its status shortly.");
+        return;
+      }
+      const returnURL = new URL(location.href);
+      returnURL.searchParams.set("subscription_return", "1");
+      const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, redirect_url: returnURL.toString() }) });
+      if (!data.checkout_link || !data.tx_ref) throw new Error("Checkout link unavailable");
+      savePendingSubscription({ tx_ref: data.tx_ref, transaction_id: "", plan_id: planId, created_at: new Date().toISOString() });
+      location.href = data.checkout_link;
+    }
     catch (error) { setMessage(error.message); renderPlans(); }
+    finally { document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = false; }); }
   }
   function renderPlans() {
     const active = hasActiveSubscription();
     const approved = state.provider?.verification_status === "approved";
+    const pending = !active && hasPendingSubscription();
+    if (active) clearPendingSubscription();
     $("subscriptionGuidance").innerHTML = active ? `<strong>Subscription active.</strong> You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
-    $("plans").innerHTML = state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : "Subscribe securely"}</button></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
+    $("plans").innerHTML = state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Subscribe securely"}</button></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
     document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe));
     renderSubscriptionGates();
   }
@@ -328,7 +403,7 @@
   function switchView(view) { document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view)); document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== view)); }
   function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
 
-  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", async () => { try { state.provider = await api("/providers/me"); renderOverview(); setMessage("Subscription status refreshed.", true); } catch (error) { setMessage(error.message); } });
+  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
   $("toggleListingForm").addEventListener("click", () => { if (requireSubscription("services")) $("listingForm").classList.toggle("hidden"); }); $("listingSearch").addEventListener("input", debounce(() => loadListings({ reset: true }))); $("listingStatus").addEventListener("change", () => loadListings({ reset: true })); $("loadMoreListings").addEventListener("click", () => loadListings());
   $("requestSearch").addEventListener("input", debounce(() => loadRequests({ reset: true }))); $("requestStatus").addEventListener("change", () => loadRequests({ reset: true })); $("loadMoreRequests").addEventListener("click", () => loadRequests()); $("refreshPortal").addEventListener("click", boot); $("refreshRequests").addEventListener("click", () => loadRequests({ reset: true }));
   $("toggleProductForm").addEventListener("click", () => { if (requireSubscription("products")) $("productForm").classList.toggle("hidden"); }); $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true }))); $("productStatus").addEventListener("change", () => loadProducts({ reset: true })); $("loadMoreProducts").addEventListener("click", () => loadProducts()); $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }),loadManifests({reset:true})])); $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders()); $("loadMoreManifests").addEventListener("click",()=>loadManifests()); $("createManifest").addEventListener("click",createManifest); $("useCurrentLocation").addEventListener("click", useCurrentLocation);
