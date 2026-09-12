@@ -162,9 +162,21 @@
     } catch (error) { setText("merchantFulfillmentStatus", error.message); }
   }
   async function saveProviderPlan(event) {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
-    try { await request("/api/v1/admin/provider-subscription-plans", { method: "POST", body: { code: form.get("code"), name: form.get("name"), description: form.get("description"), amount_ngn: Number(form.get("amount_ngn")), listing_limit: Number(form.get("listing_limit")), flutterwave_plan_id: form.get("flutterwave_plan_id") ? Number(form.get("flutterwave_plan_id")) : null, features: { verified_badge: true, public_contact: true } } }); setText("providerPlanStatus", "Subscription plan saved."); event.currentTarget.reset(); }
-    catch (error) { setText("providerPlanStatus", error.message); }
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const submitButton = formElement.querySelector('button[type="submit"]');
+    const form = new FormData(formElement);
+    setText("providerPlanStatus", "Saving subscription plan...");
+    if (submitButton) submitButton.disabled = true;
+    try {
+      await request("/api/v1/admin/provider-subscription-plans", { method: "POST", body: { code: form.get("code"), name: form.get("name"), description: form.get("description"), amount_ngn: Number(form.get("amount_ngn")), listing_limit: Number(form.get("listing_limit")), flutterwave_plan_id: form.get("flutterwave_plan_id") ? Number(form.get("flutterwave_plan_id")) : null, features: { verified_badge: true, public_contact: true } } });
+      setText("providerPlanStatus", "Subscription plan saved. Providers can now refresh their Subscription page.");
+      formElement.reset();
+    } catch (error) {
+      setText("providerPlanStatus", error.message);
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
   }
 
   $("reloadProvidersButton")?.addEventListener("click", () => loadProviders({ reset: true }));
