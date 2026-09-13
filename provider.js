@@ -297,28 +297,73 @@
     } catch (error) { setMessage(error.message, false, "verificationMessage"); } finally { button.disabled = false; }
   }
 
+  function setListingFormOpen(open, { reset = false } = {}) {
+    const form = $("listingForm"); const toggle = $("toggleListingForm");
+    if (reset) form.reset();
+    form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
+    if (open) requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function setSelectOptions(select, options, preferred) {
+    select.replaceChildren(...options.map(([value, label]) => { const option = document.createElement("option"); option.value = value; option.textContent = label; return option; }));
+    if (options.some(([value]) => value === preferred)) select.value = preferred;
+  }
+
+  function syncProductFulfillment(preferredState = "") {
+    const mode = $("productFulfillmentMode").value; const stock = $("productStockState"); const country = $("productCountryCode");
+    if (mode === "merchant_local") {
+      setSelectOptions(stock, [["locally_available", "Available now in Nigeria"]], "locally_available"); country.value = "NG"; country.readOnly = true;
+      $("productStockHelp").textContent = "Local products must already be available in Nigeria.";
+    } else {
+      setSelectOptions(stock, [["foreign_stock", "In stock outside Nigeria"], ["import_on_demand", "Import on demand"]], preferredState || stock.value);
+      country.readOnly = false; if (country.value.toUpperCase() === "NG") country.value = "";
+      $("productStockHelp").textContent = "Enter the two-letter country where the stock is currently held.";
+    }
+  }
+
+  function setProductFormOpen(open, { reset = false } = {}) {
+    const form = $("productForm"); const toggle = $("toggleProductForm");
+    if (reset) { form.reset(); state.editingProductID = ""; syncProductFulfillment(); }
+    form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create product"; toggle.setAttribute("aria-expanded", String(open));
+    if (open) requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function validatedProductValues(form) {
+    if (!form.reportValidity()) throw new Error("Complete the highlighted product fields.");
+    const values = Object.fromEntries(new FormData(form)); const price = Number(values.local_selling_price); const compared = values.compare_at_price === "" ? null : Number(values.compare_at_price); const flash = values.flash_sale_price === "" ? null : Number(values.flash_sale_price);
+    if (compared !== null && compared <= price) throw new Error("Crossed-out price must be higher than the selling price.");
+    if (form.elements.is_flash_sale.checked && (flash === null || flash <= 0 || flash >= price)) throw new Error("Flash price must be greater than zero and lower than the selling price.");
+    if (Number(values.delivery_max_days) < Number(values.delivery_min_days)) throw new Error("Maximum delivery days cannot be less than minimum delivery days.");
+    values.inventory_country_code = String(values.inventory_country_code).trim().toUpperCase();
+    if (values.fulfillment_mode === "merchant_local") { values.inventory_country_code = "NG"; values.stock_state = "locally_available"; }
+    else if (values.inventory_country_code === "NG") throw new Error("Imported products must state the foreign country where stock is held.");
+    return values;
+  }
+
   async function saveListing(event) {
-    event.preventDefault(); if (!requireSubscription("services")) return; const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    event.preventDefault(); if (!requireSubscription("services")) return; const form = event.currentTarget; if (!form.reportValidity()) return; const files = [...$("listingImages").files];
+    if (!files.length) return setMessage("Add at least one clear listing image."); if (files.length > 20) return setMessage("Upload no more than 20 listing images.");
+    const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
-      const values = Object.fromEntries(new FormData(form)); const files = [...$("listingImages").files];
-      if (!files.length) throw new Error("Add at least one clear listing image.");
+      const values = Object.fromEntries(new FormData(form));
       const media_urls = await uploadImages(files);
       const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude: values.latitude === "" ? null : Number(values.latitude), longitude: values.longitude === "" ? null : Number(values.longitude), service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, currency_code: "NGN", country_code: "NG", media_urls, attributes: {} };
       await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
-      form.reset(); form.classList.add("hidden"); setMessage("Draft saved. Submit it when the details are ready for review.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
+      setListingFormOpen(false, { reset: true }); setMessage("Service draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
 
   async function saveProduct(event) {
-    event.preventDefault(); if (!requireSubscription("products")) return; const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    event.preventDefault(); if (!requireSubscription("products")) return; const form = event.currentTarget; let values;
+    try { values = validatedProductValues(form); } catch (error) { return setMessage(error.message); }
+    const files = [...$("productImages").files]; if (files.length > 20) return setMessage("Upload no more than 20 product images."); const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
-      const values = Object.fromEntries(new FormData(form)); const files = [...$("productImages").files];
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
       const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy, atlantic_last_mile: form.elements.atlantic_last_mile.checked };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
-      await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); state.editingProductID = ""; form.reset(); form.classList.add("hidden"); setMessage("Product saved. Submit it for review when ready.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
+      await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
   async function loadProducts({ reset = false } = {}) {
@@ -333,7 +378,21 @@
     document.querySelectorAll("[data-archive-product]").forEach((button) => button.onclick = async () => { if (!confirm("Archive this product?")) return; button.disabled = true; try { await api(`/providers/me/products/${button.dataset.archiveProduct}`, { method: "DELETE" }); await loadProducts({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
   }
   function editProduct(id) {
-    const item = state.products.find(product => product.id === id); if (!item) return; const form = $("productForm"); state.editingProductID = id; form.classList.remove("hidden"); ["title","sku","description","local_selling_price","compare_at_price","inventory_count","flash_sale_price","fulfillment_mode","inventory_country_code","inventory_city","inventory_location","stock_state","handling_time_hours","delivery_min_days","delivery_max_days","return_policy"].forEach(name => { form.elements[name].value = item[name] ?? ""; }); form.elements.category.value = item.category_path?.[0] || ""; form.elements.delivery_methods.value = (item.delivery_methods || []).join(","); form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale); form.elements.atlantic_last_mile.checked = Boolean(item.atlantic_last_mile); form.scrollIntoView({ behavior: "smooth", block: "start" });
+    const item = state.products.find(product => product.id === id);
+    if (!item) return;
+    const form = $("productForm");
+    state.editingProductID = id;
+    form.elements.fulfillment_mode.value = item.fulfillment_mode || "merchant_local";
+    syncProductFulfillment(item.stock_state);
+    ["title", "sku", "description", "local_selling_price", "compare_at_price", "inventory_count", "flash_sale_price", "inventory_country_code", "inventory_city", "inventory_location", "handling_time_hours", "delivery_min_days", "delivery_max_days", "return_policy"].forEach((name) => {
+      form.elements[name].value = item[name] ?? "";
+    });
+    form.elements.stock_state.value = item.stock_state || (item.fulfillment_mode === "merchant_cross_border" ? "foreign_stock" : "locally_available");
+    form.elements.category.value = item.category_path?.[0] || "";
+    form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
+    form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
+    form.elements.atlantic_last_mile.checked = Boolean(item.atlantic_last_mile);
+    setProductFormOpen(true);
   }
   async function loadMerchantOrders({ reset = false } = {}) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); if (!reset && state.merchantOrderCursor) params.set("cursor", state.merchantOrderCursor); const data = await api(`/providers/me/merchant-orders?${params}`); state.merchantOrders = reset ? (data.items || []) : [...state.merchantOrders, ...(data.items || [])]; state.merchantOrderCursor = data.page?.next_cursor || ""; state.merchantOrderHasMore = Boolean(data.page?.has_more); renderMerchantOrders();
@@ -405,9 +464,29 @@
   function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
 
   $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
-  $("toggleListingForm").addEventListener("click", () => { if (requireSubscription("services")) $("listingForm").classList.toggle("hidden"); }); $("listingSearch").addEventListener("input", debounce(() => loadListings({ reset: true }))); $("listingStatus").addEventListener("change", () => loadListings({ reset: true })); $("loadMoreListings").addEventListener("click", () => loadListings());
+  $("toggleListingForm").addEventListener("click", () => {
+    if (!requireSubscription("services")) return;
+    setListingFormOpen($("listingForm").classList.contains("hidden"));
+  });
+  $("cancelListingForm").addEventListener("click", () => setListingFormOpen(false, { reset: true }));
+  $("listingSearch").addEventListener("input", debounce(() => loadListings({ reset: true })));
+  $("listingStatus").addEventListener("change", () => loadListings({ reset: true }));
+  $("loadMoreListings").addEventListener("click", () => loadListings());
   $("requestSearch").addEventListener("input", debounce(() => loadRequests({ reset: true }))); $("requestStatus").addEventListener("change", () => loadRequests({ reset: true })); $("loadMoreRequests").addEventListener("click", () => loadRequests()); $("refreshPortal").addEventListener("click", boot); $("refreshRequests").addEventListener("click", () => loadRequests({ reset: true }));
-  $("toggleProductForm").addEventListener("click", () => { if (requireSubscription("products")) $("productForm").classList.toggle("hidden"); }); $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true }))); $("productStatus").addEventListener("change", () => loadProducts({ reset: true })); $("loadMoreProducts").addEventListener("click", () => loadProducts()); $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }),loadManifests({reset:true})])); $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders()); $("loadMoreManifests").addEventListener("click",()=>loadManifests()); $("createManifest").addEventListener("click",createManifest); $("useCurrentLocation").addEventListener("click", useCurrentLocation);
+  $("toggleProductForm").addEventListener("click", () => {
+    if (!requireSubscription("products")) return;
+    setProductFormOpen($("productForm").classList.contains("hidden"));
+  });
+  $("cancelProductForm").addEventListener("click", () => setProductFormOpen(false, { reset: true }));
+  $("productFulfillmentMode").addEventListener("change", () => syncProductFulfillment());
+  $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true })));
+  $("productStatus").addEventListener("change", () => loadProducts({ reset: true }));
+  $("loadMoreProducts").addEventListener("click", () => loadProducts());
+  $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }), loadManifests({ reset: true })]));
+  $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders());
+  $("loadMoreManifests").addEventListener("click", () => loadManifests());
+  $("createManifest").addEventListener("click", createManifest);
+  $("useCurrentLocation").addEventListener("click", useCurrentLocation);
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
   boot().catch((error) => setMessage(error.message));
 })();
