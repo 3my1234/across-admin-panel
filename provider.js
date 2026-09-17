@@ -7,9 +7,9 @@
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
     account: null,
-    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [],
+    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0,
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
-    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: ""
+    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", notificationTimer: null
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = (value) => new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
@@ -107,13 +107,38 @@
       if (error.status === 401) return signOut();
       throw error;
     }
-    $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden");
+    $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden"); $("providerAlerts").classList.remove("hidden");
     $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
     await loadPlans();
-    if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true })]);
+    if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications()]);
     renderOverview();
+    startProviderNotificationPolling();
     void handleSubscriptionReturn();
   }
+
+  function notificationCopy(item) {
+    const meta = item.metadata || {};
+    const title = meta.listing_title || meta.title || human(item.event_type);
+    const body = meta.notes || meta.message || ({ request_created: "A buyer sent a new booking or enquiry.", listing_approved: "Your service listing is now visible to buyers.", listing_rejected: "Your service listing needs changes.", provider_approved: "Your provider account was approved.", provider_rejected: "Your provider verification was rejected." }[item.event_type] || "Your provider account has new activity.");
+    return { title, body };
+  }
+  function playProviderAlert() {
+    try { const AudioContext = window.AudioContext || window.webkitAudioContext; if (!AudioContext) return; const audio = new AudioContext(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); oscillator.frequency.value = 880; gain.gain.value = .04; oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .12); oscillator.onended = () => audio.close(); } catch (_) {}
+  }
+  function renderProviderNotifications() {
+    const count = $("providerAlertCount"); count.textContent = String(state.unreadNotifications); count.classList.toggle("hidden", state.unreadNotifications < 1);
+    $("providerAlertRows").innerHTML = state.notifications.length ? state.notifications.map((item) => { const copy = notificationCopy(item); return `<article class="alert-item${item.read_at ? "" : " unread"}"><strong>${escapeHtml(copy.title)}</strong><p>${escapeHtml(copy.body)}</p><small>${new Date(item.created_at).toLocaleString()}</small></article>`; }).join("") : "<p>No new activity.</p>";
+  }
+  async function loadProviderNotifications({ silent = false } = {}) {
+    if (!state.provider) return;
+    try { const previous = state.unreadNotifications; const data = await api("/providers/me/notifications?limit=50"); state.notifications = data.items || []; state.unreadNotifications = Number(data.unread_count || 0); renderProviderNotifications(); if (silent && state.unreadNotifications > previous) playProviderAlert(); }
+    catch (error) { if (!silent) setMessage(error.message); }
+  }
+  function startProviderNotificationPolling() {
+    if (state.notificationTimer) clearInterval(state.notificationTimer);
+    state.notificationTimer = setInterval(() => { if (!document.hidden && state.token && state.provider) void loadProviderNotifications({ silent: true }); }, 30000);
+  }
+  async function markProviderNotificationsRead() { await api("/providers/me/notifications/read-all", { method: "PATCH" }); await loadProviderNotifications(); }
 
   async function onboard(event) {
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
@@ -426,8 +451,8 @@
   }
   function renderListings() {
     $("listingRows").innerHTML = state.listings.length ? state.listings.map((item) => {
-      const image = item.media_urls?.[0]; const canSubmit = ["draft", "rejected"].includes(item.status); const direct = ["hotel", "short_let", "car_rental", "car_wash"].includes(item.listing_type);
-      return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null ? "Enquiry" : money(item.price)}</p></div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}${direct ? `<button class="secondary" data-availability="${item.id}" data-title="${escapeHtml(item.title)}">Add availability</button>` : ""}</div></article>`;
+      const image = item.media_urls?.[0]; const canSubmit = ["draft", "rejected"].includes(item.status); const direct = ["hotel", "short_let", "car_rental", "car_wash", "mechanic", "plumber", "carpenter", "fuel_station", "food_vendor", "artisan"].includes(item.listing_type);
+      return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null ? "Enquiry" : money(item.price)}</p>${item.moderation_notes ? `<p class="moderation-note">Moderator note: ${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}${direct ? `<button class="secondary" data-availability="${item.id}" data-title="${escapeHtml(item.title)}">Add availability</button>` : ""}</div></article>`;
     }).join("") : "<p>No matching listings.</p>";
     $("loadMoreListings").classList.toggle("hidden", !state.listingHasMore);
     document.querySelectorAll("[data-submit-listing]").forEach((button) => button.onclick = async () => { button.disabled = true; try { await api(`/providers/me/listings/${button.dataset.submitListing}/submit`, { method: "POST" }); setMessage("Listing submitted for moderation.", true); await loadListings({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
@@ -487,6 +512,9 @@
   $("loadMoreManifests").addEventListener("click", () => loadManifests());
   $("createManifest").addEventListener("click", createManifest);
   $("useCurrentLocation").addEventListener("click", useCurrentLocation);
+  $("providerAlerts").addEventListener("click", () => { renderProviderNotifications(); $("providerAlertsDialog").showModal(); });
+  $("closeProviderAlerts").addEventListener("click", () => $("providerAlertsDialog").close());
+  $("markProviderAlertsRead").addEventListener("click", () => void markProviderNotificationsRead());
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
   boot().catch((error) => setMessage(error.message));
 })();
