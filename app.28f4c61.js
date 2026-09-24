@@ -1,5 +1,21 @@
+const DEFAULT_API_URL = "https://api.atlxpres.com";
+
+function resolveSavedApiUrl() {
+  const saved = localStorage.getItem("across.admin.apiUrl");
+  if (!saved) return DEFAULT_API_URL;
+  try {
+    const parsed = new URL(saved);
+    const localDevelopmentHost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname.startsWith("10.") || parsed.hostname.startsWith("192.168.");
+    if ((parsed.protocol === "http:" || parsed.protocol === "https:") && (parsed.hostname === "api.atlxpres.com" || localDevelopmentHost)) {
+      return saved.replace(/\/$/, "");
+    }
+  } catch {}
+  localStorage.setItem("across.admin.apiUrl", DEFAULT_API_URL);
+  return DEFAULT_API_URL;
+}
+
 ﻿const state = {
-  apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
+  apiUrl: resolveSavedApiUrl(),
   token: localStorage.getItem("across.admin.token") || "",
   adminId: localStorage.getItem("across.admin.adminId") || "",
   role: localStorage.getItem("across.admin.role") || "",

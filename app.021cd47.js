@@ -1,5 +1,5 @@
 ﻿const state = {
-  apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://atlanticexpress-api.sportbanter.online",
+  apiUrl: localStorage.getItem("across.admin.apiUrl") || "https://api.atlxpres.com",
   token: localStorage.getItem("across.admin.token") || "",
   adminId: localStorage.getItem("across.admin.adminId") || "",
   role: localStorage.getItem("across.admin.role") || "",

@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  const API = "https://atlanticexpress-api.sportbanter.online/api/v1";
+  const API = "https://api.atlxpres.com/api/v1";
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const $ = (id) => document.getElementById(id);

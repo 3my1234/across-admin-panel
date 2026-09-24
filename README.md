@@ -8,12 +8,12 @@ Static admin dashboard for managing Atlantic Express products, admins, orders, a
 - Build pack: Static
 - Base directory: `/`
 - Publish directory: `/`
-- Domain suggestion: `https://atlanticexpress-admin.sportbanter.online`
+- Domain: `https://admin.atlxpres.com`
 
 The dashboard talks to the backend API URL entered on the login screen. Use:
 
 ```text
-https://atlanticexpress-api.sportbanter.online
+https://api.atlxpres.com
 ```
 
 ## First Admin
