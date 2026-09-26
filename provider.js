@@ -145,7 +145,10 @@
 
   async function onboard(event) {
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
-    try { await api("/providers/onboarding", { method: "POST", body: JSON.stringify({ ...Object.fromEntries(new FormData(form)), country_code: "NG" }) }); setMessage("Provider profile submitted for verification.", true); await boot(); }
+    try {
+      const payload = Object.fromEntries(new FormData(form)); payload.country_code = String(payload.country_code || "").trim().toUpperCase();
+      await api("/providers/onboarding", { method: "POST", body: JSON.stringify(payload) }); setMessage("Provider profile submitted for verification.", true); await boot();
+    }
     catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
 

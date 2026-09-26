@@ -41,7 +41,8 @@
           <form id="onboardingForm" class="form-grid">
             <label>Business name<input name="business_name" required /></label><label>Contact email<input name="contact_email" type="email" required /></label>
             <label>Contact phone<input name="contact_phone" inputmode="tel" required /></label><label>Website<input name="website_url" type="url" /></label>
-            <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State<input name="state" required /></label>
+            <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State / region<input name="state" required /></label>
+            <label>Country code<input name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" autocapitalize="characters" required /><small>Two-letter ISO code, for example NG, GB, US, or CA.</small></label>
             <label class="wide">About your business<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
           </form>
         </section>
