@@ -161,6 +161,21 @@ main {
 .form-grid label { display: grid; gap: .35rem; font-weight: 700; min-width: 0; }
 .form-grid .wide { grid-column: 1 / -1; }
 
+.location-card {
+  display: grid;
+  gap: .65rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--soft);
+}
+
+.location-card p { margin: 0; }
+.location-card a { color: var(--ink); font-weight: 700; }
+.location-status { color: var(--muted); font-weight: 700; }
+.location-status.ready { color: #18794e; }
+.location-status.error { color: var(--danger); }
+
 .field-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

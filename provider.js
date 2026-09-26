@@ -12,7 +12,10 @@
     productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", notificationTimer: null
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
-  const money = (value) => new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(Number(value || 0));
+  const money = (value, currency = "NGN") => {
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "NGN", maximumFractionDigits: 0 }).format(Number(value || 0)); }
+    catch (_) { return ((currency || "") + " " + Number(value || 0).toLocaleString()).trim(); }
+  };
   const human = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const debounce = (fn, wait = 300) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; };
   const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -324,7 +327,7 @@
 
   function setListingFormOpen(open, { reset = false } = {}) {
     const form = $("listingForm"); const toggle = $("toggleListingForm");
-    if (reset) form.reset();
+    if (reset) { form.reset(); setListingLocationStatus("No location captured yet."); }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
     if (open) requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
@@ -374,11 +377,12 @@
     const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form));
-      if (values.latitude === "" || values.longitude === "") {
-        throw new Error("Use current location before saving so nearby customers can discover this service.");
-      }
+      values.country_code = String(values.country_code || "").trim().toUpperCase();
+      values.currency_code = String(values.currency_code || "").trim().toUpperCase();
+      const latitude = Number(values.latitude); const longitude = Number(values.longitude);
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new Error("Enter valid latitude and longitude for this service.");
       const media_urls = await uploadImages(files);
-      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude: values.latitude === "" ? null : Number(values.latitude), longitude: values.longitude === "" ? null : Number(values.longitude), service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, currency_code: "NGN", country_code: "NG", media_urls, attributes: {} };
+      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes: {} };
       await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
       setListingFormOpen(false, { reset: true }); setMessage("Service draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
@@ -450,10 +454,46 @@
     const button = $("useProductLocation"); button.disabled = true; navigator.geolocation.getCurrentPosition(({ coords }) => { const form = $("productForm"); form.elements.inventory_latitude.value = coords.latitude.toFixed(6); form.elements.inventory_longitude.value = coords.longitude.toFixed(6); setMessage("Current stock location added.", true); button.disabled = false; }, (error) => { setMessage(error.message || "Could not read current location."); button.disabled = false; }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
-  function useCurrentLocation() {
-    if (!navigator.geolocation) return setMessage("Location is unavailable in this browser.");
+  function setListingLocationStatus(text, stateName = "") {
+    const node = $("listingLocationStatus"); node.textContent = text;
+    node.className = "location-status" + (stateName ? " " + stateName : "");
+  }
+  function requestBrowserPosition(options) { return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options)); }
+  function explainLocationError(error) {
+    if (error?.code === 1) return "Location is blocked for this site. Use the padlock/site-settings icon beside the address, allow Location for admin.atlxpres.com, then retry—or enter coordinates manually.";
+    if (error?.code === 2) return "This device could not determine its location. Check the operating-system location service or enter the service coordinates manually.";
+    if (error?.code === 3) return "Location timed out. Move near a window, retry, or enter the service coordinates manually.";
+    return "Could not read this device's location. Enter the service coordinates manually.";
+  }
+  async function useCurrentLocation() {
+    if (!window.isSecureContext) return setListingLocationStatus("Device location requires a secure HTTPS page.", "error");
+    if (!navigator.geolocation) return setListingLocationStatus("Location is unavailable in this browser. Enter coordinates manually.", "error");
+    const button = $("useCurrentLocation"); button.disabled = true; setListingLocationStatus("Requesting this device's location…");
+    try {
+      if (navigator.permissions?.query) {
+        const permission = await navigator.permissions.query({ name: "geolocation" });
+        if (permission.state === "denied") throw Object.assign(new Error("Permission denied"), { code: 1 });
+      }
+      let position;
+      try { position = await requestBrowserPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }); }
+      catch (error) {
+        if (error?.code === 1) throw error;
+        position = await requestBrowserPosition({ enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 });
+      }
+      const { latitude, longitude, accuracy } = position.coords; const form = $("listingForm");
+      form.elements.latitude.value = latitude.toFixed(6); form.elements.longitude.value = longitude.toFixed(6);
+      setListingLocationStatus("Location captured: " + latitude.toFixed(6) + ", " + longitude.toFixed(6) + " (accuracy about " + Math.round(accuracy) + " m).", "ready");
+      setMessage("Device location added to this service draft.", true);
+    } catch (error) {
+      const message = explainLocationError(error); setListingLocationStatus(message, "error"); setMessage(message);
+    } finally { button.disabled = false; }
+  }
 
-    const button = $("useCurrentLocation"); button.disabled = true; navigator.geolocation.getCurrentPosition(({ coords }) => { const form = $("listingForm"); form.elements.latitude.value = coords.latitude.toFixed(6); form.elements.longitude.value = coords.longitude.toFixed(6); setMessage("Current location added to this service draft.", true); button.disabled = false; }, (error) => { setMessage(error.message || "Could not read current location."); button.disabled = false; }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  function updateManualListingLocation() {
+    const form = $("listingForm"); const latitude = Number(form.elements.latitude.value); const longitude = Number(form.elements.longitude.value);
+    if (!form.elements.latitude.value || !form.elements.longitude.value) return setListingLocationStatus("No complete location captured yet.");
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return setListingLocationStatus("Latitude must be -90 to 90 and longitude must be -180 to 180.", "error");
+    setListingLocationStatus("Service location set to " + latitude.toFixed(6) + ", " + longitude.toFixed(6) + ".", "ready");
   }
 
   async function loadListings({ reset = false } = {}) {
@@ -525,6 +565,8 @@
   $("loadMoreManifests").addEventListener("click", () => loadManifests());
   $("createManifest").addEventListener("click", createManifest);
   $("useCurrentLocation").addEventListener("click", useCurrentLocation);
+  $("listingForm").elements.latitude.addEventListener("input", updateManualListingLocation);
+  $("listingForm").elements.longitude.addEventListener("input", updateManualListingLocation);
   $("providerAlerts").addEventListener("click", () => { renderProviderNotifications(); $("providerAlertsDialog").showModal(); });
   $("closeProviderAlerts").addEventListener("click", () => $("providerAlertsDialog").close());
   $("markProviderAlertsRead").addEventListener("click", () => void markProviderNotificationsRead());
