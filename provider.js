@@ -360,7 +360,10 @@
     if (form.elements.is_flash_sale.checked && (flash === null || flash <= 0 || flash >= price)) throw new Error("Flash price must be greater than zero and lower than the selling price.");
     if (Number(values.delivery_max_days) < Number(values.delivery_min_days)) throw new Error("Maximum delivery days cannot be less than minimum delivery days.");
     values.inventory_country_code = String(values.inventory_country_code).trim().toUpperCase();
-    if (values.fulfillment_mode === "merchant_local") { values.inventory_country_code = "NG"; values.stock_state = "locally_available"; }
+    if (values.fulfillment_mode === "merchant_local") {
+      values.inventory_country_code = "NG"; values.stock_state = "locally_available";
+      if (values.inventory_latitude === "" || values.inventory_longitude === "") throw new Error("Use current stock location so nearby buyers can discover this product.");
+    }
     else if (values.inventory_country_code === "NG") throw new Error("Imported products must state the foreign country where stock is held.");
     return values;
   }
@@ -371,6 +374,9 @@
     const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form));
+      if (values.latitude === "" || values.longitude === "") {
+        throw new Error("Use current location before saving so nearby customers can discover this service.");
+      }
       const media_urls = await uploadImages(files);
       const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude: values.latitude === "" ? null : Number(values.latitude), longitude: values.longitude === "" ? null : Number(values.longitude), service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, currency_code: "NGN", country_code: "NG", media_urls, attributes: {} };
       await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
@@ -386,7 +392,7 @@
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
-      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy, atlantic_last_mile: form.elements.atlantic_last_mile.checked };
+      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy, atlantic_last_mile: form.elements.atlantic_last_mile.checked };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
@@ -409,7 +415,7 @@
     state.editingProductID = id;
     form.elements.fulfillment_mode.value = item.fulfillment_mode || "merchant_local";
     syncProductFulfillment(item.stock_state);
-    ["title", "sku", "description", "local_selling_price", "compare_at_price", "inventory_count", "flash_sale_price", "inventory_country_code", "inventory_city", "inventory_location", "handling_time_hours", "delivery_min_days", "delivery_max_days", "return_policy"].forEach((name) => {
+    ["title", "sku", "description", "local_selling_price", "compare_at_price", "inventory_count", "flash_sale_price", "inventory_country_code", "inventory_city", "inventory_location", "inventory_latitude", "inventory_longitude", "handling_time_hours", "delivery_min_days", "delivery_max_days", "return_policy"].forEach((name) => {
       form.elements[name].value = item[name] ?? "";
     });
     form.elements.stock_state.value = item.stock_state || (item.fulfillment_mode === "merchant_cross_border" ? "foreign_stock" : "locally_available");
@@ -439,8 +445,14 @@
   async function transitionManifest(button){button.disabled=true;try{await api(`/providers/me/manifests/${button.dataset.manifestTransition}`,{method:"PATCH",body:JSON.stringify({status:button.dataset.next,expected_version:Number(button.dataset.version),idempotency_key:crypto.randomUUID(),notes:""})});await loadManifests({reset:true});}catch(error){setMessage(error.message);}finally{button.disabled=false;}}
   async function printManifest(id){try{const data=await api(`/providers/me/manifests/${id}`);const popup=open("","_blank");if(!popup)throw new Error("Allow pop-ups to print manifests.");popup.document.write(`<title>${escapeHtml(data.manifest.manifest_code)}</title><style>body{font:14px Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:8px;text-align:left}img{width:72px}</style><h1>${escapeHtml(data.manifest.manifest_code)}</h1><p>${escapeHtml(data.manifest.origin_city)}, ${escapeHtml(data.manifest.origin_country_code)} · ${escapeHtml(human(data.manifest.status))}</p><table><tr><th>Package</th><th>Product</th><th>Qty</th><th>Buyer</th><th>Contact</th></tr>${(data.items||[]).map(row=>`<tr><td>${escapeHtml(row.package_code)}</td><td>${escapeHtml(row.product?.title||row.product?.sku||row.item_id)}</td><td>${row.quantity}</td><td>${escapeHtml(row.buyer?.full_name)}</td><td>${escapeHtml(row.buyer?.phone)}<br>${escapeHtml(row.buyer?.email)}</td></tr>`).join("")}</table>`);popup.document.close();popup.focus();}catch(error){setMessage(error.message);}}
 
+  function useCurrentProductLocation() {
+    if (!navigator.geolocation) return setMessage("Location is unavailable in this browser.");
+    const button = $("useProductLocation"); button.disabled = true; navigator.geolocation.getCurrentPosition(({ coords }) => { const form = $("productForm"); form.elements.inventory_latitude.value = coords.latitude.toFixed(6); form.elements.inventory_longitude.value = coords.longitude.toFixed(6); setMessage("Current stock location added.", true); button.disabled = false; }, (error) => { setMessage(error.message || "Could not read current location."); button.disabled = false; }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  }
+
   function useCurrentLocation() {
     if (!navigator.geolocation) return setMessage("Location is unavailable in this browser.");
+
     const button = $("useCurrentLocation"); button.disabled = true; navigator.geolocation.getCurrentPosition(({ coords }) => { const form = $("listingForm"); form.elements.latitude.value = coords.latitude.toFixed(6); form.elements.longitude.value = coords.longitude.toFixed(6); setMessage("Current location added to this service draft.", true); button.disabled = false; }, (error) => { setMessage(error.message || "Could not read current location."); button.disabled = false; }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
   }
 
@@ -509,6 +521,7 @@
   $("loadMoreProducts").addEventListener("click", () => loadProducts());
   $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }), loadManifests({ reset: true })]));
   $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders());
+  $("useProductLocation").addEventListener("click", useCurrentProductLocation);
   $("loadMoreManifests").addEventListener("click", () => loadManifests());
   $("createManifest").addEventListener("click", createManifest);
   $("useCurrentLocation").addEventListener("click", useCurrentLocation);
