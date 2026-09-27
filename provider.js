@@ -134,7 +134,13 @@
   }
   async function loadProviderNotifications({ silent = false } = {}) {
     if (!state.provider) return;
-    try { const previous = state.unreadNotifications; const data = await api("/providers/me/notifications?limit=50"); state.notifications = data.items || []; state.unreadNotifications = Number(data.unread_count || 0); renderProviderNotifications(); if (silent && state.unreadNotifications > previous) playProviderAlert(); }
+    try {
+      const previous = state.unreadNotifications; const known = new Set(state.notifications.map(item => item.id));
+      const data = await api("/providers/me/notifications?limit=50"); state.notifications = data.items || []; state.unreadNotifications = Number(data.unread_count || 0); renderProviderNotifications();
+      const listingChanged = state.notifications.some(item => !known.has(item.id) && ["listing_approved", "listing_rejected", "listing_suspended"].includes(item.event_type));
+      if (silent && state.unreadNotifications > previous) playProviderAlert();
+      if (silent && listingChanged) await loadListings({ reset: true });
+    }
     catch (error) { if (!silent) setMessage(error.message); }
   }
   function startProviderNotificationPolling() {

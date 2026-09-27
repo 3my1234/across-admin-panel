@@ -104,12 +104,24 @@
       <td><span class="status-pill ${item.status === "approved" ? "active" : item.status === "rejected" ? "inactive" : ""}">${escapeHtml(item.status)}</span></td><td class="table-actions"><button data-listing-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-listing-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-listing-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
     </tr>`).join("") || `<tr><td colspan="7">No matching listings.</td></tr>`}</tbody>`;
     $("loadMoreProviderListingsButton")?.classList.toggle("hidden", !state.providerListingHasMore);
-    $("providerListingsTable").querySelectorAll("[data-listing-status]").forEach((button) => button.addEventListener("click", () => moderateListing(button.dataset.id, button.dataset.listingStatus)));
+    $("providerListingsTable").querySelectorAll("[data-listing-status]").forEach((button) => button.addEventListener("click", () => moderateListingVerified(button)));
   }
   async function moderateListing(id, status) {
     const notes = prompt(`${status} listing. Add an internal note (optional):`, ""); if (notes === null) return;
     try { await request(`/api/v1/admin/provider-listings/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadProviderListings({ reset: true }); }
     catch (error) { setText("providerListingStatus", error.message); }
+  }
+  async function moderateListingVerified(button) {
+    const id = button.dataset.id; const status = button.dataset.listingStatus;
+    const notes = prompt(status + " listing. Add an internal note (optional):", ""); if (notes === null) return;
+    const buttons = [...document.querySelectorAll("[data-listing-status]")].filter(item => item.dataset.id === id); buttons.forEach(item => { item.disabled = true; });
+    try {
+      const result = await request("/api/v1/admin/provider-listings/" + id + "/moderation", { method: "PATCH", body: { status, notes } });
+      if (result.id !== id || result.status !== status) throw new Error("The server did not confirm this moderation change.");
+      await loadProviderListings({ reset: true });
+      setText("providerListingStatus", result.title + " (listing " + id.slice(0, 8) + ") is confirmed " + status + ".");
+    } catch (error) { setText("providerListingStatus", error.message); }
+    finally { buttons.forEach(item => { item.disabled = false; }); }
   }
   function renderMerchantProducts() {
     $("merchantProductsTable").innerHTML = `<thead><tr><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td>${item.image_urls?.[0] ? `<img class="product-image" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>NGN ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="6">No matching merchant products.</td></tr>`}</tbody>`;

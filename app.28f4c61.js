@@ -1294,6 +1294,7 @@ function logout() {
 async function request(path, options = {}) {
   const response = await fetch(`${state.apiUrl}${path}`, {
     method: options.method || "GET",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...(options.auth === false ? {} : { Authorization: `Bearer ${state.token}` })
