@@ -9,7 +9,7 @@
     account: null,
     provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0,
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
-    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", notificationTimer: null
+    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", notificationTimer: null
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = (value, currency = "NGN") => {
@@ -330,7 +330,10 @@
 
   function setListingFormOpen(open, { reset = false } = {}) {
     const form = $("listingForm"); const toggle = $("toggleListingForm");
-    if (reset) { form.reset(); setListingLocationStatus("Select Use my current location to continue."); }
+    if (reset) {
+      form.reset(); state.editingListingID = ""; state.listingLocationAccuracy = null; state.listingLocationSource = "";
+      setListingLocationStatus("Select Use my current location to continue.");
+    }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
     if (open) {
       requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -379,7 +382,8 @@
 
   async function saveListing(event) {
     event.preventDefault(); if (!requireSubscription("services")) return; const form = event.currentTarget; if (!form.reportValidity()) return; const files = [...$("listingImages").files];
-    if (!files.length) return setMessage("Add at least one clear listing image."); if (files.length > 20) return setMessage("Upload no more than 20 listing images.");
+    const existing = state.listings.find(item => item.id === state.editingListingID);
+    if (!files.length && !existing?.media_urls?.length) return setMessage("Add at least one clear listing image."); if (files.length > 20) return setMessage("Upload no more than 20 listing images.");
     const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form));
@@ -391,10 +395,12 @@
         $("listingLocationStatus").scrollIntoView({ behavior: "smooth", block: "center" });
         throw new Error("Capture the service location before saving.");
       }
-      const media_urls = await uploadImages(files);
-      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes: {} };
-      await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
-      setListingFormOpen(false, { reset: true }); setMessage("Service draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
+      const media_urls = files.length ? await uploadImages(files) : existing.media_urls;
+      const attributes = { ...(existing?.attributes || {}), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
+      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes };
+      const path = state.editingListingID ? "/providers/me/listings/" + state.editingListingID : "/providers/me/listings";
+      await api(path, { method: state.editingListingID ? "PATCH" : "POST", body: JSON.stringify(payload) });
+      setListingFormOpen(false, { reset: true }); setMessage(existing ? "Service updated and returned for review." : "Service draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
 
@@ -473,6 +479,7 @@
     if (error?.code === 1) return "Location is blocked for this site. Use the padlock/site-settings icon beside the address, allow Location for admin.atlxpres.com, then retry—or enter coordinates manually.";
     if (error?.code === 2) return "This device could not determine its location. Check the operating-system location service or enter the service coordinates manually.";
     if (error?.code === 3) return "Location timed out. Move near a window, retry, or enter the service coordinates manually.";
+    if (String(error?.message || "").startsWith("Location accuracy is too low")) return error.message;
     return "Could not read this device's location. Enter the service coordinates manually.";
   }
   async function prepareListingLocation() {
@@ -504,7 +511,9 @@
         position = await requestBrowserPosition({ enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 });
       }
       const { latitude, longitude, accuracy } = position.coords; const form = $("listingForm");
+      if (!Number.isFinite(accuracy) || accuracy > 10000) throw new Error("Location accuracy is too low. Move near a window, disable any VPN, or use a phone at the service address and retry.");
       form.elements.latitude.value = latitude.toFixed(6); form.elements.longitude.value = longitude.toFixed(6);
+      state.listingLocationAccuracy = Math.round(accuracy); state.listingLocationSource = "device";
       setListingLocationStatus("Location captured successfully (accuracy about " + Math.round(accuracy) + " m). Nearby customers can now discover this service.", "ready");
     } catch (error) {
       const message = explainLocationError(error); setListingLocationStatus(message, "error");
@@ -515,6 +524,7 @@
     const form = $("listingForm"); const latitude = Number(form.elements.latitude.value); const longitude = Number(form.elements.longitude.value);
     if (!form.elements.latitude.value || !form.elements.longitude.value) return setListingLocationStatus("No complete location captured yet.");
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return setListingLocationStatus("Latitude must be -90 to 90 and longitude must be -180 to 180.", "error");
+    state.listingLocationAccuracy = null; state.listingLocationSource = "manual";
     setListingLocationStatus("Service location set to " + latitude.toFixed(6) + ", " + longitude.toFixed(6) + ".", "ready");
   }
 
@@ -528,9 +538,31 @@
       const image = item.media_urls?.[0]; const canSubmit = ["draft", "rejected"].includes(item.status); const direct = ["hotel", "short_let", "car_rental", "car_wash", "mechanic", "plumber", "carpenter", "fuel_station", "food_vendor", "artisan"].includes(item.listing_type);
       return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null ? "Enquiry" : money(item.price)}</p>${item.moderation_notes ? `<p class="moderation-note">Moderator note: ${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}${direct ? `<button class="secondary" data-availability="${item.id}" data-title="${escapeHtml(item.title)}">Add availability</button>` : ""}</div></article>`;
     }).join("") : "<p>No matching listings.</p>";
+    [...$("listingRows").children].forEach((row, index) => {
+      const actions = row.querySelector(".list-actions"); const item = state.listings[index];
+      if (!actions || !item) return;
+      const button = document.createElement("button"); button.type = "button"; button.className = "secondary"; button.textContent = "Edit"; button.dataset.editListing = item.id;
+      actions.prepend(button);
+    });
     $("loadMoreListings").classList.toggle("hidden", !state.listingHasMore);
+    document.querySelectorAll("[data-edit-listing]").forEach((button) => button.onclick = () => editListing(button.dataset.editListing));
     document.querySelectorAll("[data-submit-listing]").forEach((button) => button.onclick = async () => { button.disabled = true; try { await api(`/providers/me/listings/${button.dataset.submitListing}/submit`, { method: "POST" }); setMessage("Listing submitted for moderation.", true); await loadListings({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
     document.querySelectorAll("[data-availability]").forEach((button) => button.onclick = () => openAvailability(button.dataset.availability, button.dataset.title));
+  }
+
+  function editListing(id) {
+    const item = state.listings.find(listing => listing.id === id); if (!item) return;
+    const form = $("listingForm"); state.editingListingID = id;
+    ["listing_type", "title", "category", "city", "state", "address_line", "country_code", "currency_code", "price", "pricing_unit", "capacity", "contact_email", "contact_phone", "latitude", "longitude", "service_radius_km", "description"].forEach(name => {
+      form.elements[name].value = item[name] ?? "";
+    });
+    form.elements.is_mobile_service.checked = Boolean(item.is_mobile_service);
+    form.elements.is_available_now.checked = Boolean(item.is_available_now);
+    setListingFormOpen(true);
+    state.editingListingID = id;
+    state.listingLocationAccuracy = Number.isFinite(item.attributes?.location_accuracy_m) ? Number(item.attributes.location_accuracy_m) : null;
+    state.listingLocationSource = String(item.attributes?.location_source || "saved");
+    setListingLocationStatus("Saved location loaded. Select Use my current location to recapture it before saving.", "ready");
   }
 
   function openAvailability(id, title) { const form = $("availabilityForm"); form.reset(); form.elements.listing_id.value = id; $("availabilityTitle").textContent = `Availability · ${title}`; setMessage("", false, "availabilityMessage"); $("availabilityDialog").showModal(); }
