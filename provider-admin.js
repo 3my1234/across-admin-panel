@@ -98,11 +98,12 @@
   }
 
   function renderProviderListings() {
-    $("providerListingsTable").innerHTML = `<thead><tr><th>Listing</th><th>Provider</th><th>Service</th><th>Location</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerListings.map((item) => `<tr>
+    $("providerListingsTable").innerHTML = `<thead><tr><th>Images</th><th>Listing</th><th>Provider</th><th>Service</th><th>Location</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerListings.map((item) => `<tr>
+      <td><div class="moderation-media">${(item.media_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td>
       <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
       <td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td><td>${item.price == null ? "Enquiry" : `${escapeHtml(item.currency_code)} ${format(item.price)} / ${escapeHtml(item.pricing_unit || "unit")}`}</td>
       <td><span class="status-pill ${item.status === "approved" ? "active" : item.status === "rejected" ? "inactive" : ""}">${escapeHtml(item.status)}</span></td><td class="table-actions"><button data-listing-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-listing-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-listing-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
-    </tr>`).join("") || `<tr><td colspan="7">No matching listings.</td></tr>`}</tbody>`;
+    </tr>`).join("") || `<tr><td colspan="8">No matching listings.</td></tr>`}</tbody>`;
     $("loadMoreProviderListingsButton")?.classList.toggle("hidden", !state.providerListingHasMore);
     $("providerListingsTable").querySelectorAll("[data-listing-status]").forEach((button) => button.addEventListener("click", () => moderateListingVerified(button)));
   }
@@ -124,14 +125,22 @@
     finally { buttons.forEach(item => { item.disabled = false; }); }
   }
   function renderMerchantProducts() {
-    $("merchantProductsTable").innerHTML = `<thead><tr><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td>${item.image_urls?.[0] ? `<img class="product-image" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>NGN ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="6">No matching merchant products.</td></tr>`}</tbody>`;
+    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>NGN ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
     $("loadMoreMerchantProductsButton")?.classList.toggle("hidden", !state.merchantProductHasMore);
-    $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProduct(button.dataset.id, button.dataset.productStatus));
+    $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProductVerified(button));
   }
-  async function moderateMerchantProduct(id, status) {
+  async function moderateMerchantProductVerified(button) {
+    const id = button.dataset.id; const status = button.dataset.productStatus;
     const notes = prompt(`${status} product. Add a moderation note (optional):`, ""); if (notes === null) return;
-    try { await request(`/api/v1/admin/merchant-products/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadMerchantProducts({ reset: true }); }
+    const buttons = [...document.querySelectorAll("[data-product-status]")].filter(item => item.dataset.id === id); buttons.forEach(item => { item.disabled = true; });
+    try {
+      const result = await request(`/api/v1/admin/merchant-products/${id}/moderation`, { method: "PATCH", body: { status, notes } });
+      if (result.id !== id || result.status !== status) throw new Error("The server did not confirm this product moderation change.");
+      await loadMerchantProducts({ reset: true });
+      setText("merchantProductModerationStatus", result.title + " (product " + id.slice(0, 8) + ") is confirmed " + status + ".");
+    }
     catch (error) { setText("merchantProductModerationStatus", error.message); }
+    finally { buttons.forEach(item => { item.disabled = false; }); }
   }
 
   async function loadMerchantFulfillments({ reset = false } = {}) {
