@@ -330,9 +330,12 @@
 
   function setListingFormOpen(open, { reset = false } = {}) {
     const form = $("listingForm"); const toggle = $("toggleListingForm");
-    if (reset) { form.reset(); setListingLocationStatus("No location captured yet."); }
+    if (reset) { form.reset(); setListingLocationStatus("Select Use my current location to continue."); }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
-    if (open) requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
+    if (open) {
+      requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
+      void prepareListingLocation();
+    }
   }
 
   function setSelectOptions(select, options, preferred) {
@@ -383,7 +386,11 @@
       values.country_code = String(values.country_code || "").trim().toUpperCase();
       values.currency_code = String(values.currency_code || "").trim().toUpperCase();
       const latitude = Number(values.latitude); const longitude = Number(values.longitude);
-      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) throw new Error("Enter valid latitude and longitude for this service.");
+      if (values.latitude === "" || values.longitude === "" || !Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+        setListingLocationStatus("Location is required. Select Use my current location, then allow the browser request.", "error");
+        $("listingLocationStatus").scrollIntoView({ behavior: "smooth", block: "center" });
+        throw new Error("Capture the service location before saving.");
+      }
       const media_urls = await uploadImages(files);
       const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes: {} };
       await api("/providers/me/listings", { method: "POST", body: JSON.stringify(payload) });
@@ -468,6 +475,19 @@
     if (error?.code === 3) return "Location timed out. Move near a window, retry, or enter the service coordinates manually.";
     return "Could not read this device's location. Enter the service coordinates manually.";
   }
+  async function prepareListingLocation() {
+    const form = $("listingForm");
+    if (form.elements.latitude.value && form.elements.longitude.value) return updateManualListingLocation();
+    if (!window.isSecureContext) return setListingLocationStatus("Location requires the secure HTTPS portal.", "error");
+    if (!navigator.geolocation) return setListingLocationStatus("This browser does not provide device location. Open the advanced fallback below.", "error");
+    if (!navigator.permissions?.query) return setListingLocationStatus("Select Use my current location, then approve the browser request.");
+    try {
+      const permission = await navigator.permissions.query({ name: "geolocation" });
+      if (permission.state === "granted") return void useCurrentLocation();
+      if (permission.state === "denied") return setListingLocationStatus("Location is blocked for admin.atlxpres.com. Open the padlock/site settings beside the address, change Location to Allow, reload, then select Use my current location.", "error");
+      setListingLocationStatus("Select Use my current location, then choose Allow when your browser asks.");
+    } catch (_) { setListingLocationStatus("Select Use my current location, then approve the browser request."); }
+  }
   async function useCurrentLocation() {
     if (!window.isSecureContext) return setListingLocationStatus("Device location requires a secure HTTPS page.", "error");
     if (!navigator.geolocation) return setListingLocationStatus("Location is unavailable in this browser. Enter coordinates manually.", "error");
@@ -485,10 +505,9 @@
       }
       const { latitude, longitude, accuracy } = position.coords; const form = $("listingForm");
       form.elements.latitude.value = latitude.toFixed(6); form.elements.longitude.value = longitude.toFixed(6);
-      setListingLocationStatus("Location captured: " + latitude.toFixed(6) + ", " + longitude.toFixed(6) + " (accuracy about " + Math.round(accuracy) + " m).", "ready");
-      setMessage("Device location added to this service draft.", true);
+      setListingLocationStatus("Location captured successfully (accuracy about " + Math.round(accuracy) + " m). Nearby customers can now discover this service.", "ready");
     } catch (error) {
-      const message = explainLocationError(error); setListingLocationStatus(message, "error"); setMessage(message);
+      const message = explainLocationError(error); setListingLocationStatus(message, "error");
     } finally { button.disabled = false; }
   }
 

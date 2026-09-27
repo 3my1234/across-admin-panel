@@ -111,7 +111,7 @@ main {
 .form-grid > *,
 .section-heading > * { min-width: 0; }
 
-.side-card { position: sticky; top: 100px; align-self: start; }
+.side-card { position: static; align-self: start; }
 .side-card nav { display: grid; gap: .45rem; margin-top: 1rem; }
 .side-card nav button { background: transparent; color: var(--ink); text-align: left; }
 .side-card nav button.active { background: var(--soft); }
@@ -170,11 +170,14 @@ main {
   background: var(--soft);
 }
 
+.location-card h3 { margin: 0 0 .25rem; }
 .location-card p { margin: 0; }
-.location-card a { color: var(--ink); font-weight: 700; }
 .location-status { color: var(--muted); font-weight: 700; }
 .location-status.ready { color: #18794e; }
 .location-status.error { color: var(--danger); }
+.manual-location { border-top: 1px solid var(--line); padding-top: .75rem; }
+.manual-location summary { cursor: pointer; font-weight: 700; }
+.manual-location .field-pair { margin: .75rem 0 .5rem; }
 
 .field-pair {
   display: grid;
