@@ -338,6 +338,7 @@
     const form = $("listingForm"); const toggle = $("toggleListingForm");
     if (reset) {
       form.reset(); state.editingListingID = ""; state.listingLocationAccuracy = null; state.listingLocationSource = "";
+      $("confirmListingLocation").checked = false; $("listingLocationPreview").classList.add("hidden"); $("listingLocationMap").removeAttribute("src");
       setListingLocationStatus("Select Use my current location to continue.");
     }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
@@ -400,6 +401,10 @@
         setListingLocationStatus("Location is required. Select Use my current location, then allow the browser request.", "error");
         $("listingLocationStatus").scrollIntoView({ behavior: "smooth", block: "center" });
         throw new Error("Capture the service location before saving.");
+      }
+      if (!$("confirmListingLocation").checked) {
+        $("listingLocationPreview").scrollIntoView({ behavior: "smooth", block: "center" });
+        throw new Error("Confirm that the map pin is at the actual service or property location before saving.");
       }
       const media_urls = files.length ? await uploadImages(files) : existing.media_urls;
       const attributes = { ...(existing?.attributes || {}), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
@@ -480,6 +485,15 @@
     const node = $("listingLocationStatus"); node.textContent = text;
     node.className = "location-status" + (stateName ? " " + stateName : "");
   }
+  function renderListingLocationPreview(latitude, longitude) {
+    const lat = Number(latitude); const lon = Number(longitude); if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const delta = 0.01;
+    const embed = "https://www.openstreetmap.org/export/embed.html?bbox=" + (lon - delta) + "," + (lat - delta) + "," + (lon + delta) + "," + (lat + delta) + "&layer=mapnik&marker=" + lat + "," + lon;
+    $("listingLocationMap").src = embed;
+    $("openListingLocationMap").href = "https://www.openstreetmap.org/?mlat=" + lat + "&mlon=" + lon + "#map=17/" + lat + "/" + lon;
+    $("confirmListingLocation").checked = false;
+    $("listingLocationPreview").classList.remove("hidden");
+  }
   function requestBrowserPosition(options) { return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options)); }
   function explainLocationError(error) {
     if (error?.code === 1) return "Location is blocked for this site. Use the padlock/site-settings icon beside the address, allow Location for admin.atlxpres.com, then retry—or enter coordinates manually.";
@@ -520,6 +534,7 @@
       if (!Number.isFinite(accuracy) || accuracy > 10000) throw new Error("Location accuracy is too low. Move near a window, disable any VPN, or use a phone at the service address and retry.");
       form.elements.latitude.value = latitude.toFixed(6); form.elements.longitude.value = longitude.toFixed(6);
       state.listingLocationAccuracy = Math.round(accuracy); state.listingLocationSource = "device";
+      renderListingLocationPreview(latitude, longitude);
       setListingLocationStatus("Location captured successfully (accuracy about " + Math.round(accuracy) + " m). Nearby customers can now discover this service.", "ready");
     } catch (error) {
       const message = explainLocationError(error); setListingLocationStatus(message, "error");
@@ -531,6 +546,7 @@
     if (!form.elements.latitude.value || !form.elements.longitude.value) return setListingLocationStatus("No complete location captured yet.");
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return setListingLocationStatus("Latitude must be -90 to 90 and longitude must be -180 to 180.", "error");
     state.listingLocationAccuracy = null; state.listingLocationSource = "manual";
+    renderListingLocationPreview(latitude, longitude);
     setListingLocationStatus("Service location set to " + latitude.toFixed(6) + ", " + longitude.toFixed(6) + ".", "ready");
   }
 

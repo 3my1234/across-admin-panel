@@ -178,6 +178,9 @@ main {
 .manual-location { border-top: 1px solid var(--line); padding-top: .75rem; }
 .manual-location summary { cursor: pointer; font-weight: 700; }
 .manual-location .field-pair { margin: .75rem 0 .5rem; }
+.location-preview { display: grid; gap: .65rem; }
+.location-preview iframe { width: 100%; height: 280px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.location-preview a { color: var(--ink); font-weight: 800; }
 
 .field-pair {
   display: grid;
