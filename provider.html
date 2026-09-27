@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="./provider.css?v=20260927-picker" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
-  <script src="./provider.js?v=20260927-picker" defer></script>
+  <script src="./provider.js?v=20260927-session" defer></script>
 </head>
 <body>
   <header class="provider-header">
@@ -30,6 +30,11 @@
         <label>Phone<input name="phone" type="tel" autocomplete="tel" required /><small>Use a phone number that is not linked to another Atlantic Express account.</small></label><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
         <button type="submit">Create provider account</button><p id="signupMessage" class="message"></p>
       </form>
+    </section>
+
+    <section id="sessionRestorePanel" class="card auth-card hidden" aria-live="polite">
+      <div><span class="eyebrow">Secure provider access</span><h2>Restoring your session</h2><p id="sessionRestoreMessage">Checking your Atlantic Express account and provider access…</p></div>
+      <div class="form-actions"><button id="retrySessionRestore" type="button">Retry</button><button id="cancelSessionRestore" type="button" class="secondary">Sign out</button></div>
     </section>
 
     <section id="portal" class="hidden dashboard-grid">

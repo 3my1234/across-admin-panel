@@ -3,13 +3,16 @@
   const API = "https://api.atlxpres.com/api/v1";
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
+  const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
+  const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests"]);
   const $ = (id) => document.getElementById(id);
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
     account: null,
     provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0,
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
-    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null
+    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
+    activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = (value, currency = "NGN") => {
@@ -33,7 +36,17 @@
   async function api(path, options = {}) {
     const headers = { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
     if (state.token) headers.Authorization = `Bearer ${state.token}`;
-    const response = await fetch(`${API}${path}`, { ...options, headers });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    let response;
+    try {
+      response = await fetch(`${API}${path}`, { ...options, headers, signal: options.signal || controller.signal });
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("The server took too long to respond.");
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
     const raw = response.status === 204 ? "" : await response.text();
     let data = null;
     if (raw) { try { data = JSON.parse(raw); } catch (_) { data = null; } }
@@ -92,14 +105,19 @@
   }
 
   function signOut() {
+    state.booting = false;
     state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = [];
-    localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden");
+    localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
     $("providerStatus").textContent = "Secure provider access";
   }
 
   async function boot() {
     if (!state.token) return signOut();
-    $("authPanel").classList.add("hidden"); $("portal").classList.add("hidden"); $("signOut").classList.add("hidden");
+    if (state.booting) return;
+    state.booting = true;
+    $("authPanel").classList.add("hidden"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.remove("hidden"); $("signOut").classList.add("hidden");
+    $("sessionRestoreMessage").textContent = "Checking your Atlantic Express account and provider access…";
+    $("retrySessionRestore").disabled = true;
     $("providerStatus").textContent = "Restoring provider session..."; setMessage("");
     try {
       const profileData = await api("/profile");
@@ -108,15 +126,26 @@
       catch (error) { if (error.status === 404) { state.provider = null; $("onboardingCard").classList.remove("hidden"); } else throw error; }
     } catch (error) {
       if (error.status === 401) return signOut();
-      throw error;
+      $("sessionRestoreMessage").textContent = (error.message || "The provider session could not be restored.") + " Check your connection, then retry.";
+      $("providerStatus").textContent = "Session restoration needs attention";
+      $("retrySessionRestore").disabled = false;
+      state.booting = false;
+      return;
     }
-    $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden"); $("providerAlerts").classList.remove("hidden");
+    $("sessionRestorePanel").classList.add("hidden"); $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden"); $("providerAlerts").classList.remove("hidden");
+    switchView(state.activeView, { persist: false });
     $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
-    await loadPlans();
-    if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications()]);
-    renderOverview();
-    startProviderNotificationPolling();
-    void handleSubscriptionReturn();
+    try {
+      await loadPlans();
+      if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications()]);
+      renderOverview();
+      startProviderNotificationPolling();
+      void handleSubscriptionReturn();
+    } catch (error) {
+      setMessage((error.message || "Some provider data could not be loaded.") + " Use Refresh to try again.");
+    } finally {
+      state.booting = false;
+    }
   }
 
   function notificationCopy(item) {
@@ -659,7 +688,13 @@
     $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
     renderPlans();
   }
-  function switchView(view) { document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view)); document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== view)); }
+  function switchView(view, { persist = true } = {}) {
+    const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
+    state.activeView = nextView;
+    if (persist) localStorage.setItem(ACTIVE_VIEW_KEY, nextView);
+    document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
+    document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== nextView));
+  }
   function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
 
   $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
@@ -694,6 +729,8 @@
   $("providerAlerts").addEventListener("click", () => { renderProviderNotifications(); $("providerAlertsDialog").showModal(); });
   $("closeProviderAlerts").addEventListener("click", () => $("providerAlertsDialog").close());
   $("markProviderAlertsRead").addEventListener("click", () => void markProviderNotificationsRead());
+  $("retrySessionRestore").addEventListener("click", () => void boot());
+  $("cancelSessionRestore").addEventListener("click", signOut);
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
   boot().catch((error) => setMessage(error.message));
 })();
