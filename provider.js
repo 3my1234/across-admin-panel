@@ -9,7 +9,7 @@
     account: null,
     provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0,
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
-    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", notificationTimer: null
+    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = (value, currency = "NGN") => {
@@ -338,11 +338,14 @@
     const form = $("listingForm"); const toggle = $("toggleListingForm");
     if (reset) {
       form.reset(); state.editingListingID = ""; state.listingLocationAccuracy = null; state.listingLocationSource = "";
-      $("confirmListingLocation").checked = false; $("listingLocationPreview").classList.add("hidden"); $("listingLocationMap").removeAttribute("src");
-      setListingLocationStatus("Select Use my current location to continue.");
+      $("confirmListingLocation").checked = false; $("openListingLocationMap").classList.add("hidden"); $("listingLocationSearchResults").classList.add("hidden"); $("listingLocationSearchResults").replaceChildren();
+      if (state.listingMarker && state.listingMap) { state.listingMap.removeLayer(state.listingMarker); state.listingMarker = null; state.listingMap.setView([9.082, 8.6753], 6); }
+      setListingLocationStatus("Search for the address or use this device's location, then verify the pin.");
     }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
     if (open) {
+      ensureListingMap();
+      setTimeout(() => state.listingMap?.invalidateSize(), 0);
       requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
       void prepareListingLocation();
     }
@@ -485,14 +488,58 @@
     const node = $("listingLocationStatus"); node.textContent = text;
     node.className = "location-status" + (stateName ? " " + stateName : "");
   }
-  function renderListingLocationPreview(latitude, longitude) {
-    const lat = Number(latitude); const lon = Number(longitude); if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-    const delta = 0.01;
-    const embed = "https://www.openstreetmap.org/export/embed.html?bbox=" + (lon - delta) + "," + (lat - delta) + "," + (lon + delta) + "," + (lat + delta) + "&layer=mapnik&marker=" + lat + "," + lon;
-    $("listingLocationMap").src = embed;
+  function ensureListingMap() {
+    if (state.listingMap) return state.listingMap;
+    if (!window.L) { setListingLocationStatus("The interactive map could not load. Check the internet connection and reload this page.", "error"); return null; }
+    const map = window.L.map("listingLocationMap").setView([9.082, 8.6753], 6);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' }).addTo(map);
+    map.on("click", (event) => { setListingMapPin(event.latlng.lat, event.latlng.lng, "map", null, true); setListingLocationStatus("Pin placed. Drag it if needed, then confirm the exact service location.", "ready"); });
+    state.listingMap = map;
+    return map;
+  }
+  function setListingMapPin(latitude, longitude, source = "map", accuracy = null, recenter = true) {
+    const lat = Number(latitude); const lon = Number(longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const map = ensureListingMap(); if (!map) return;
+    const form = $("listingForm"); form.elements.latitude.value = lat.toFixed(6); form.elements.longitude.value = lon.toFixed(6);
+    state.listingLocationSource = source; state.listingLocationAccuracy = Number.isFinite(accuracy) ? Math.round(accuracy) : null;
+    if (!state.listingMarker) {
+      state.listingMarker = window.L.marker([lat, lon], { draggable: true }).addTo(map);
+      state.listingMarker.on("dragend", (event) => { const point = event.target.getLatLng(); setListingMapPin(point.lat, point.lng, "map", null, false); setListingLocationStatus("Pin moved. Confirm that it is now at the exact service location.", "ready"); });
+    } else { state.listingMarker.setLatLng([lat, lon]); }
+    if (recenter) map.setView([lat, lon], Math.max(map.getZoom(), 16));
     $("openListingLocationMap").href = "https://www.openstreetmap.org/?mlat=" + lat + "&mlon=" + lon + "#map=17/" + lat + "/" + lon;
-    $("confirmListingLocation").checked = false;
-    $("listingLocationPreview").classList.remove("hidden");
+    $("openListingLocationMap").classList.remove("hidden"); $("confirmListingLocation").checked = false;
+    setTimeout(() => map.invalidateSize(), 0);
+  }
+  function renderListingLocationPreview(latitude, longitude) {
+    setListingMapPin(latitude, longitude, state.listingLocationSource || "saved", state.listingLocationAccuracy, true);
+  }
+  function cachedLocationSearch(query) {
+    try { return JSON.parse(localStorage.getItem("atlantic.location.search." + query.toLowerCase()) || "null"); } catch (_) { return null; }
+  }
+  async function searchListingLocation() {
+    const form = $("listingForm"); const input = $("listingLocationSearch"); const button = $("searchListingLocation");
+    const composed = [form.elements.address_line.value, form.elements.city.value, form.elements.state.value].map(value => String(value || "").trim()).filter(Boolean).join(", ");
+    const query = input.value.trim() || composed; if (!query) return setListingLocationStatus("Enter an address, area, city, or state to search.", "error");
+    input.value = query; const country = String(form.elements.country_code.value || "").trim().toLowerCase(); button.disabled = true; setListingLocationStatus("Searching the map for " + query + "…");
+    try {
+      let results = cachedLocationSearch(query + "|" + country);
+      if (!results) {
+        const wait = Math.max(0, 1100 - (Date.now() - state.lastLocationSearchAt)); if (wait) await delay(wait);
+        state.lastLocationSearchAt = Date.now(); const params = new URLSearchParams({ q: query, format: "jsonv2", limit: "5", addressdetails: "1" }); if (country) params.set("countrycodes", country);
+        const response = await fetch("https://nominatim.openstreetmap.org/search?" + params, { headers: { Accept: "application/json" } }); if (!response.ok) throw new Error("Map search is temporarily unavailable (" + response.status + ").");
+        results = await response.json(); localStorage.setItem("atlantic.location.search." + (query + "|" + country).toLowerCase(), JSON.stringify(results));
+      }
+      const container = $("listingLocationSearchResults"); container.replaceChildren();
+      if (!results.length) { container.classList.add("hidden"); return setListingLocationStatus("No map result matched that search. Add the city/state or try a nearby landmark.", "error"); }
+      results.forEach((result) => {
+        const option = document.createElement("button"); option.type = "button"; option.className = "location-search-result"; option.textContent = result.display_name;
+        option.onclick = () => { setListingMapPin(result.lat, result.lon, "address_search", null, true); container.classList.add("hidden"); setListingLocationStatus("Search result selected. Click the map or drag the pin to the exact property, then confirm it.", "ready"); };
+        container.append(option);
+      });
+      container.classList.remove("hidden"); setListingLocationStatus("Choose the best result, then move the pin to the exact service location.");
+    } catch (error) { setListingLocationStatus(error.message || "Map search failed. Try again or click the location directly on the map.", "error"); } finally { button.disabled = false; }
   }
   function requestBrowserPosition(options) { return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, options)); }
   function explainLocationError(error) {
@@ -510,7 +557,7 @@
     if (!navigator.permissions?.query) return setListingLocationStatus("Select Use my current location, then approve the browser request.");
     try {
       const permission = await navigator.permissions.query({ name: "geolocation" });
-      if (permission.state === "granted") return void useCurrentLocation();
+      if (permission.state === "granted") return setListingLocationStatus("Search the address first, or select Use my current location as a starting point. Always verify the pin on the map.");
       if (permission.state === "denied") return setListingLocationStatus("Location is blocked for admin.atlxpres.com. Open the padlock/site settings beside the address, change Location to Allow, reload, then select Use my current location.", "error");
       setListingLocationStatus("Select Use my current location, then choose Allow when your browser asks.");
     } catch (_) { setListingLocationStatus("Select Use my current location, then approve the browser request."); }
@@ -532,10 +579,9 @@
       }
       const { latitude, longitude, accuracy } = position.coords; const form = $("listingForm");
       if (!Number.isFinite(accuracy) || accuracy > 10000) throw new Error("Location accuracy is too low. Move near a window, disable any VPN, or use a phone at the service address and retry.");
-      form.elements.latitude.value = latitude.toFixed(6); form.elements.longitude.value = longitude.toFixed(6);
       state.listingLocationAccuracy = Math.round(accuracy); state.listingLocationSource = "device";
-      renderListingLocationPreview(latitude, longitude);
-      setListingLocationStatus("Location captured successfully (accuracy about " + Math.round(accuracy) + " m). Nearby customers can now discover this service.", "ready");
+      setListingMapPin(latitude, longitude, "device", accuracy, true);
+      setListingLocationStatus("Device suggested this pin (reported accuracy about " + Math.round(accuracy) + " m). Verify it on the map and move it if needed before confirming.", "ready");
     } catch (error) {
       const message = explainLocationError(error); setListingLocationStatus(message, "error");
     } finally { button.disabled = false; }
@@ -584,7 +630,7 @@
     state.editingListingID = id;
     state.listingLocationAccuracy = Number.isFinite(item.attributes?.location_accuracy_m) ? Number(item.attributes.location_accuracy_m) : null;
     state.listingLocationSource = String(item.attributes?.location_source || "saved");
-    setListingLocationStatus("Saved location loaded. Select Use my current location to recapture it before saving.", "ready");
+    setListingLocationStatus("Saved location loaded. Verify it on the map; search again, click, or drag the pin if it is not at the exact property.", "ready");
   }
 
   function openAvailability(id, title) { const form = $("availabilityForm"); form.reset(); form.elements.listing_id.value = id; $("availabilityTitle").textContent = `Availability · ${title}`; setMessage("", false, "availabilityMessage"); $("availabilityDialog").showModal(); }
@@ -641,6 +687,8 @@
   $("loadMoreManifests").addEventListener("click", () => loadManifests());
   $("createManifest").addEventListener("click", createManifest);
   $("useCurrentLocation").addEventListener("click", useCurrentLocation);
+  $("searchListingLocation").addEventListener("click", searchListingLocation);
+  $("listingLocationSearch").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); void searchListingLocation(); } });
   $("listingForm").elements.latitude.addEventListener("input", updateManualListingLocation);
   $("listingForm").elements.longitude.addEventListener("input", updateManualListingLocation);
   $("providerAlerts").addEventListener("click", () => { renderProviderNotifications(); $("providerAlertsDialog").showModal(); });
