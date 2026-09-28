@@ -4,12 +4,12 @@
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
-  const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests"]);
+  const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests", "messages"]);
   const $ = (id) => document.getElementById(id);
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
     account: null,
-    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0,
+    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0, conversations: [], currentConversation: null,
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
     productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
@@ -106,7 +106,7 @@
 
   function signOut() {
     state.booting = false;
-    state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = [];
+    state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
     $("providerStatus").textContent = "Secure provider access";
   }
@@ -137,7 +137,7 @@
     $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
     try {
       await loadPlans();
-      if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications()]);
+      if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications(), loadConversations()]);
       renderOverview();
       startProviderNotificationPolling();
       void handleSubscriptionReturn();
@@ -169,6 +169,7 @@
       const listingChanged = state.notifications.some(item => !known.has(item.id) && ["listing_approved", "listing_rejected", "listing_suspended"].includes(item.event_type));
       if (silent && state.unreadNotifications > previous) playProviderAlert();
       if (silent && listingChanged) await loadListings({ reset: true });
+      if (silent && state.notifications.some(item => !known.has(item.id) && item.event_type === "conversation_message")) await loadConversations();
     }
     catch (error) { if (!silent) setMessage(error.message); }
   }
@@ -680,6 +681,67 @@
     $("loadMoreRequests").classList.toggle("hidden", !state.requestHasMore); document.querySelectorAll("[data-request]").forEach((button) => button.onclick = () => updateRequest(button.dataset.request, button.dataset.status));
   }
 
+  async function loadConversations() {
+    if (!state.provider) return;
+    const data = await api("/providers/me/conversations");
+    state.conversations = data.items || [];
+    renderConversations();
+  }
+  function renderConversations() {
+    $("conversationRows").innerHTML = state.conversations.length ? state.conversations.map((item) => `<article class="list-row"><div><span class="badge">${item.unread_count ? `${item.unread_count} unread` : "Up to date"}</span><h3>${escapeHtml(item.listing_title)}</h3><p><strong>${escapeHtml(item.counterpart_name)}</strong> · ${new Date(item.last_message_at).toLocaleString()}</p><p>${escapeHtml(item.last_message || "No messages yet")}</p>${item.subscription_active ? "" : '<p class="moderation-note">Subscription inactive — replies are paused.</p>'}</div><div class="list-actions"><button type="button" data-conversation="${item.id}">Open</button></div></article>`).join("") : "<p>No buyer conversations yet.</p>";
+    document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation));
+  }
+  async function openConversation(id) {
+    const conversation = state.conversations.find((item) => item.id === id);
+    if (!conversation) return;
+    state.currentConversation = conversation;
+    $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
+    setMessage("", false, "conversationMessage");
+    const data = await api(`/providers/me/conversations/${id}/messages`);
+    $("conversationMessages").innerHTML = (data.items || []).map((item) => `<article class="alert-item ${item.sender_type === "provider" ? "unread" : ""}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p><small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
+    const reply = $("conversationReplyForm");
+    reply.querySelector("textarea").disabled = !conversation.subscription_active;
+    reply.querySelector("button").disabled = !conversation.subscription_active;
+    if (!conversation.subscription_active) setMessage("Renew your subscription to reply.", false, "conversationMessage");
+    $("conversationDialog").showModal();
+    conversation.unread_count = 0;
+    renderConversations();
+  }
+  async function sendConversationReply(event) {
+    event.preventDefault();
+    if (!state.currentConversation) return;
+    const form = event.currentTarget;
+    const button = form.querySelector("button");
+    const message = form.elements.message.value.trim();
+    if (!message) return;
+    button.disabled = true;
+    try {
+      await api(`/providers/me/conversations/${state.currentConversation.id}/messages`, { method: "POST", body: JSON.stringify({ message }) });
+      form.reset();
+      await Promise.all([loadConversations(), openConversation(state.currentConversation.id)]);
+    } catch (error) {
+      setMessage(error.message, false, "conversationMessage");
+    } finally {
+      button.disabled = !state.currentConversation?.subscription_active;
+    }
+  }
+
+  function renderProviderTools(provider) {
+    const productsAllowed = !provider || provider.can_sell_products !== false;
+    const servicesAllowed = !provider || provider.can_offer_services !== false;
+    document.querySelectorAll("[data-product-tool]").forEach((element) => element.classList.toggle("hidden", !productsAllowed));
+    document.querySelectorAll("[data-service-tool]").forEach((element) => element.classList.toggle("hidden", !servicesAllowed));
+    if ((!productsAllowed && ["products", "merchant-orders"].includes(state.activeView)) || (!servicesAllowed && ["listings", "requests"].includes(state.activeView))) {
+      switchView("overview");
+    }
+    if (!provider) return;
+    $("verificationDocumentGuidance").textContent = provider.provider_type === "product_merchant"
+      ? "Upload a government ID and business registration where applicable. Names and contact details must match your account."
+      : provider.provider_type === "property_host"
+        ? "Upload a government ID plus proof that you own or are authorized to offer the property or accommodation."
+        : "Upload a government ID plus any professional licence, qualification, business registration, or proof of address relevant to your work.";
+  }
+
   function renderOverview() {
     const p = state.provider, verification = p?.verification_status || "Not submitted", subscription = p?.subscription?.status || "None";
     const subscriptionActive = hasActiveSubscription();
@@ -687,6 +749,7 @@
     $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscriptionLabel); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
     $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
     renderPlans();
+    renderProviderTools(p);
   }
   function switchView(view, { persist = true } = {}) {
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
@@ -697,6 +760,14 @@
   }
   function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
 
+  $("providerType").addEventListener("change", (event) => {
+    const isOther = event.target.value === "other";
+    $("providerTypeOtherField").classList.toggle("hidden", !isOther);
+    $("providerTypeOtherField").querySelector("input").required = isOther;
+  });
+  $("refreshConversations").addEventListener("click", () => void loadConversations());
+  $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
+  $("conversationReplyForm").addEventListener("submit", sendConversationReply);
   $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
   $("toggleListingForm").addEventListener("click", () => {
     if (!requireSubscription("services")) return;

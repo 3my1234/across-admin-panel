@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Atlantic Express Provider Portal</title>
-  <link rel="icon" type="image/png" href="./favicon.png?v=20260927-brand" />
-  <link rel="apple-touch-icon" href="./favicon.png?v=20260927-brand" />
+  <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
+  <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="./provider.css?v=20260927-picker" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
-  <script src="./provider.js?v=20260927-session" defer></script>
+  <script src="./provider.js?v=20260928-onboarding-messages" defer></script>
 </head>
 <body>
   <header class="provider-header">
@@ -40,17 +40,18 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" class="active">Overview</button><button data-view="subscription">Subscription</button><button data-view="products">Products</button><button data-view="merchant-orders">Product orders</button><button data-view="listings">Services</button><button data-view="requests">Bookings & enquiries</button></nav>
+        <nav><button data-view="overview" class="active">Overview</button><button data-view="subscription">Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages">Messages</button></nav>
       </aside>
       <div class="workspace">
         <section id="onboardingCard" class="card hidden">
           <h2>Create your provider profile</h2><p>Your profile and listings are reviewed before buyers can see them.</p>
           <form id="onboardingForm" class="form-grid">
-            <label>Business name<input name="business_name" required /></label><label>Contact email<input name="contact_email" type="email" required /></label>
+            <label>Business / professional name<input name="business_name" required /></label><label>What do you provide?<select name="provider_type" id="providerType" required><option value="">Choose one</option><option value="product_merchant">Products — importer, manufacturer or local seller</option><option value="service_professional">Skilled or professional services — artisan, specialist, health worker</option><option value="property_host">Property, accommodation or rentals</option><option value="mobility_provider">Vehicles, transport or roadside services</option><option value="mixed">Both products and services</option><option value="other">Other</option></select></label>
+            <label id="providerTypeOtherField" class="wide hidden">Describe what you provide<input name="provider_type_other" maxlength="180" /></label><label>Contact email<input name="contact_email" type="email" required /></label>
             <label>Contact phone<input name="contact_phone" inputmode="tel" required /></label><label>Website<input name="website_url" type="url" /></label>
             <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State / region<input name="state" required /></label>
             <label>Country code<input name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" autocapitalize="characters" required /><small>Two-letter ISO code, for example NG, GB, US, or CA.</small></label>
-            <label class="wide">About your business<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
+            <label class="wide">About your business or professional work<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
           </form>
         </section>
 
@@ -93,9 +94,9 @@
           <div id="accountGuidance" class="notice"></div>
           <section id="verificationDocuments" class="verification-box hidden">
             <div class="section-heading"><div><span class="eyebrow">Business verification</span><h3>Verification documents</h3></div></div>
-            <p>Upload a clear government ID, business registration, or proof of address. PDF, JPG, PNG, and WebP are accepted.</p>
+            <p id="verificationDocumentGuidance">Upload clear documents that match your registered name and contact details. PDF, JPG, PNG, and WebP are accepted.</p>
             <form id="verificationForm" class="form-grid compact">
-              <label>Document type<select name="document_type" required><option value="government_id">Government ID</option><option value="business_registration">Business registration</option><option value="address_proof">Proof of address</option></select></label>
+              <label>Document type<select name="document_type" required><option value="government_id">Government ID</option><option value="business_registration">Business registration</option><option value="professional_license">Professional licence / qualification</option><option value="property_authority">Property ownership / authority</option><option value="address_proof">Proof of address</option></select></label>
               <label>Document<input id="verificationFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required /></label>
               <button type="submit">Upload document</button><p id="verificationMessage" class="message"></p>
             </form>
@@ -146,6 +147,10 @@
           <div class="toolbar"><input id="requestSearch" type="search" placeholder="Search buyer, listing, or status" /><select id="requestStatus"><option value="">All statuses</option><option>pending</option><option>accepted</option><option>rejected</option><option>completed</option></select></div><div id="requestRows" class="stack-list"></div>
           <button id="loadMoreRequests" type="button" class="secondary hidden">Load more requests</button>
         </section>
+        <section data-view-panel="messages" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Customer conversations</span><h2>Messages</h2><p>Reply to buyers inside Atlantic Express. New conversations and replies require an active subscription.</p></div><button id="refreshConversations" class="secondary">Refresh</button></div>
+          <div id="conversationRows" class="stack-list"><p>No buyer conversations yet.</p></div>
+        </section>
         <p id="portalMessage" class="message"></p>
       </div>
     </section>
@@ -159,6 +164,15 @@
         <label>Capacity<input name="capacity" type="number" min="1" value="1" required /></label>
         <button type="submit">Save availability</button>
         <p id="availabilityMessage" class="message"></p>
+      </form>
+    </dialog>
+    <dialog id="conversationDialog">
+      <div class="section-heading"><div><span class="eyebrow">Atlantic Express messages</span><h2 id="conversationTitle">Conversation</h2></div><button type="button" id="closeConversation" class="secondary">Close</button></div>
+      <div id="conversationMessages" class="alert-rows"></div>
+      <form id="conversationReplyForm" class="form-grid compact">
+        <label>Reply<textarea name="message" rows="3" maxlength="2000" required></textarea></label>
+        <button type="submit">Send reply</button>
+        <p id="conversationMessage" class="message"></p>
       </form>
     </dialog>
   </main>
