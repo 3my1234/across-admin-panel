@@ -891,9 +891,11 @@ function renderTransactionCards(rows) {
       (row) => `
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(row.email)}</h3>
-        <p class="mobile-card-meta">${escapeHtml(row.order_status)} · payment ${escapeHtml(row.payment_status)}</p>
+        <p class="mobile-card-meta">${escapeHtml(row.provider || "-")} · ${escapeHtml((row.purpose || "payment").replaceAll("_", " "))}</p>
+        <p class="mobile-card-meta">Payment ${escapeHtml(row.payment_status)} · refund ${escapeHtml(row.refund_status)}</p>
+        <p class="mobile-card-meta">Chargeback ${escapeHtml(row.chargeback_status)} · settlement ${escapeHtml(row.settlement_status)}</p>
         <p class="mobile-card-meta">${escapeHtml(row.currency)} ${format(row.total_amount)}</p>
-        <p class="mobile-card-meta">${escapeHtml(row.flutterwave_tx_ref || "-")}</p>
+        <p class="mobile-card-meta">${escapeHtml(row.provider_reference || row.flutterwave_tx_ref || "-")}</p>
       </article>
     `
     )
@@ -1359,7 +1361,7 @@ function renderNamedList(name) {
   }
   if (name === "transactions") {
     const rows = state.transactions;
-    renderTable("transactionsTable", ["email", "order_status", "payment_status", "total_amount", "flutterwave_tx_ref", "flutterwave_transaction_id"], rows);
+    renderTable("transactionsTable", ["email", "provider", "purpose", "payment_status", "refund_status", "chargeback_status", "settlement_status", "total_amount", "currency", "provider_reference", "provider_transaction_id"], rows);
     renderTransactionCards(rows);
     updateListControls(name, state.transactions);
   }
