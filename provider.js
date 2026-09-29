@@ -732,14 +732,20 @@
   }
 
   function renderProviderTools(provider) {
-    const productsAllowed = !provider || provider.can_sell_products !== false;
-    const servicesAllowed = !provider || provider.can_offer_services !== false;
+    const hasProviderProfile = Boolean(provider);
+    const productsAllowed = hasProviderProfile && provider.can_sell_products !== false;
+    const servicesAllowed = hasProviderProfile && provider.can_offer_services !== false;
+    document.querySelectorAll("[data-provider-profile]").forEach((element) => element.classList.toggle("hidden", !hasProviderProfile));
     document.querySelectorAll("[data-product-tool]").forEach((element) => element.classList.toggle("hidden", !productsAllowed));
     document.querySelectorAll("[data-service-tool]").forEach((element) => element.classList.toggle("hidden", !servicesAllowed));
+    if (!hasProviderProfile) {
+      if (state.activeView !== "overview") switchView("overview");
+      document.querySelector('[data-view-panel="overview"]').classList.add("hidden");
+      return;
+    }
     if ((!productsAllowed && ["products", "merchant-orders"].includes(state.activeView)) || (!servicesAllowed && ["listings", "requests"].includes(state.activeView))) {
       switchView("overview");
     }
-    if (!provider) return;
     $("verificationDocumentGuidance").textContent = provider.provider_type === "product_merchant"
       ? "Upload a government ID and business registration where applicable. Names and contact details must match your account."
       : provider.provider_type === "property_host"
@@ -779,11 +785,11 @@
     document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view));
   }
 
-  $("providerType").addEventListener("change", (event) => {
+  document.querySelectorAll('input[name="provider_type"]').forEach((input) => input.addEventListener("change", (event) => {
     const isOther = event.target.value === "other";
     $("providerTypeOtherField").classList.toggle("hidden", !isOther);
     $("providerTypeOtherField").querySelector("input").required = isOther;
-  });
+  }));
   $("refreshConversations").addEventListener("click", () => void loadConversations());
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);

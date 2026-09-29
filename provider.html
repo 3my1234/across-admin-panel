@@ -7,9 +7,9 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20260929-auth" />
+  <link rel="stylesheet" href="./provider.css?v=20260929-onboarding-v2" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
-  <script src="./provider.js?v=20260929-auth" defer></script>
+  <script src="./provider.js?v=20260929-onboarding-v2" defer></script>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -40,13 +40,21 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" class="active">Overview</button><button data-view="subscription">Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages">Messages</button></nav>
+        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages" data-provider-profile>Messages</button></nav>
       </aside>
       <div class="workspace">
         <section id="onboardingCard" class="card hidden">
-          <h2>Create your provider profile</h2><p>Your profile and listings are reviewed before buyers can see them.</p>
+          <span class="eyebrow">Step 1 of 2</span><h2>Choose how you will use Atlantic Express</h2><p>Your choice determines the tools available in your portal. You can add verification documents after submitting this profile.</p>
           <form id="onboardingForm" class="form-grid">
-            <label>Business / professional name<input name="business_name" required /></label><label>What do you provide?<select name="provider_type" id="providerType" required><option value="">Choose one</option><option value="product_merchant">Products — importer, manufacturer or local seller</option><option value="service_professional">Skilled or professional services — artisan, specialist, health worker</option><option value="property_host">Property, accommodation or rentals</option><option value="mobility_provider">Vehicles, transport or roadside services</option><option value="mixed">Both products and services</option><option value="other">Other</option></select></label>
+            <fieldset class="wide provider-type-fieldset"><legend>Which best describes what you provide?</legend><div class="provider-type-grid">
+              <label class="provider-type-card"><input type="radio" name="provider_type" value="product_merchant" required /><span><strong>Products and retail</strong><small>Imported or locally available goods such as gadgets, clothing, food, beauty, home items and accessories.</small></span></label>
+              <label class="provider-type-card"><input type="radio" name="provider_type" value="service_professional" /><span><strong>Skilled or professional services</strong><small>Artisans and specialists such as mechanics, plumbers, carpenters, drivers and qualified professionals.</small></span></label>
+              <label class="provider-type-card"><input type="radio" name="provider_type" value="property_host" /><span><strong>Property and accommodation</strong><small>Hotels, short lets, rentals, land, houses and other managed property listings.</small></span></label>
+              <label class="provider-type-card"><input type="radio" name="provider_type" value="mobility_provider" /><span><strong>Vehicles and roadside services</strong><small>Car rentals, vehicle sales, car wash, fuel assistance, transport and roadside support.</small></span></label>
+              <label class="provider-type-card"><input type="radio" name="provider_type" value="mixed" /><span><strong>Products and services</strong><small>A verified business that genuinely offers both physical products and service-based listings.</small></span></label>
+              <label class="provider-type-card"><input type="radio" name="provider_type" value="other" /><span><strong>Something else</strong><small>Choose this when none of the categories above accurately describes your work.</small></span></label>
+            </div></fieldset>
+            <label>Business / professional name<input name="business_name" required /></label>
             <label id="providerTypeOtherField" class="wide hidden">Describe what you provide<input name="provider_type_other" maxlength="180" /></label><label>Contact email<input name="contact_email" type="email" required /></label>
             <label>Contact phone<input name="contact_phone" inputmode="tel" required /></label><label>Website<input name="website_url" type="url" /></label>
             <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State / region<input name="state" required /></label>
