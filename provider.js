@@ -70,11 +70,13 @@
   }
 
   async function signup(event) {
-    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true; setMessage("Creating your account…", false, "signupMessage");
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const defaultLabel = button.textContent; button.disabled = true; button.textContent = "Creating account…"; setMessage("", false, "signupMessage");
     const payload = Object.fromEntries(new FormData(form));
     try {
       const data = await api("/auth/signup", { method: "POST", body: JSON.stringify(payload) });
-      setMessage(data.message || "Account created. Verify your email, then sign in here.", true, "signupMessage"); form.reset();
+      switchAuth("login");
+      document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
+      setMessage(data.message || "Account created. Check your email to verify it, then sign in here.", true, "loginMessage");
     } catch (error) {
       if (error.status === 409) {
         const conflict = String(error.message || "").toLowerCase();
@@ -94,7 +96,7 @@
       } else {
         setMessage(error.message, false, "signupMessage");
       }
-    } finally { button.disabled = false; }
+    } finally { button.disabled = false; button.textContent = defaultLabel; }
   }
 
   async function resendVerification() {
@@ -108,6 +110,8 @@
     state.booting = false;
     state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
+    document.body.classList.add("auth-mode");
+    switchAuth("login");
     $("providerStatus").textContent = "Secure provider access";
   }
 
@@ -133,6 +137,7 @@
       return;
     }
     $("sessionRestorePanel").classList.add("hidden"); $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden"); $("providerAlerts").classList.remove("hidden");
+    document.body.classList.remove("auth-mode");
     switchView(state.activeView, { persist: false });
     $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
     try {
@@ -758,7 +763,21 @@
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
     document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== nextView));
   }
-  function switchAuth(view) { document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view)); document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view)); }
+  function resetAuthForms() {
+    ["loginForm", "signupForm"].forEach((id) => {
+      const form = $(id);
+      form.reset();
+      const submit = form.querySelector("button[type=submit]");
+      if (submit) submit.disabled = false;
+    });
+    setMessage("", false, "loginMessage");
+    setMessage("", false, "signupMessage");
+  }
+  function switchAuth(view, { reset = true } = {}) {
+    if (reset) resetAuthForms();
+    document.querySelectorAll("[data-auth-view]").forEach((b) => b.classList.toggle("active", b.dataset.authView === view));
+    document.querySelectorAll("[data-auth-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.authPanel !== view));
+  }
 
   $("providerType").addEventListener("change", (event) => {
     const isOther = event.target.value === "other";

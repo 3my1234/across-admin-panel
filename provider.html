@@ -7,28 +7,28 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20260927-picker" />
+  <link rel="stylesheet" href="./provider.css?v=20260929-auth" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
-  <script src="./provider.js?v=20260928-onboarding-messages" defer></script>
+  <script src="./provider.js?v=20260929-auth" defer></script>
 </head>
-<body>
+<body class="auth-mode">
   <header class="provider-header">
     <div><span class="eyebrow">Atlantic Express</span><h1>Provider Portal</h1></div>
     <div class="header-actions"><span id="providerStatus">Secure provider access</span><button id="providerAlerts" class="secondary hidden" type="button">Alerts <span id="providerAlertCount" class="alert-count hidden">0</span></button><button id="signOut" class="secondary hidden">Sign out</button></div>
   </header>
   <main>
     <section id="authPanel" class="card auth-card">
-      <div><span class="eyebrow">For verified partners</span><h2>Manage services and enquiries</h2><p>Use the same verified Atlantic Express account you use in the buyer app.</p></div>
+      <div><span class="eyebrow">For trusted providers</span><h2>Build your business on Atlantic Express</h2><p>Sell products, offer professional services, manage property or mobility listings, and connect with customers from one secure portal.</p></div>
       <div class="auth-switch"><button type="button" data-auth-view="login" class="active">Sign in</button><button type="button" data-auth-view="signup" class="secondary">Create account</button></div>
       <form id="loginForm" class="form-grid compact" data-auth-panel="login">
         <label>Email<input name="email" type="email" autocomplete="email" required /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
-        <button type="submit">Sign in</button><button type="button" id="resendVerification" class="link-button">Resend verification email</button><p id="loginMessage" class="message"></p>
+        <button type="submit">Sign in</button><button type="button" id="resendVerification" class="link-button">Resend verification email</button><p id="loginMessage" class="message" aria-live="polite"></p>
       </form>
       <form id="signupForm" class="form-grid compact hidden" data-auth-panel="signup">
         <label>Full name<input name="full_name" autocomplete="name" required /></label><label>Email<input name="email" type="email" autocomplete="email" required /></label>
         <label>Phone<input name="phone" type="tel" autocomplete="tel" required /><small>Use a phone number that is not linked to another Atlantic Express account.</small></label><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
-        <button type="submit">Create provider account</button><p id="signupMessage" class="message"></p>
+        <button type="submit">Create provider account</button><p id="signupMessage" class="message" aria-live="polite"></p>
       </form>
     </section>
 

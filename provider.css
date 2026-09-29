@@ -19,6 +19,20 @@ body {
   font: 15px/1.5 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+body.auth-mode {
+  min-height: 100vh;
+  background-color: #f7f1e9;
+  background-image: linear-gradient(90deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.42) 44%, rgba(255,255,255,.04) 76%), url("./provider-background.png");
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+body.auth-mode main {
+  max-width: none;
+  padding-inline: clamp(1rem, 5vw, 5rem);
+}
+
 button, input, select, textarea { font: inherit; }
 
 button {
@@ -94,6 +108,37 @@ main {
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
   align-items: center;
+}
+
+body.auth-mode .auth-card {
+  grid-template-columns: 1fr;
+  max-width: 570px;
+  margin: clamp(2rem, 8vh, 6rem) auto clamp(2rem, 8vh, 6rem) 0;
+  gap: 1.25rem;
+  background: rgba(255,255,255,.94);
+  border-color: rgba(255,255,255,.82);
+  box-shadow: 0 24px 70px rgba(7,28,24,.18);
+  backdrop-filter: blur(12px);
+}
+
+.auth-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem;
+  padding: .35rem;
+  border-radius: 13px;
+  background: var(--soft);
+}
+
+.auth-switch button {
+  background: transparent;
+  color: var(--ink);
+}
+
+.auth-switch button.active {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(255,77,85,.24);
 }
 
 .auth-card h2, .section-heading h2 { margin: .15rem 0; }
@@ -264,4 +309,10 @@ small { font-weight: 400; color: var(--muted); }
   .list-row { display: flex; }
   .list-actions { justify-content: flex-start; }
   .metrics { grid-template-columns: 1fr 1fr; }
+  body.auth-mode {
+    background-position: 63% center;
+    background-image: linear-gradient(rgba(255,255,255,.66), rgba(255,255,255,.76)), url("./provider-background.png");
+  }
+  body.auth-mode main { padding-inline: 1rem; }
+  body.auth-mode .auth-card { margin: 2vh auto; }
 }
