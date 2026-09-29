@@ -9,7 +9,7 @@
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
     account: null,
-    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0, conversations: [], currentConversation: null,
+    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0, conversations: [], currentConversation: null, payoutBanks: [],
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
     productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
@@ -193,6 +193,34 @@
     catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
 
+  async function loadPayoutBanks() {
+    if (!state.provider?.can_sell_products || state.provider?.payout_account?.status === "active") return;
+    const country = String($("payoutCountry").value || state.provider.country_code || "NG").trim().toUpperCase();
+    if (country.length !== 2) return setMessage("Enter a valid two-letter bank country code.", false, "payoutMessage");
+    const button = $("loadPayoutBanks"); button.disabled = true; setMessage("Loading supported banks…", false, "payoutMessage");
+    try {
+      const data = await api(`/providers/payout-banks?country=${encodeURIComponent(country)}`);
+      state.payoutBanks = data.items || [];
+      $("payoutBank").innerHTML = '<option value="">Choose your bank</option>' + state.payoutBanks.map((bank) => `<option value="${escapeHtml(bank.code)}">${escapeHtml(bank.name)} (${escapeHtml(bank.code)})</option>`).join("");
+      setMessage(state.payoutBanks.length ? "Choose the account's bank." : "Flutterwave returned no supported banks for this country.", state.payoutBanks.length > 0, "payoutMessage");
+    } catch (error) { setMessage(error.message, false, "payoutMessage"); }
+    finally { button.disabled = false; }
+  }
+
+  async function configurePayoutAccount(event) {
+    event.preventDefault();
+    if (!confirm("Confirm this is the provider's settlement account. Replacing it later requires support review.")) return;
+    const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    const payload = Object.fromEntries(new FormData(form)); payload.country_code = String(payload.country_code || "").trim().toUpperCase();
+    try {
+      await api("/providers/me/payout-account", { method: "POST", body: JSON.stringify(payload) });
+      state.provider = await api("/providers/me");
+      form.reset(); renderOverview();
+      setMessage("Flutterwave settlement account connected.", true, "payoutMessage");
+    } catch (error) { setMessage(error.message, false, "payoutMessage"); }
+    finally { button.disabled = false; }
+  }
+
   async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; renderPlans(); }
   function hasActiveSubscription() {
     const subscription = state.provider?.subscription;
@@ -282,10 +310,18 @@
     }
   }
   function requireSubscription(kind = "products") {
-    if (hasActiveSubscription()) return true;
-    setMessage(`Choose and activate a monthly plan before creating ${kind}.`);
-    openSubscription();
-    return false;
+    if (!hasActiveSubscription()) {
+      setMessage(`Choose and activate a monthly plan before creating ${kind}.`);
+      openSubscription();
+      return false;
+    }
+    if (kind === "products" && state.provider?.payout_account?.status !== "active") {
+      setMessage("Connect the seller's Flutterwave settlement account before creating products.");
+      switchView("overview");
+      $("sellerSettlement").scrollIntoView({ behavior: "smooth", block: "start" });
+      return false;
+    }
+    return true;
   }
   async function subscribe(planId) {
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
@@ -786,7 +822,20 @@
     const subscriptionActive = hasActiveSubscription();
     const subscriptionLabel = subscriptionActive ? "Active" : subscription === "active" ? "Expired" : subscription;
     $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscriptionLabel); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
-    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
+    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : p.can_sell_products && p.payout_account?.status !== "active" ? "<strong>Settlement setup required.</strong> Connect the product seller's Flutterwave settlement account before products can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
+    const settlement = $("sellerSettlement"); const payout = p?.payout_account || {};
+    settlement.classList.toggle("hidden", !p?.can_sell_products);
+    if (p?.can_sell_products) {
+      $("payoutStatus").textContent = human(payout.status || "not_configured");
+      const activePayout = payout.status === "active";
+      $("payoutForm").classList.toggle("hidden", activePayout);
+      $("payoutSummary").classList.toggle("hidden", !activePayout);
+      if (activePayout) $("payoutSummary").innerHTML = `<strong>${escapeHtml(payout.account_name || "Verified seller")}</strong><br>${escapeHtml(payout.bank_name || "Flutterwave settlement account")} · ${escapeHtml(payout.account_number_masked || "")}<br>Atlantic Express service fee: 1%`;
+      else {
+        $("payoutCountry").value = String(p.country_code || "NG").toUpperCase();
+        if (!state.payoutBanks.length) void loadPayoutBanks();
+      }
+    }
     renderPlans();
     renderProviderTools(p);
   }
@@ -821,7 +870,7 @@
   $("refreshConversations").addEventListener("click", () => void loadConversations());
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);
-  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
+  $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("payoutForm").addEventListener("submit", configurePayoutAccount); $("loadPayoutBanks").addEventListener("click", loadPayoutBanks); $("payoutCountry").addEventListener("change", () => { state.payoutBanks = []; void loadPayoutBanks(); }); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
   $("toggleListingForm").addEventListener("click", () => {
     if (!requireSubscription("services")) return;
     setListingFormOpen($("listingForm").classList.contains("hidden"));

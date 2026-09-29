@@ -871,7 +871,7 @@ function renderOrderCards(rows) {
       <article class="mobile-card">
         <h3 class="mobile-card-title">${escapeHtml(row.email)}</h3>
         <p class="mobile-card-meta">${escapeHtml(row.status)} · ${escapeHtml(row.stage)}</p>
-        <p class="mobile-card-meta">Total ${format(row.total_amount)} · Customs ${format(row.customs_fee)} · VAT ${format(row.vat_fee)}</p>
+        <p class="mobile-card-meta">Total ${format(row.total_amount)} · Service fee ${format(row.platform_fee)}</p>
         <p class="mobile-card-meta">${format(row.created_at)}</p>
       </article>
     `
@@ -1348,7 +1348,7 @@ function renderNamedList(name) {
   if (name === "batches") return renderBatchesTable();
   if (name === "orders") {
     const rows = state.orders;
-    renderTable("ordersTable", ["email", "status", "stage", "total_amount", "customs_fee", "vat_fee", "created_at"], rows);
+    renderTable("ordersTable", ["email", "status", "stage", "total_amount", "platform_fee", "created_at"], rows);
     renderOrderCards(rows);
     return updateListControls(name, state.orders);
   }

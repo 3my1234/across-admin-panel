@@ -7,9 +7,9 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20260929-seller-fulfilment" />
+  <link rel="stylesheet" href="./provider.css?v=20260929-seller-split-payments" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
-  <script src="./provider.js?v=20260929-seller-fulfilment" defer></script>
+  <script src="./provider.js?v=20260929-seller-split-payments" defer></script>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -99,6 +99,19 @@
           <div class="section-heading"><div><span class="eyebrow">Account</span><h2>Provider overview</h2></div><button id="refreshPortal" class="secondary">Refresh</button></div>
           <div class="metrics"><article><span>Verification</span><strong id="metricVerification">—</strong></article><article><span>Subscription</span><strong id="metricSubscription">—</strong></article><article><span>Listings</span><strong id="metricListings">0</strong></article><article><span>Open requests</span><strong id="metricRequests">0</strong></article></div>
           <div id="accountGuidance" class="notice"></div>
+          <section id="sellerSettlement" class="verification-box hidden">
+            <div class="section-heading"><div><span class="eyebrow">Product seller settlement</span><h3>Connect your Flutterwave settlement account</h3></div><span id="payoutStatus" class="badge">Not configured</span></div>
+            <p>Required for product sellers. Customers pay securely through Atlantic Express; Flutterwave sends the seller portion to this account and the 1% Atlantic Express service fee to the marketplace account.</p>
+            <div id="payoutSummary" class="notice hidden"></div>
+            <form id="payoutForm" class="form-grid compact">
+              <label>Bank country<input id="payoutCountry" name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" required /><small>Two-letter code, such as NG, GH, KE, GB, or US.</small></label>
+              <label>Bank<select id="payoutBank" name="account_bank" required><option value="">Load banks for this country</option></select></label>
+              <label>Account number / IBAN<input name="account_number" autocomplete="off" minlength="4" maxlength="34" required /><small>Sent securely to Flutterwave. Atlantic Express stores only the final four characters.</small></label>
+              <details class="wide"><summary>International bank details, when required</summary><div class="form-grid compact"><label>SWIFT / BIC<input name="swift_code" autocomplete="off" /></label><label>Routing number<input name="routing_number" autocomplete="off" /></label><label>Bank branch code<input name="bank_branch" autocomplete="off" /></label></div><small>Flutterwave may require these details for US, SEPA, Ghana, Tanzania, Rwanda, or Uganda accounts.</small></details>
+              <button id="loadPayoutBanks" type="button" class="secondary">Load banks</button>
+              <button type="submit">Connect settlement account</button><p id="payoutMessage" class="message"></p>
+            </form>
+          </section>
           <section id="verificationDocuments" class="verification-box hidden">
             <div class="section-heading"><div><span class="eyebrow">Business verification</span><h3>Verification documents</h3></div></div>
             <p id="verificationDocumentGuidance">Upload clear documents that match your registered name and contact details. PDF, JPG, PNG, and WebP are accepted.</p>
