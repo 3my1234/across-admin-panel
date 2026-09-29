@@ -32,8 +32,8 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css" />
-    <script src="./app.20260927.js?v=payments-20260928" defer></script>
-    <script src="./provider-admin.js?v=20260928-provider-types" defer></script>
+    <script src="./app.20260927.js?v=seller-fulfilment-20260929" defer></script>
+    <script src="./provider-admin.js?v=seller-fulfilment-20260929" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -70,11 +70,9 @@
           </div>
           <nav class="side-nav" aria-label="Admin sections">
             <button class="nav-item active" data-tab="overview">Overview</button>
-            <button class="nav-item" data-tab="products">Products</button>
             <button class="nav-item" data-tab="providers">Providers</button>
             <button class="nav-item" data-tab="merchant-fulfillments">Merchant Fulfilment</button>
             <button class="nav-item" data-tab="orders">Orders</button>
-            <button class="nav-item" data-tab="batches">Batches</button>
             <button class="nav-item" data-tab="transactions">Transactions</button>
             <button class="nav-item" data-tab="admins">Admins</button>
             <button class="nav-item" data-tab="support">Support</button>
@@ -198,7 +196,7 @@
               <div class="section-head">
                 <div>
                   <h2>Create Admin</h2>
-                  <p class="muted">Create staff accounts and assign operational roles.</p>
+                  <p class="muted">Create marketplace moderation and support administrators.</p>
                 </div>
                 <button type="button" id="reloadAdminsButton" class="secondary-button">Reload admins</button>
               </div>
@@ -215,9 +213,7 @@
                 <label>
                   Role
                   <select name="role">
-                    <option value="catalog_admin">Admin I</option>
-                    <option value="procurement_admin">Admin II</option>
-                    <option value="courier_admin">Admin III</option>
+                    <option value="catalog_admin">Marketplace Admin</option>
                     <option value="super_admin">Super Admin</option>
                   </select>
                 </label>
@@ -370,11 +366,11 @@
 
           <section class="tab-panel hidden" data-panel="merchant-fulfillments">
             <section class="panel">
-              <div class="section-head"><div><h2>Merchant Fulfilment Oversight</h2><p class="muted">Track local and cross-border merchant orders. Admin III acts only after a merchant hands an order to Atlantic Express.</p></div><button type="button" id="reloadMerchantFulfillmentsButton" class="secondary-button">Reload</button></div>
+              <div class="section-head"><div><h2>Seller Fulfilment Oversight</h2><p class="muted">Read-only operational visibility for local and cross-border seller orders. Sellers remain responsible for every delivery update.</p></div><button type="button" id="reloadMerchantFulfillmentsButton" class="secondary-button">Reload</button></div>
               <div class="filter-grid">
                 <label>Search <input id="merchantFulfillmentSearch" type="search" placeholder="Merchant, package, or tracking number" autocomplete="off" /></label>
                 <label>Route <select id="merchantFulfillmentRoute"><option value="">All routes</option><option value="merchant_local">Local</option><option value="merchant_cross_border">Cross-border</option></select></label>
-                <label>Status <input id="merchantFulfillmentStatusFilter" placeholder="e.g. handed_to_atlantic" /></label>
+                <label>Status <input id="merchantFulfillmentStatusFilter" placeholder="e.g. out_for_delivery" /></label>
               </div>
               <p class="error" id="merchantFulfillmentStatus"></p><div class="table-wrap"><table id="merchantFulfillmentsTable"></table></div><button type="button" id="loadMoreMerchantFulfillmentsButton" class="secondary-button hidden">Load more</button>
             </section>
@@ -480,11 +476,9 @@
         <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile admin navigation">
           <div class="mobile-bottom-nav-scroll">
             <button class="mobile-nav-item active" data-tab="overview">Overview</button>
-            <button class="mobile-nav-item" data-tab="products">Products</button>
             <button class="mobile-nav-item" data-tab="providers">Providers</button>
             <button class="mobile-nav-item" data-tab="merchant-fulfillments">Fulfilment</button>
             <button class="mobile-nav-item" data-tab="orders">Orders</button>
-            <button class="mobile-nav-item" data-tab="batches">Batches</button>
             <button class="mobile-nav-item" data-tab="transactions">Transactions</button>
             <button class="mobile-nav-item" data-tab="admins">Admins</button>
           </div>

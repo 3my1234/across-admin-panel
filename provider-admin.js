@@ -166,22 +166,10 @@
   function renderMerchantFulfillments() {
     const table = $("merchantFulfillmentsTable");
     if (!table) return;
-    table.innerHTML = `<thead><tr><th>Order</th><th>Merchant</th><th>Route</th><th>Status</th><th>Location</th><th>Updated</th><th>Action</th></tr></thead><tbody>${state.merchantFulfillments.map((item) => {
-      const canCourierAct = state.role === "courier_admin" && item.fulfillment_owner === "atlantic_last_mile";
-      const next = item.status === "handed_to_atlantic" ? "local_hub" : item.status === "local_hub" ? "ready_for_pickup" : item.status === "ready_for_pickup" ? "delivered" : "";
-      return `<tr><td><strong>${escapeHtml(item.package_label || item.order_id)}</strong><br><span class="muted">${escapeHtml(item.tracking_number || "No tracking number")}</span></td><td>${escapeHtml(item.provider_name || "-")}</td><td>${escapeHtml((item.route_type || "").replaceAll("_", " "))}</td><td><span class="status-pill">${escapeHtml((item.status || "").replaceAll("_", " "))}</span></td><td>${escapeHtml(item.current_location || "-")}</td><td>${format(item.updated_at)}</td><td>${canCourierAct && next ? `<button class="secondary-button" data-last-mile-order="${item.order_id}" data-next-status="${next}" data-version="${item.version}">${escapeHtml(next.replaceAll("_", " "))}</button>` : "-"}</td></tr>`;
-    }).join("") || `<tr><td colspan="7">No matching merchant fulfilments.</td></tr>`}</tbody>`;
+    table.innerHTML = `<thead><tr><th>Order</th><th>Seller</th><th>Route</th><th>Status</th><th>Carrier / tracking</th><th>Location</th><th>Updated</th></tr></thead><tbody>${state.merchantFulfillments.map((item) =>
+      `<tr><td><strong>${escapeHtml(item.package_label || item.order_id)}</strong></td><td>${escapeHtml(item.provider_name || "-")}</td><td>${escapeHtml((item.route_type || "").replaceAll("_", " "))}</td><td><span class="status-pill">${escapeHtml((item.status || "").replaceAll("_", " "))}</span></td><td>${escapeHtml(item.carrier || "Seller managed")}<br><span class="muted">${escapeHtml(item.tracking_number || "No tracking number")}</span></td><td>${escapeHtml(item.current_location || "-")}</td><td>${format(item.updated_at)}</td></tr>`
+    ).join("") || `<tr><td colspan="7">No matching seller fulfilments.</td></tr>`}</tbody>`;
     $("loadMoreMerchantFulfillmentsButton")?.classList.toggle("hidden", !state.merchantFulfillmentHasMore);
-    table.querySelectorAll("[data-last-mile-order]").forEach((button) => button.onclick = () => updateLastMile(button));
-  }
-
-  async function updateLastMile(button) {
-    const location = prompt("Current location or pickup point (optional):", "");
-    if (location === null) return;
-    try {
-      await request(`/api/v1/admin/merchant-orders/${button.dataset.lastMileOrder}/last-mile`, { method: "PATCH", body: { status: button.dataset.nextStatus, current_location: location.trim(), expected_version: Number(button.dataset.version), idempotency_key: crypto.randomUUID() } });
-      await loadMerchantFulfillments({ reset: true });
-    } catch (error) { setText("merchantFulfillmentStatus", error.message); }
   }
   async function saveProviderPlan(event) {
     event.preventDefault();

@@ -1152,11 +1152,7 @@ function roleLabel(value) {
     case "super_admin":
       return "Super Admin";
     case "catalog_admin":
-      return "Admin I";
-    case "procurement_admin":
-      return "Admin II";
-    case "courier_admin":
-      return "Admin III";
+      return "Marketplace Admin";
     default:
       return String(value || "")
         .replaceAll("_", " ")
@@ -1173,12 +1169,9 @@ function sessionRoleLabel(value) {
 function allowedTabsForRole(role = state.role) {
   switch (role) {
     case "super_admin":
-      return ["overview", "products", "providers", "merchant-fulfillments", "orders", "batches", "transactions", "admins", "support", "analytics", "complaints"];
+      return ["overview", "providers", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
     case "catalog_admin":
-      return ["overview", "products", "providers", "merchant-fulfillments", "orders", "batches", "transactions", "admins", "support", "analytics", "complaints"];
-    case "procurement_admin":
-    case "courier_admin":
-      return ["batches"];
+      return ["overview", "providers", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
     default:
       return ["overview"];
   }

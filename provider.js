@@ -393,13 +393,13 @@
 
   function syncProductFulfillment(preferredState = "") {
     const mode = $("productFulfillmentMode").value; const stock = $("productStockState"); const country = $("productCountryCode");
+    country.readOnly = false;
     if (mode === "merchant_local") {
-      setSelectOptions(stock, [["locally_available", "Available now in Nigeria"]], "locally_available"); country.value = "NG"; country.readOnly = true;
-      $("productStockHelp").textContent = "Local products must already be available in Nigeria.";
+      setSelectOptions(stock, [["locally_available", "Available now"]], "locally_available");
+      $("productStockHelp").textContent = "Use the country where this stock is already available.";
     } else {
-      setSelectOptions(stock, [["foreign_stock", "In stock outside Nigeria"], ["import_on_demand", "Import on demand"]], preferredState || stock.value);
-      country.readOnly = false; if (country.value.toUpperCase() === "NG") country.value = "";
-      $("productStockHelp").textContent = "Enter the two-letter country where the stock is currently held.";
+      setSelectOptions(stock, [["foreign_stock", "In stock at origin"], ["import_on_demand", "Source after customer payment"]], preferredState || stock.value);
+      $("productStockHelp").textContent = "Enter the country where the seller will source or dispatch this product.";
     }
   }
 
@@ -418,10 +418,9 @@
     if (Number(values.delivery_max_days) < Number(values.delivery_min_days)) throw new Error("Maximum delivery days cannot be less than minimum delivery days.");
     values.inventory_country_code = String(values.inventory_country_code).trim().toUpperCase();
     if (values.fulfillment_mode === "merchant_local") {
-      values.inventory_country_code = "NG"; values.stock_state = "locally_available";
+      values.stock_state = "locally_available";
       if (values.inventory_latitude === "" || values.inventory_longitude === "") throw new Error("Use current stock location so nearby buyers can discover this product.");
     }
-    else if (values.inventory_country_code === "NG") throw new Error("Imported products must state the foreign country where stock is held.");
     return values;
   }
 
@@ -461,7 +460,7 @@
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
-      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy, atlantic_last_mile: form.elements.atlantic_last_mile.checked };
+      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
@@ -491,7 +490,6 @@
     form.elements.category.value = item.category_path?.[0] || "";
     form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
     form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
-    form.elements.atlantic_last_mile.checked = Boolean(item.atlantic_last_mile);
     setProductFormOpen(true);
   }
   async function loadMerchantOrders({ reset = false } = {}) {
@@ -499,18 +497,48 @@
   }
   function renderMerchantOrders() {
     const transitions = {
-      merchant_local: { pending:["accepted"], accepted:["packed"], packed:["ready_for_pickup","out_for_delivery","handed_to_atlantic"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] },
-      merchant_cross_border: { pending:["accepted"], accepted:["processing"], processing:["dispatched_from_origin"], dispatched_from_origin:["international_transit"], international_transit:["customs_clearance","local_hub"], customs_clearance:["local_hub"], local_hub:["ready_for_pickup","out_for_delivery","handed_to_atlantic"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] }
+      merchant_local: { pending:["accepted"], accepted:["packed"], packed:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] },
+      merchant_cross_border: { pending:["accepted"], accepted:["processing"], processing:["dispatched_from_origin"], dispatched_from_origin:["international_transit"], international_transit:["customs_clearance","local_hub"], customs_clearance:["local_hub"], local_hub:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] }
     };
     $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => { const f=order.fulfillment||{}, targets=transitions[f.route]?.[f.status]||[]; return `<article class="list-row"><label>${f.route === "merchant_cross_border" && ["pending","accepted","processing"].includes(f.status) ? `<input type="checkbox" data-manifest-order="${order.id}" /> Add to manifest` : ""}</label><div><span class="badge">${escapeHtml(human(f.status || order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3><p>${escapeHtml(human(f.route))} · ${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p>${(order.items || []).map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}<p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div><div class="list-actions">${targets.map(target => `<button data-fulfil-order="${order.id}" data-next="${target}" data-version="${f.version}">${escapeHtml(human(target))}</button>`).join("")}</div></article>`; }).join("") : "<p>No paid merchant orders yet.</p>"; $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
     document.querySelectorAll("[data-fulfil-order]").forEach(button => button.onclick = () => transitionOrder(button));
   }
 
-  async function transitionOrder(button) { const notes=prompt(`Operational note for ${human(button.dataset.next)}`, "") ?? ""; const location=prompt("Current location (optional)", "") ?? ""; button.disabled=true; try { await api(`/providers/me/merchant-orders/${button.dataset.fulfilOrder}/fulfillment`, { method:"PATCH", body:JSON.stringify({ status:button.dataset.next, expected_version:Number(button.dataset.version), idempotency_key:crypto.randomUUID(), notes, location }) }); await loadMerchantOrders({reset:true}); } catch(error) { setMessage(error.message); } finally { button.disabled=false; } }
+  function transitionOrder(button) {
+    const order = state.merchantOrders.find(item => item.id === button.dataset.fulfilOrder);
+    if (!order) return;
+    const fulfillment = order.fulfillment || {};
+    const form = $("fulfillmentForm");
+    form.reset();
+    form.elements.order_id.value = order.id;
+    form.elements.status.value = button.dataset.next;
+    form.elements.expected_version.value = button.dataset.version;
+    form.elements.location.value = fulfillment.current_location || "";
+    form.elements.carrier.value = fulfillment.carrier || "";
+    form.elements.tracking_number.value = fulfillment.tracking_number || "";
+    form.elements.tracking_url.value = fulfillment.tracking_url || "";
+    $("fulfillmentTitle").textContent = human(button.dataset.next);
+    setMessage("", false, "fulfillmentMessage");
+    $("fulfillmentDialog").showModal();
+  }
+
+  async function submitFulfillmentUpdate(event) {
+    event.preventDefault();
+    const form = event.currentTarget; const button = form.querySelector('button[type="submit"]'); const values = Object.fromEntries(new FormData(form));
+    button.disabled = true;
+    try {
+      const estimated = values.estimated_delivery_at ? new Date(values.estimated_delivery_at).toISOString() : "";
+      await api("/providers/me/merchant-orders/" + values.order_id + "/fulfillment", { method:"PATCH", body:JSON.stringify({ status:values.status, expected_version:Number(values.expected_version), idempotency_key:crypto.randomUUID(), notes:values.notes, location:values.location, carrier:values.carrier, tracking_number:values.tracking_number, tracking_url:values.tracking_url, estimated_delivery_at:estimated }) });
+      $("fulfillmentDialog").close();
+      setMessage("Tracking update published to the buyer.", true);
+      await loadMerchantOrders({reset:true});
+    } catch(error) { setMessage(error.message, false, "fulfillmentMessage"); }
+    finally { button.disabled=false; }
+  }
 
   async function loadManifests({reset=false}={}) { const params=new URLSearchParams({limit:String(PAGE_SIZE)}); if(!reset&&state.manifestCursor) params.set("cursor",state.manifestCursor); const data=await api(`/providers/me/manifests?${params}`); state.manifests=reset?(data.items||[]):[...state.manifests,...(data.items||[])]; state.manifestCursor=data.next_cursor||""; state.manifestHasMore=Boolean(data.has_more); renderManifests(); }
   function renderManifests(){ const next={open:"closed",closed:"dispatched",dispatched:"completed"}; $("manifestRows").innerHTML=state.manifests.length?state.manifests.map(item=>`<article class="list-row"><div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.manifest_code)}</h3><p>${item.order_count} orders · ${escapeHtml(item.origin_city)}, ${escapeHtml(item.origin_country_code)} · cutoff ${new Date(item.cutoff_at).toLocaleString()}</p></div><div class="list-actions"><button class="secondary" data-print-manifest="${item.id}">View / print</button>${next[item.status]?`<button data-manifest-transition="${item.id}" data-next="${next[item.status]}" data-version="${item.version}">${escapeHtml(human(next[item.status]))}</button>`:""}</div></article>`).join(""):"<p>No merchant manifests yet.</p>"; $("loadMoreManifests").classList.toggle("hidden",!state.manifestHasMore); document.querySelectorAll("[data-print-manifest]").forEach(button=>button.onclick=()=>printManifest(button.dataset.printManifest)); document.querySelectorAll("[data-manifest-transition]").forEach(button=>button.onclick=()=>transitionManifest(button)); }
-  async function createManifest(){ const order_ids=[...document.querySelectorAll("[data-manifest-order]:checked")].map(input=>input.dataset.manifestOrder); if(!order_ids.length) return setMessage("Select at least one imported order."); const origin_country_code=(prompt("Origin country code","CN")||"").trim().toUpperCase(); const origin_city=(prompt("Origin city","")||"").trim(); if(!origin_country_code||!origin_city)return; try{await api("/providers/me/manifests",{method:"POST",body:JSON.stringify({order_ids,origin_country_code,origin_city,cutoff_at:new Date().toISOString()})}); await Promise.all([loadManifests({reset:true}),loadMerchantOrders({reset:true})]);}catch(error){setMessage(error.message);} }
+  async function createManifest(){ const order_ids=[...document.querySelectorAll("[data-manifest-order]:checked")].map(input=>input.dataset.manifestOrder); if(!order_ids.length) return setMessage("Select at least one imported order."); const origin_country_code=(prompt("Two-letter origin country code","")||"").trim().toUpperCase(); const origin_city=(prompt("Origin city","")||"").trim(); if(!origin_country_code||!origin_city)return; try{await api("/providers/me/manifests",{method:"POST",body:JSON.stringify({order_ids,origin_country_code,origin_city,cutoff_at:new Date().toISOString()})}); await Promise.all([loadManifests({reset:true}),loadMerchantOrders({reset:true})]);}catch(error){setMessage(error.message);} }
   async function transitionManifest(button){button.disabled=true;try{await api(`/providers/me/manifests/${button.dataset.manifestTransition}`,{method:"PATCH",body:JSON.stringify({status:button.dataset.next,expected_version:Number(button.dataset.version),idempotency_key:crypto.randomUUID(),notes:""})});await loadManifests({reset:true});}catch(error){setMessage(error.message);}finally{button.disabled=false;}}
   async function printManifest(id){try{const data=await api(`/providers/me/manifests/${id}`);const popup=open("","_blank");if(!popup)throw new Error("Allow pop-ups to print manifests.");popup.document.write(`<title>${escapeHtml(data.manifest.manifest_code)}</title><style>body{font:14px Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:8px;text-align:left}img{width:72px}</style><h1>${escapeHtml(data.manifest.manifest_code)}</h1><p>${escapeHtml(data.manifest.origin_city)}, ${escapeHtml(data.manifest.origin_country_code)} · ${escapeHtml(human(data.manifest.status))}</p><table><tr><th>Package</th><th>Product</th><th>Qty</th><th>Buyer</th><th>Contact</th></tr>${(data.items||[]).map(row=>`<tr><td>${escapeHtml(row.package_code)}</td><td>${escapeHtml(row.product?.title||row.product?.sku||row.item_id)}</td><td>${row.quantity}</td><td>${escapeHtml(row.buyer?.full_name)}</td><td>${escapeHtml(row.buyer?.phone)}<br>${escapeHtml(row.buyer?.email)}</td></tr>`).join("")}</table>`);popup.document.close();popup.focus();}catch(error){setMessage(error.message);}}
 
@@ -817,6 +845,8 @@
   $("useProductLocation").addEventListener("click", useCurrentProductLocation);
   $("loadMoreManifests").addEventListener("click", () => loadManifests());
   $("createManifest").addEventListener("click", createManifest);
+  $("fulfillmentForm").addEventListener("submit", submitFulfillmentUpdate);
+  $("closeFulfillment").addEventListener("click", () => $("fulfillmentDialog").close());
   $("useCurrentLocation").addEventListener("click", useCurrentLocation);
   $("searchListingLocation").addEventListener("click", searchListingLocation);
   $("listingLocationSearch").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); void searchListingLocation(); } });
