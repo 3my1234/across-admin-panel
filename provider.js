@@ -71,7 +71,7 @@
 
   async function signup(event) {
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const defaultLabel = button.textContent; button.disabled = true; button.textContent = "Creating account…"; setMessage("", false, "signupMessage");
-    const payload = Object.fromEntries(new FormData(form));
+    const payload = { ...Object.fromEntries(new FormData(form)), registration_context: "provider" };
     try {
       const data = await api("/auth/signup", { method: "POST", body: JSON.stringify(payload) });
       switchAuth("login");
@@ -111,6 +111,8 @@
     state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
     document.body.classList.add("auth-mode");
+    document.body.classList.remove("session-restoring");
+    document.documentElement.classList.remove("provider-session-pending");
     switchAuth("login");
     $("providerStatus").textContent = "Secure provider access";
   }
@@ -119,7 +121,10 @@
     if (!state.token) return signOut();
     if (state.booting) return;
     state.booting = true;
-    $("authPanel").classList.add("hidden"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.remove("hidden"); $("signOut").classList.add("hidden");
+    $("authPanel").classList.add("hidden"); $("portal").classList.remove("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("signOut").classList.remove("hidden");
+    document.body.classList.remove("auth-mode");
+    document.body.classList.add("session-restoring");
+    switchView(state.activeView, { persist: false });
     $("sessionRestoreMessage").textContent = "Checking your Atlantic Express account and provider access…";
     $("retrySessionRestore").disabled = true;
     $("providerStatus").textContent = "Restoring provider session..."; setMessage("");
@@ -130,14 +135,17 @@
       catch (error) { if (error.status === 404) { state.provider = null; $("onboardingCard").classList.remove("hidden"); } else throw error; }
     } catch (error) {
       if (error.status === 401) return signOut();
-      $("sessionRestoreMessage").textContent = (error.message || "The provider session could not be restored.") + " Check your connection, then retry.";
+      setMessage((error.message || "The provider session could not be restored.") + " Check your connection, then refresh.", false);
       $("providerStatus").textContent = "Session restoration needs attention";
-      $("retrySessionRestore").disabled = false;
+      document.body.classList.remove("session-restoring");
+      document.documentElement.classList.remove("provider-session-pending");
       state.booting = false;
       return;
     }
     $("sessionRestorePanel").classList.add("hidden"); $("portal").classList.remove("hidden"); $("signOut").classList.remove("hidden"); $("providerAlerts").classList.remove("hidden");
     document.body.classList.remove("auth-mode");
+    document.body.classList.remove("session-restoring");
+    document.documentElement.classList.remove("provider-session-pending");
     switchView(state.activeView, { persist: false });
     $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
     try {
@@ -490,8 +498,10 @@
 
   async function saveProduct(event) {
     event.preventDefault(); if (!requireSubscription("products")) return; const form = event.currentTarget; let values;
-    try { values = validatedProductValues(form); } catch (error) { return setMessage(error.message); }
-    const files = [...$("productImages").files]; if (files.length > 20) return setMessage("Upload no more than 20 product images."); const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    const showFormError = (message) => { setMessage(message, false, "productUploadProgress"); $("productUploadProgress").scrollIntoView({ behavior: "smooth", block: "center" }); };
+    setMessage("", false, "productUploadProgress");
+    try { values = validatedProductValues(form); } catch (error) { return showFormError(error.message); }
+    const files = [...$("productImages").files]; if (files.length > 20) return showFormError("Upload no more than 20 product images."); const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
@@ -499,7 +509,7 @@
       const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
-    } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
+    } catch (error) { showFormError(error.message); } finally { button.disabled = false; }
   }
   async function loadProducts({ reset = false } = {}) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); const search = $("productSearch").value.trim(), status = $("productStatus").value; if (search) params.set("search", search); if (status) params.set("status", status); if (!reset && state.productCursor) params.set("cursor", state.productCursor);
@@ -537,6 +547,10 @@
       merchant_cross_border: { pending:["accepted"], accepted:["processing"], processing:["dispatched_from_origin"], dispatched_from_origin:["international_transit"], international_transit:["customs_clearance","local_hub"], customs_clearance:["local_hub"], local_hub:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] }
     };
     $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => { const f=order.fulfillment||{}, targets=transitions[f.route]?.[f.status]||[]; return `<article class="list-row"><label>${f.route === "merchant_cross_border" && ["pending","accepted","processing"].includes(f.status) ? `<input type="checkbox" data-manifest-order="${order.id}" /> Add to manifest` : ""}</label><div><span class="badge">${escapeHtml(human(f.status || order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3><p>${escapeHtml(human(f.route))} · ${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p>${(order.items || []).map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}<p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div><div class="list-actions">${targets.map(target => `<button data-fulfil-order="${order.id}" data-next="${target}" data-version="${f.version}">${escapeHtml(human(target))}</button>`).join("")}</div></article>`; }).join("") : "<p>No paid merchant orders yet.</p>"; $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
+    document.querySelectorAll("#merchantOrderRows article").forEach((article, index) => {
+      const order = state.merchantOrders[index];
+      article.querySelector("label")?.insertAdjacentHTML("afterbegin", `<input type="checkbox" data-bulk-order="${order.id}" /> Select for bulk update<br>`);
+    });
     document.querySelectorAll("[data-fulfil-order]").forEach(button => button.onclick = () => transitionOrder(button));
   }
 
@@ -570,6 +584,32 @@
       await loadMerchantOrders({reset:true});
     } catch(error) { setMessage(error.message, false, "fulfillmentMessage"); }
     finally { button.disabled=false; }
+  }
+
+  async function bulkUpdateMerchantOrders() {
+    const selectedIDs = [...document.querySelectorAll("[data-bulk-order]:checked")].map(input => input.dataset.bulkOrder);
+    const status = $("bulkFulfillmentStatus").value;
+    if (!selectedIDs.length || !status) {
+      setMessage("Select at least one order and the next tracking stage.", false, "bulkFulfillmentMessage");
+      return $("bulkFulfillmentControls").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const orders = selectedIDs.map(orderID => {
+      const order = state.merchantOrders.find(item => item.id === orderID);
+      return { order_id: orderID, expected_version: Number(order?.fulfillment?.version || 0) };
+    });
+    const button = $("bulkUpdateOrders");
+    button.disabled = true;
+    setMessage(`Updating ${orders.length} order(s)...`, true, "bulkFulfillmentMessage");
+    try {
+      const data = await api("/providers/me/merchant-orders/fulfillment/bulk", { method: "PATCH", body: JSON.stringify({ orders, status, idempotency_key: crypto.randomUUID() }) });
+      setMessage(`${data.updated || orders.length} order(s) updated. Buyers have been notified.`, true, "bulkFulfillmentMessage");
+      await loadMerchantOrders({ reset: true });
+    } catch (error) {
+      setMessage(error.message, false, "bulkFulfillmentMessage");
+      $("bulkFulfillmentControls").scrollIntoView({ behavior: "smooth", block: "center" });
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function loadManifests({reset=false}={}) { const params=new URLSearchParams({limit:String(PAGE_SIZE)}); if(!reset&&state.manifestCursor) params.set("cursor",state.manifestCursor); const data=await api(`/providers/me/manifests?${params}`); state.manifests=reset?(data.items||[]):[...state.manifests,...(data.items||[])]; state.manifestCursor=data.next_cursor||""; state.manifestHasMore=Boolean(data.has_more); renderManifests(); }
@@ -891,6 +931,7 @@
   $("loadMoreProducts").addEventListener("click", () => loadProducts());
   $("refreshMerchantOrders").addEventListener("click", () => Promise.all([loadMerchantOrders({ reset: true }), loadManifests({ reset: true })]));
   $("loadMoreMerchantOrders").addEventListener("click", () => loadMerchantOrders());
+  $("bulkUpdateOrders").addEventListener("click", () => void bulkUpdateMerchantOrders());
   $("useProductLocation").addEventListener("click", useCurrentProductLocation);
   $("loadMoreManifests").addEventListener("click", () => loadManifests());
   $("createManifest").addEventListener("click", createManifest);

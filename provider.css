@@ -48,6 +48,28 @@ button {
 button:disabled { opacity: .55; cursor: not-allowed; }
 .secondary { background: var(--soft); color: var(--ink); }
 .hidden { display: none !important; }
+
+/* A stored session renders the stable portal shell before deferred JavaScript
+   starts, preventing the signed-out screen from flashing during refresh. */
+html.provider-session-pending #authPanel,
+html.provider-session-pending #sessionRestorePanel { display: none !important; }
+html.provider-session-pending #portal.hidden { display: grid !important; }
+html.provider-session-pending body.auth-mode {
+  background: #f5f7f6;
+}
+html.provider-session-pending body.auth-mode main {
+  max-width: 1440px;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+body.session-restoring .workspace {
+  opacity: .55;
+  pointer-events: none;
+  animation: session-shell-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes session-shell-pulse {
+  from { opacity: .45; }
+  to { opacity: .72; }
+}
 .alert-count { display: inline-grid; min-width: 1.35rem; height: 1.35rem; padding: 0 .3rem; place-items: center; border-radius: 999px; background: var(--accent); color: #fff; font-size: .75rem; }
 .alerts-dialog { width: min(680px, calc(100% - 2rem)); max-height: 80vh; border: 0; border-radius: 16px; padding: 1.25rem; box-shadow: 0 24px 80px rgba(0,0,0,.25); }
 .alerts-dialog::backdrop { background: rgba(7,25,22,.52); }
