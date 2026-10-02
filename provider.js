@@ -427,7 +427,16 @@
       setTimeout(() => state.listingMap?.invalidateSize(), 0);
       requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
       void prepareListingLocation();
+	  syncListingTypeFields();
     }
+  }
+
+  function syncListingTypeFields() {
+	const form = $("listingForm");
+	const capacityTypes = new Set(["hotel", "short_let", "car_rental", "car_wash", "food_vendor", "shop_rental"]);
+	const visible = capacityTypes.has(form.elements.listing_type.value);
+	$("listingCapacityField").classList.toggle("hidden", !visible);
+	if (!visible) form.elements.capacity.value = "1";
   }
 
   function setSelectOptions(select, options, preferred) {
@@ -493,7 +502,10 @@
       const path = state.editingListingID ? "/providers/me/listings/" + state.editingListingID : "/providers/me/listings";
       await api(path, { method: state.editingListingID ? "PATCH" : "POST", body: JSON.stringify(payload) });
       setListingFormOpen(false, { reset: true }); setMessage(existing ? "Service updated and returned for review." : "Service draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
-    } catch (error) { setMessage(error.message); } finally { button.disabled = false; }
+    } catch (error) {
+	  setMessage(error.message, false, "uploadProgress");
+	  $("uploadProgress").scrollIntoView({ behavior: "smooth", block: "center" });
+	} finally { button.disabled = false; }
   }
 
   async function saveProduct(event) {
@@ -546,7 +558,7 @@
       merchant_local: { pending:["accepted"], accepted:["packed"], packed:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] },
       merchant_cross_border: { pending:["accepted"], accepted:["processing"], processing:["dispatched_from_origin"], dispatched_from_origin:["international_transit"], international_transit:["customs_clearance","local_hub"], customs_clearance:["local_hub"], local_hub:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] }
     };
-    $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => { const f=order.fulfillment||{}, targets=transitions[f.route]?.[f.status]||[]; return `<article class="list-row"><label>${f.route === "merchant_cross_border" && ["pending","accepted","processing"].includes(f.status) ? `<input type="checkbox" data-manifest-order="${order.id}" /> Add to manifest` : ""}</label><div><span class="badge">${escapeHtml(human(f.status || order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3><p>${escapeHtml(human(f.route))} · ${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p>${(order.items || []).map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}<p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div><div class="list-actions">${targets.map(target => `<button data-fulfil-order="${order.id}" data-next="${target}" data-version="${f.version}">${escapeHtml(human(target))}</button>`).join("")}</div></article>`; }).join("") : "<p>No paid merchant orders yet.</p>"; $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
+    $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => { const f=order.fulfillment||{}, funds=order.seller_funds||{}, settlementPending=f.route === "merchant_cross_border" && funds.status !== "settled", targets=settlementPending?[]:(transitions[f.route]?.[f.status]||[]); return `<article class="list-row"><label>${!settlementPending && f.route === "merchant_cross_border" && ["pending","accepted","processing"].includes(f.status) ? `<input type="checkbox" data-manifest-order="${order.id}" /> Add to manifest` : ""}</label><div><span class="badge">${escapeHtml(human(f.status || order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3><p>${escapeHtml(human(f.route))} · ${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p><p><strong>Seller funds:</strong> ${escapeHtml(human(funds.status || "pending"))}${funds.settled_amount ? ` · ${money(funds.settled_amount)} released` : ""}</p>${settlementPending ? '<p class="moderation-note">Payment is secured, but Flutterwave has not released the seller settlement. Do not purchase or dispatch this imported item yet.</p>' : ""}${(order.items || []).map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}<p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div><div class="list-actions">${targets.map(target => `<button data-fulfil-order="${order.id}" data-next="${target}" data-version="${f.version}">${escapeHtml(human(target))}</button>`).join("")}</div></article>`; }).join("") : "<p>No paid merchant orders yet.</p>"; $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
     document.querySelectorAll("#merchantOrderRows article").forEach((article, index) => {
       const order = state.merchantOrders[index];
       article.querySelector("label")?.insertAdjacentHTML("afterbegin", `<input type="checkbox" data-bulk-order="${order.id}" /> Select for bulk update<br>`);
@@ -631,7 +643,9 @@
     if (state.listingMap) return state.listingMap;
     if (!window.L) { setListingLocationStatus("The interactive map could not load. Check the internet connection and reload this page.", "error"); return null; }
     const map = window.L.map("listingLocationMap").setView([9.082, 8.6753], 6);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' }).addTo(map);
+    const street = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>' }).addTo(map);
+    const satellite = window.L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Tiles &copy; Esri" });
+    window.L.control.layers({ "Street map": street, "Satellite": satellite }, null, { collapsed: false }).addTo(map);
     map.on("click", (event) => { setListingMapPin(event.latlng.lat, event.latlng.lng, "map", null, true); setListingLocationStatus("Pin placed. Drag it if needed, then confirm the exact service location.", "ready"); });
     state.listingMap = map;
     return map;
@@ -697,7 +711,7 @@
     try {
       const permission = await navigator.permissions.query({ name: "geolocation" });
       if (permission.state === "granted") return setListingLocationStatus("Search the address first, or select Use my current location as a starting point. Always verify the pin on the map.");
-      if (permission.state === "denied") return setListingLocationStatus("Location is blocked for admin.atlxpres.com. Open the padlock/site settings beside the address, change Location to Allow, reload, then select Use my current location.", "error");
+      if (permission.state === "denied") return setListingLocationStatus("Location is blocked for " + location.hostname + ". Open the padlock/site settings beside the address, change Location to Allow, reload, then select Use my current location.", "error");
       setListingLocationStatus("Select Use my current location, then choose Allow when your browser asks.");
     } catch (_) { setListingLocationStatus("Select Use my current location, then approve the browser request."); }
   }
@@ -942,6 +956,7 @@
   $("listingLocationSearch").addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); void searchListingLocation(); } });
   $("listingForm").elements.latitude.addEventListener("input", updateManualListingLocation);
   $("listingForm").elements.longitude.addEventListener("input", updateManualListingLocation);
+  $("listingForm").elements.listing_type.addEventListener("change", syncListingTypeFields);
   $("providerAlerts").addEventListener("click", () => { renderProviderNotifications(); $("providerAlertsDialog").showModal(); });
   $("closeProviderAlerts").addEventListener("click", () => $("providerAlertsDialog").close());
   $("markProviderAlertsRead").addEventListener("click", () => void markProviderNotificationsRead());

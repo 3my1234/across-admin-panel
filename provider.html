@@ -147,7 +147,7 @@
             <label>State / region<input name="state" required /></label><label>Street / area<input name="address_line" /></label>
             <label>Country code<input name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" autocapitalize="characters" required /><small>Two-letter ISO code, for example NG, GB, US, or CA.</small></label>
             <label>Currency code<input name="currency_code" maxlength="3" pattern="[A-Za-z]{3}" value="NGN" autocapitalize="characters" required /><small>Three-letter ISO code, for example NGN, GBP, USD, or CAD.</small></label>
-            <label>Price<input name="price" type="number" min="0" step="0.01" /></label><label>Pricing unit<input name="pricing_unit" placeholder="night, day, appointment" /></label><label>Capacity<input name="capacity" type="number" min="1" value="1" /></label>
+            <label>Price<input name="price" type="number" min="0" step="0.01" /></label><label>Pricing unit<input name="pricing_unit" placeholder="night, day, appointment" /></label><label id="listingCapacityField">Booking capacity<input name="capacity" type="number" min="1" value="1" /><small>Maximum guests, vehicles, rooms, or people available for the same time slot.</small></label>
             <label>Contact email<input name="contact_email" type="email" /></label><label>Contact phone<input name="contact_phone" inputmode="tel" /></label>
             <div class="wide location-card">
               <div><h3>Service location</h3><p>Search the service address, then click the map or drag the pin to the exact property or workplace. Customers never see the coordinates; they are only used to find nearby services.</p></div>
