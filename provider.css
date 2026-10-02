@@ -370,6 +370,24 @@ textarea { resize: vertical; }
 .list-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
 .message { color: var(--danger); font-weight: 700; overflow-wrap: anywhere; }
 .message.success { color: #18794e; }
+.portal-message:empty { display: none; }
+.portal-message {
+  position: sticky;
+  top: 5.5rem;
+  z-index: 30;
+  margin: 0 0 1rem;
+  padding: .85rem 1rem;
+  border: 1px solid #f3b7bc;
+  border-left: .35rem solid var(--danger);
+  border-radius: .75rem;
+  background: #fff7f7;
+  box-shadow: 0 .65rem 1.5rem rgba(34, 21, 21, .14);
+}
+.portal-message.success {
+  border-color: #a9d9c0;
+  border-left-color: #18794e;
+  background: #f1fbf5;
+}
 small { font-weight: 400; color: var(--muted); }
 
 @media (max-width: 850px) {

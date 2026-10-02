@@ -14,7 +14,7 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20260930-session-shell" />
+  <link rel="stylesheet" href="./provider.css?v=20261002-visible-errors" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="./provider.js?v=20260930-session-shell" defer></script>
 </head>
@@ -50,6 +50,7 @@
         <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages" data-provider-profile>Messages</button></nav>
       </aside>
       <div class="workspace">
+        <p id="portalMessage" class="message portal-message" role="alert" aria-live="assertive"></p>
         <section id="onboardingCard" class="card hidden">
           <span class="eyebrow">Step 1 of 2</span><h2>Choose how you will use Atlantic Express</h2><p>Your choice determines the tools available in your portal. You can add verification documents after submitting this profile.</p>
           <form id="onboardingForm" class="form-grid">
@@ -179,7 +180,6 @@
           <div class="section-heading"><div><span class="eyebrow">Customer conversations</span><h2>Messages</h2><p>Reply to buyers inside Atlantic Express. New conversations and replies require an active subscription.</p></div><button id="refreshConversations" class="secondary">Refresh</button></div>
           <div id="conversationRows" class="stack-list"><p>No buyer conversations yet.</p></div>
         </section>
-        <p id="portalMessage" class="message"></p>
       </div>
     </section>
 
