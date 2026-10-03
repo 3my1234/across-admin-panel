@@ -38,6 +38,7 @@ function resolveSavedApiUrl() {
   resetAdminTarget: null,
   activityCursor: "",
   activityItems: [],
+  supportTickets: [],
   activityTimer: null
 };
 
@@ -2345,7 +2346,8 @@ $("sendTicketReply").addEventListener("click", sendTicketReply);
 async function loadTickets() {
   try {
     const data = await request("/api/v1/admin/support/tickets");
-    renderTicketsTable(data.tickets || []);
+    state.supportTickets = data.tickets || [];
+    renderTicketsTable(state.supportTickets);
   } catch (error) {
     setText("ticketStatus", error.message);
   }
@@ -2421,15 +2423,16 @@ async function openTicketView(ticketId, subject) {
   setText("ticketStatus", "");
   try {
     const data = await request(`/api/v1/admin/support/tickets/${ticketId}/messages`);
-    const messages = data.messages || [];
+    const ticket = state.supportTickets.find(item => item.id === ticketId);
+    const messages = (data.messages || []).length ? data.messages : (ticket?.message ? [{ sender_type: "user", message: ticket.message, created_at: ticket.created_at }] : []);
     const container = $("ticketMessagesList");
-    container.innerHTML = messages.map(m => `
+    container.innerHTML = messages.length ? messages.map(m => `
       <div style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
         <p style="font-weight:700;font-size:12px;color:#66736F;margin-bottom:4px;">${m.sender_type === 'admin' ? 'Admin' : 'User'}</p>
         <p style="color:#191919;font-size:14px;">${escapeHtml(m.message)}</p>
         <p style="font-size:11px;color:#8C8C8C;margin-top:4px;">${format(m.created_at)}</p>
       </div>
-    `).join("");
+    `).join("") : `<p style="color:#66736F;">This ticket has no message content. Reload the ticket list, then try again.</p>`;
   } catch (error) {
     setText("ticketStatus", error.message);
   }

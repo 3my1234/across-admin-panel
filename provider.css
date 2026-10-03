@@ -417,3 +417,9 @@ small { font-weight: 400; color: var(--muted); }
   body.auth-mode .auth-card { margin: 2vh auto; }
   .provider-type-grid { grid-template-columns: 1fr; }
 }
+
+.existing-media { border: 1px solid var(--line); border-radius: 12px; padding: 1rem; background: #f8fbfa; }
+.existing-media > p { margin: .3rem 0 .8rem; color: var(--muted); }
+.existing-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .75rem; }
+.existing-media-grid figure { margin: 0; display: grid; gap: .45rem; }
+.existing-media-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }

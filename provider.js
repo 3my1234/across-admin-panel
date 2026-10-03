@@ -11,7 +11,7 @@
     account: null,
     provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0, conversations: [], currentConversation: null, payoutBanks: [],
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
-    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
+    productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingRetainedMediaUrls: [], listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -20,9 +20,13 @@
     catch (_) { return ((currency || "") + " " + Number(value || 0).toLocaleString()).trim(); }
   };
   const human = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const bookingUnit = (listingType, count) => {
+    const singular = listingType === "hotel" || listingType === "short_let" ? "guest" : ["car_rental", "car_wash", "mechanic"].includes(listingType) ? "vehicle" : "person";
+    return Number(count) === 1 ? singular : `${singular}s`;
+  };
   const debounce = (fn, wait = 300) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; };
   const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-  const setMessage = (text, ok = false, target = "portalMessage") => { const node = $(target); if (!node) return; node.textContent = text || ""; node.className = `message${ok ? " success" : ""}`; };
+  const setMessage = (text, ok = false, target = "portalMessage") => { const node = $(target); if (!node) return; node.textContent = text || ""; node.className = `message${target === "portalMessage" ? " portal-message" : ""}${ok ? " success" : ""}`; };
   function readPendingSubscription() {
     try {
       const value = JSON.parse(localStorage.getItem(PENDING_SUBSCRIPTION_KEY) || "null");
@@ -380,8 +384,14 @@
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index]; setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
       const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing" }) });
-      const put = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      if (!put.ok) throw new Error(`Image upload failed (${put.status})`); urls.push(signed.view_url);
+      let put;
+      try {
+        put = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      } catch (_) {
+        throw new Error("The image could not reach storage. Ask the administrator to allow provider.atlxpres.com in the S3 bucket CORS settings, then try again.");
+      }
+      if (!put.ok) throw new Error(`Image storage rejected the upload (${put.status}). Check the S3 CORS policy, file type, and upload permissions.`);
+      urls.push(signed.view_url);
     }
     return urls;
   }
@@ -413,10 +423,25 @@
     } catch (error) { setMessage(error.message, false, "verificationMessage"); } finally { button.disabled = false; }
   }
 
+  function renderExistingListingImages() {
+    const container = $("listingExistingImages");
+    if (!container) return;
+    const urls = state.listingRetainedMediaUrls || [];
+    container.classList.toggle("hidden", urls.length === 0);
+    container.innerHTML = urls.length ? `<strong>Current images</strong><p>Remove only the images you no longer want. New images selected below will be added to these.</p><div class="existing-media-grid">${urls.map((url, index) => `<figure><img src="${escapeHtml(url)}" alt="Current service image ${index + 1}" /><button type="button" class="secondary" data-remove-listing-image="${index}">Remove</button></figure>`).join("")}</div>` : "";
+    container.querySelectorAll("[data-remove-listing-image]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.listingRetainedMediaUrls.splice(Number(button.dataset.removeListingImage), 1);
+        renderExistingListingImages();
+        setMessage("Image removed from this draft. Select Save service draft to keep the change.", true, "uploadProgress");
+      });
+    });
+  }
+
   function setListingFormOpen(open, { reset = false } = {}) {
     const form = $("listingForm"); const toggle = $("toggleListingForm");
     if (reset) {
-      form.reset(); state.editingListingID = ""; state.listingLocationAccuracy = null; state.listingLocationSource = "";
+      form.reset(); state.editingListingID = ""; state.listingRetainedMediaUrls = []; state.listingLocationAccuracy = null; state.listingLocationSource = ""; renderExistingListingImages();
       $("confirmListingLocation").checked = false; $("openListingLocationMap").classList.add("hidden"); $("listingLocationSearchResults").classList.add("hidden"); $("listingLocationSearchResults").replaceChildren();
       if (state.listingMarker && state.listingMap) { state.listingMap.removeLayer(state.listingMarker); state.listingMarker = null; state.listingMap.setView([9.082, 8.6753], 6); }
       setListingLocationStatus("Search for the address or use this device's location, then verify the pin.");
@@ -480,7 +505,9 @@
   async function saveListing(event) {
     event.preventDefault(); if (!requireSubscription("services")) return; const form = event.currentTarget; if (!form.reportValidity()) return; const files = [...$("listingImages").files];
     const existing = state.listings.find(item => item.id === state.editingListingID);
-    if (!files.length && !existing?.media_urls?.length) return setMessage("Add at least one clear listing image."); if (files.length > 20) return setMessage("Upload no more than 20 listing images.");
+    const retainedMedia = state.editingListingID ? [...state.listingRetainedMediaUrls] : [];
+    if (!files.length && !retainedMedia.length) return setMessage("Keep or add at least one clear service image.", false, "uploadProgress");
+    if (files.length + retainedMedia.length > 20) return setMessage("A service can have no more than 20 images in total.", false, "uploadProgress");
     const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const values = Object.fromEntries(new FormData(form));
@@ -496,7 +523,8 @@
         $("listingLocationPreview").scrollIntoView({ behavior: "smooth", block: "center" });
         throw new Error("Confirm that the map pin is at the actual service or property location before saving.");
       }
-      const media_urls = files.length ? await uploadImages(files) : existing.media_urls;
+      const uploadedMedia = files.length ? await uploadImages(files) : [];
+      const media_urls = [...retainedMedia, ...uploadedMedia];
       const attributes = { ...(existing?.attributes || {}), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
       const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes };
       const path = state.editingListingID ? "/providers/me/listings/" + state.editingListingID : "/providers/me/listings";
@@ -773,7 +801,7 @@
 
   function editListing(id) {
     const item = state.listings.find(listing => listing.id === id); if (!item) return;
-    const form = $("listingForm"); state.editingListingID = id;
+    const form = $("listingForm"); state.editingListingID = id; state.listingRetainedMediaUrls = [...(item.media_urls || [])]; renderExistingListingImages();
     ["listing_type", "title", "category", "city", "state", "address_line", "country_code", "currency_code", "price", "pricing_unit", "capacity", "contact_email", "contact_phone", "latitude", "longitude", "service_radius_km", "description"].forEach(name => {
       form.elements[name].value = item[name] ?? "";
     });
@@ -800,7 +828,7 @@
   async function updateRequest(id, status) { try { await api(`/providers/me/requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); setMessage(`Request marked ${status}.`, true); await loadRequests({ reset: true }); } catch (error) { setMessage(error.message); } }
   function renderRequests() {
     const items = state.requests;
-    $("requestRows").innerHTML = items.length ? items.map((item) => `<article class="list-row"><div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.listing_title)}</h3><p>${escapeHtml(human(item.request_type))} · party of ${item.party_size} · ${item.starts_at ? new Date(item.starts_at).toLocaleString() : "Schedule by contact"}</p><p>${escapeHtml(item.message || "No message")}</p>${item.buyer ? `<p><strong>${escapeHtml(item.buyer.full_name)}</strong> · <a href="mailto:${escapeHtml(item.buyer.email)}">${escapeHtml(item.buyer.email)}</a>${item.buyer.phone ? ` · <a href="tel:${escapeHtml(item.buyer.phone)}">${escapeHtml(item.buyer.phone)}</a>` : ""}</p>` : ""}</div><div class="list-actions">${item.status === "pending" ? `<button data-request="${item.id}" data-status="accepted">Accept</button><button class="secondary" data-request="${item.id}" data-status="rejected">Reject</button>` : item.status === "accepted" ? `<button data-request="${item.id}" data-status="completed">Complete</button>` : ""}</div></article>`).join("") : "<p>No matching bookings or enquiries.</p>";
+    $("requestRows").innerHTML = items.length ? items.map((item) => `<article class="list-row"><div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.listing_title)}</h3><p>${escapeHtml(human(item.request_type))} · booking for ${item.party_size} ${bookingUnit(item.listing_type, item.party_size)} · ${item.starts_at ? new Date(item.starts_at).toLocaleString() : "Provider and customer will agree on a time"}</p><p>${escapeHtml(item.message || "No message")}</p>${item.buyer ? `<p><strong>${escapeHtml(item.buyer.full_name)}</strong> · <a href="mailto:${escapeHtml(item.buyer.email)}">${escapeHtml(item.buyer.email)}</a>${item.buyer.phone ? ` · <a href="tel:${escapeHtml(item.buyer.phone)}">${escapeHtml(item.buyer.phone)}</a>` : ""}</p>` : ""}</div><div class="list-actions">${item.status === "pending" ? `<button data-request="${item.id}" data-status="accepted">Accept</button><button class="secondary" data-request="${item.id}" data-status="rejected">Reject</button>` : item.status === "accepted" ? `<button data-request="${item.id}" data-status="completed">Complete</button>` : ""}</div></article>`).join("") : "<p>No matching bookings or enquiries.</p>";
     $("loadMoreRequests").classList.toggle("hidden", !state.requestHasMore); document.querySelectorAll("[data-request]").forEach((button) => button.onclick = () => updateRequest(button.dataset.request, button.dataset.status));
   }
 
