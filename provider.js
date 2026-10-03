@@ -239,6 +239,7 @@
     const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : NaN;
     return subscription?.status === "active" && Number.isFinite(periodEnd) && periodEnd > Date.now();
   }
+  function hasProviderAccess() { return state.provider?.subscription?.launch_access_active === true || hasActiveSubscription(); }
   function openSubscription() { switchView("subscription"); document.querySelector('[data-view="subscription"]')?.focus(); }
   function clearSubscriptionReturn() {
     const url = new URL(location.href);
@@ -322,7 +323,7 @@
     }
   }
   function requireSubscription(kind = "products") {
-    if (!hasActiveSubscription()) {
+    if (!hasProviderAccess()) {
       setMessage(`Choose and activate a monthly plan before creating ${kind}.`);
       openSubscription();
       return false;
@@ -336,6 +337,7 @@
     return true;
   }
   async function subscribe(planId) {
+    if (state.provider?.subscription?.launch_access_active) return setMessage("Provider access is free during launch. No subscription payment is needed.", true);
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
     document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
     const pending = hasPendingSubscription();
@@ -360,16 +362,17 @@
   }
   function renderPlans() {
     const active = hasActiveSubscription();
+    const freeLaunch = state.provider?.subscription?.launch_access_active === true;
     const approved = state.provider?.verification_status === "approved";
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
-    $("subscriptionGuidance").innerHTML = active ? `<strong>Subscription active.</strong> You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
-    $("plans").innerHTML = state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Subscribe securely"}</button></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
+    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free launch access is active.</strong> Approved providers can create and submit products and services without paying a subscription." : active ? `<strong>Subscription active.</strong> You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
+    $("plans").innerHTML = freeLaunch ? "" : state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Subscribe securely"}</button></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
     document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe));
     renderSubscriptionGates();
   }
   function renderSubscriptionGates() {
-    const active = hasActiveSubscription();
+    const active = hasProviderAccess();
     [["productSubscriptionGate", "products"], ["listingSubscriptionGate", "services"]].forEach(([id, label]) => {
       const node = $(id); if (!node) return;
       node.classList.toggle("hidden", active);
@@ -586,7 +589,26 @@
       merchant_local: { pending:["accepted"], accepted:["packed"], packed:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] },
       merchant_cross_border: { pending:["accepted"], accepted:["processing"], processing:["dispatched_from_origin"], dispatched_from_origin:["international_transit"], international_transit:["customs_clearance","local_hub"], customs_clearance:["local_hub"], local_hub:["ready_for_pickup","out_for_delivery"], ready_for_pickup:["delivered"], out_for_delivery:["delivered"] }
     };
-    $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => { const f=order.fulfillment||{}, funds=order.seller_funds||{}, settlementPending=f.route === "merchant_cross_border" && funds.status !== "settled", targets=settlementPending?[]:(transitions[f.route]?.[f.status]||[]); return `<article class="list-row"><label>${!settlementPending && f.route === "merchant_cross_border" && ["pending","accepted","processing"].includes(f.status) ? `<input type="checkbox" data-manifest-order="${order.id}" /> Add to manifest` : ""}</label><div><span class="badge">${escapeHtml(human(f.status || order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3><p>${escapeHtml(human(f.route))} · ${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p><p><strong>Seller funds:</strong> ${escapeHtml(human(funds.status || "pending"))}${funds.settled_amount ? ` · ${money(funds.settled_amount)} released` : ""}</p>${settlementPending ? '<p class="moderation-note">Payment is secured, but Flutterwave has not released the seller settlement. Do not purchase or dispatch this imported item yet.</p>' : ""}${(order.items || []).map((item) => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}<p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div><div class="list-actions">${targets.map(target => `<button data-fulfil-order="${order.id}" data-next="${target}" data-version="${f.version}">${escapeHtml(human(target))}</button>`).join("")}</div></article>`; }).join("") : "<p>No paid merchant orders yet.</p>"; $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
+    $("merchantOrderRows").innerHTML = state.merchantOrders.length ? state.merchantOrders.map((order) => {
+      const f = order.fulfillment || {}, funds = order.seller_funds || {};
+      const settlementPending = f.route === "merchant_cross_border" && funds.status !== "settled";
+      const targets = settlementPending ? [] : (transitions[f.route]?.[f.status] || []);
+      const payoutKnown = funds.payout_amount != null;
+      const failed = ["failed", "reversed"].includes(funds.status);
+      const payoutSummary = `<p><strong>Seller funds:</strong> ${escapeHtml(human(funds.status || "pending"))}</p>
+        <p>Expected seller share: ${money(funds.expected_amount || 0)}${payoutKnown ? ` · Gateway deductions: ${money(funds.gateway_deductions || 0)}` : ""}</p>
+        ${payoutKnown ? `<p>${funds.status === "settled" ? "Released payout" : funds.status === "reversed" ? "Reversed payout" : "Reported payout (not released)"}: <strong>${money(funds.payout_amount)}</strong>${funds.destination ? ` · ${escapeHtml(human(funds.destination))}` : ""}</p>` : ""}
+        ${funds.note ? `<p class="moderation-note">Flutterwave: ${escapeHtml(funds.note)}</p>` : ""}
+        ${funds.checked_at ? `<p class="mobile-card-meta">Last settlement update: ${new Date(funds.checked_at).toLocaleString()}</p>` : ""}`;
+      return `<article class="list-row"><label>${!settlementPending && f.route === "merchant_cross_border" && ["pending", "accepted", "processing"].includes(f.status) ? `<input type="checkbox" data-manifest-order="${order.id}" /> Add to manifest` : ""}</label>
+        <div><span class="badge">${escapeHtml(human(f.status || order.status))}</span><h3>${escapeHtml(order.package_label || order.id)}</h3>
+        <p>${escapeHtml(human(f.route))} · ${new Date(order.created_at).toLocaleString()} · ${money(order.total_amount)}</p>${payoutSummary}
+        ${settlementPending ? `<p class="moderation-note">${failed ? "Seller payout needs attention. Contact support." : "Buyer payment is confirmed, but Flutterwave has not released the seller payout."} Do not purchase or dispatch this imported item yet.</p>` : ""}
+        ${(order.items || []).map(item => `<p><strong>${escapeHtml(item.title)}</strong> · ${item.quantity} × ${money(item.unit_price)}</p>`).join("")}
+        <p><strong>Buyer:</strong> ${escapeHtml(order.fulfillment_contact?.full_name || "")} · ${escapeHtml(order.fulfillment_contact?.phone || "")} · ${escapeHtml([order.fulfillment_contact?.address, order.fulfillment_contact?.city, order.fulfillment_contact?.state].filter(Boolean).join(", "))}</p></div>
+        <div class="list-actions">${targets.map(target => `<button data-fulfil-order="${order.id}" data-next="${target}" data-version="${f.version}">${escapeHtml(human(target))}</button>`).join("")}</div></article>`;
+    }).join("") : "<p>No paid merchant orders yet.</p>";
+    $("loadMoreMerchantOrders").classList.toggle("hidden", !state.merchantOrderHasMore);
     document.querySelectorAll("#merchantOrderRows article").forEach((article, index) => {
       const order = state.merchantOrders[index];
       article.querySelector("label")?.insertAdjacentHTML("afterbegin", `<input type="checkbox" data-bulk-order="${order.id}" /> Select for bulk update<br>`);
@@ -901,10 +923,11 @@
 
   function renderOverview() {
     const p = state.provider, verification = p?.verification_status || "Not submitted", subscription = p?.subscription?.status || "None";
-    const subscriptionActive = hasActiveSubscription();
-    const subscriptionLabel = subscriptionActive ? "Active" : subscription === "active" ? "Expired" : subscription;
+    const subscriptionActive = hasProviderAccess();
+    const freeLaunch = p?.subscription?.launch_access_active === true;
+    const subscriptionLabel = freeLaunch ? "Free launch" : subscriptionActive ? "Active" : subscription === "active" ? "Expired" : subscription;
     $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscriptionLabel); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
-    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : p.can_sell_products && p.payout_account?.status !== "active" ? "<strong>Settlement setup required.</strong> Connect the product seller's Flutterwave settlement account before products can appear to buyers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
+    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : p.can_sell_products && p.payout_account?.status !== "active" ? "<strong>Settlement setup required.</strong> Connect the product seller's Flutterwave settlement account before products can appear to buyers." : freeLaunch ? "<strong>Ready for buyers.</strong> Free launch access is active for approved providers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
     const settlement = $("sellerSettlement"); const payout = p?.payout_account || {};
     settlement.classList.toggle("hidden", !p?.can_sell_products);
     if (p?.can_sell_products) {
