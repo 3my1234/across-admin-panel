@@ -16,7 +16,7 @@
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = (value, currency = "NGN") => {
-    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "NGN", maximumFractionDigits: 0 }).format(Number(value || 0)); }
+    try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "NGN", maximumFractionDigits: 2 }).format(Number(value || 0)); }
     catch (_) { return ((currency || "") + " " + Number(value || 0).toLocaleString()).trim(); }
   };
   const human = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -152,17 +152,16 @@
     document.documentElement.classList.remove("provider-session-pending");
     switchView(state.activeView, { persist: false });
     $("providerStatus").textContent = `Signed in as ${state.account.email || "verified user"}. Provider access is separate from the Admin dashboard.`;
-    try {
-      await loadPlans();
-      if (state.provider) await Promise.all([loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications(), loadConversations()]);
+    renderOverview();
+    state.booting = false;
+    startProviderNotificationPolling();
+    void handleSubscriptionReturn();
+    const loads = [loadPlans(), loadBuyerMarkets()];
+    if (state.provider) loads.push(loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications(), loadConversations());
+    void Promise.allSettled(loads).then(results => {
+      if (results.some(result => result.status === "rejected")) setMessage("Some provider data could not be loaded. Use Refresh to try again.");
       renderOverview();
-      startProviderNotificationPolling();
-      void handleSubscriptionReturn();
-    } catch (error) {
-      setMessage((error.message || "Some provider data could not be loaded.") + " Use Refresh to try again.");
-    } finally {
-      state.booting = false;
-    }
+    });
   }
 
   function notificationCopy(item) {
@@ -234,6 +233,14 @@
   }
 
   async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; renderPlans(); }
+  async function loadBuyerMarkets() {
+    try {
+      const data = await api("/buyer-markets");
+      $("enabledBuyerMarkets").textContent = `Currently enabled buyer checkout markets: ${(data.markets || []).map(market => `${market.country_code} (${market.currency_code})`).join(", ") || "none"}.`;
+    } catch {
+      $("enabledBuyerMarkets").textContent = "Could not load enabled buyer markets. Refresh before adding a new destination.";
+    }
+  }
   function hasActiveSubscription() {
     const subscription = state.provider?.subscription;
     const periodEnd = subscription?.current_period_end ? Date.parse(subscription.current_period_end) : NaN;
@@ -498,9 +505,21 @@
     if (form.elements.is_flash_sale.checked && (flash === null || flash <= 0 || flash >= price)) throw new Error("Flash price must be greater than zero and lower than the selling price.");
     if (Number(values.delivery_max_days) < Number(values.delivery_min_days)) throw new Error("Maximum delivery days cannot be less than minimum delivery days.");
     values.inventory_country_code = String(values.inventory_country_code).trim().toUpperCase();
+    values.currency_code = String(values.currency_code || "").trim().toUpperCase();
+    values.delivery_areas = String(values.delivery_areas || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+      const parts = line.split("|").map(part => part.trim());
+      if (parts.length > 5 || !/^[A-Za-z]{2}$/.test(parts[0]) || (parts[2] && !parts[1])) throw new Error("Use country | state | city | price | currency for each delivery area.");
+      const fallback = parts[0].toUpperCase() === "NG" && values.currency_code === "NGN";
+      const areaPrice = parts[3] ? Number(parts[3]) : fallback ? price : NaN;
+      const currency = String(parts[4] || (fallback ? values.currency_code : "")).toUpperCase();
+      if (!Number.isFinite(areaPrice) || areaPrice <= 0 || !/^[A-Z]{3}$/.test(currency)) throw new Error("Each delivery area needs a positive total price and three-letter currency.");
+      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", delivered_price: areaPrice, currency_code: currency };
+    });
+    if (!values.delivery_areas.length || values.delivery_areas.length > 20) throw new Error("Choose between 1 and 20 delivery areas.");
     if (values.fulfillment_mode === "merchant_local") {
       values.stock_state = "locally_available";
       if (values.inventory_latitude === "" || values.inventory_longitude === "") throw new Error("Use current stock location so nearby buyers can discover this product.");
+      if (values.delivery_areas.some(area => area.country_code !== values.inventory_country_code)) throw new Error("Local products can only be delivered in the stock country. Use the international route for other countries.");
     }
     return values;
   }
@@ -549,7 +568,7 @@
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
-      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), return_policy: values.return_policy };
+      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), currency_code: values.currency_code, compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), delivery_areas: values.delivery_areas, return_policy: values.return_policy };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { showFormError(error.message); } finally { button.disabled = false; }
@@ -559,7 +578,7 @@
     const data = await api(`/providers/me/products?${params}`); state.products = reset ? (data.items || []) : [...state.products, ...(data.items || [])]; state.productCursor = data.page?.next_cursor || ""; state.productHasMore = Boolean(data.page?.has_more); renderProducts(); renderOverview();
   }
   function renderProducts() {
-    $("productRows").innerHTML = state.products.length ? state.products.map((item) => `<article class="list-row listing-row">${item.image_urls?.[0] ? `<img class="listing-thumb" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.moderation_status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.sku)} · ${money(item.local_selling_price)} · ${item.inventory_count} in stock</p><p>${escapeHtml(human(item.fulfillment_mode))} · ${escapeHtml([item.inventory_city, item.inventory_country_code].filter(Boolean).join(", "))} · ${item.delivery_min_days}-${item.delivery_max_days} days</p>${item.moderation_notes ? `<p>${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions"><button class="secondary" data-edit-product="${item.id}">Edit</button>${["draft","rejected"].includes(item.moderation_status) ? `<button data-submit-product="${item.id}">Submit for review</button>` : ""}<button class="secondary" data-archive-product="${item.id}">Archive</button></div></article>`).join("") : "<p>No matching products.</p>";
+    $("productRows").innerHTML = state.products.length ? state.products.map((item) => `<article class="list-row listing-row">${item.image_urls?.[0] ? `<img class="listing-thumb" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.moderation_status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.sku)} · ${money(item.local_selling_price, item.currency_code)} · ${item.inventory_count} in stock</p><p>${escapeHtml(human(item.fulfillment_mode))} · ${escapeHtml([item.inventory_city, item.inventory_country_code].filter(Boolean).join(", "))} · ${item.delivery_min_days}-${item.delivery_max_days} days</p><p>Delivers to: ${escapeHtml((item.delivery_areas || []).map(area => [area.city, area.state, area.country_code].filter(Boolean).join(", ")).join("; ") || "No area set")}</p>${item.moderation_notes ? `<p>${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions"><button class="secondary" data-edit-product="${item.id}">Edit</button>${["draft","rejected"].includes(item.moderation_status) ? `<button data-submit-product="${item.id}">Submit for review</button>` : ""}<button class="secondary" data-archive-product="${item.id}">Archive</button></div></article>`).join("") : "<p>No matching products.</p>";
     $("loadMoreProducts").classList.toggle("hidden", !state.productHasMore);
     document.querySelectorAll("[data-submit-product]").forEach((button) => button.onclick = async () => { button.disabled = true; try { await api(`/providers/me/products/${button.dataset.submitProduct}/submit`, { method: "POST" }); setMessage("Product submitted for moderation.", true); await loadProducts({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
     document.querySelectorAll("[data-edit-product]").forEach((button) => button.onclick = () => editProduct(button.dataset.editProduct));
@@ -572,10 +591,11 @@
     state.editingProductID = id;
     form.elements.fulfillment_mode.value = item.fulfillment_mode || "merchant_local";
     syncProductFulfillment(item.stock_state);
-    ["title", "sku", "description", "local_selling_price", "compare_at_price", "inventory_count", "flash_sale_price", "inventory_country_code", "inventory_city", "inventory_location", "inventory_latitude", "inventory_longitude", "handling_time_hours", "delivery_min_days", "delivery_max_days", "return_policy"].forEach((name) => {
+    ["title", "sku", "description", "local_selling_price", "currency_code", "compare_at_price", "inventory_count", "flash_sale_price", "inventory_country_code", "inventory_city", "inventory_location", "inventory_latitude", "inventory_longitude", "handling_time_hours", "delivery_min_days", "delivery_max_days", "return_policy"].forEach((name) => {
       form.elements[name].value = item[name] ?? "";
     });
     form.elements.stock_state.value = item.stock_state || (item.fulfillment_mode === "merchant_cross_border" ? "foreign_stock" : "locally_available");
+    form.elements.delivery_areas.value = (item.delivery_areas || []).map(area => [area.country_code, area.state || "", area.city || "", area.delivered_price, area.currency_code].join(" | ")).join("\n") || `${item.inventory_country_code || "NG"} | | | ${item.local_selling_price} | ${item.currency_code || "NGN"}`;
     form.elements.category.value = item.category_path?.[0] || "";
     form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
     form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
