@@ -8,7 +8,19 @@
     return ["super_admin", "catalog_admin"].includes(role) && !withFulfilment.includes("providers") ? [...withFulfilment.slice(0, 2), "providers", ...withFulfilment.slice(2)] : withFulfilment;
   };
   const originalLoadTabData = loadTabData;
-  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true }), loadMerchantProducts({ reset: true }), loadProviderPlans(), loadProviderAccess(), loadGatewaySubscriptions()]) : tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
+  loadTabData = (tab, options = {}) => {
+    if (tab === "providers") {
+      $("providerBillingSection")?.classList.toggle("hidden", state.role !== "super_admin");
+      if (state.role === "super_admin") void loadProviderBilling();
+      return Promise.all([
+        options.force || !state.providers.length ? loadProviders({ reset: true }) : Promise.resolve(),
+        options.force || !state.providerListings.length ? loadProviderListings({ reset: true }) : Promise.resolve(),
+        options.force || !state.merchantProducts.length ? loadMerchantProducts({ reset: true }) : Promise.resolve(),
+        ...(state.role === "super_admin" ? [loadProviderAccess()] : [])
+      ]);
+    }
+    return tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
+  };
 
   state.providers = [];
   state.providerListings = [];
@@ -25,11 +37,23 @@
   state.providerPlans = [];
   state.providerAccess = null;
   state.gatewaySubscriptions = [];
+  let billingLoadedAt = 0;
+  let billingLoadPromise = null;
 
-  async function loadGatewaySubscriptions() {
+  function loadProviderBilling() {
+    if (billingLoadPromise) return billingLoadPromise;
+    if (Date.now() - billingLoadedAt < 60000) return Promise.resolve();
+    billingLoadPromise = Promise.allSettled([loadProviderPlans().then(() => loadProviderPlans(true)), loadGatewaySubscriptions()]).finally(() => {
+      billingLoadedAt = Date.now();
+      billingLoadPromise = null;
+    });
+    return billingLoadPromise;
+  }
+
+  async function loadGatewaySubscriptions(fresh = false) {
     setText("gatewaySubscriptionsStatus", "Checking active Flutterwave renewals...");
     try {
-      const data = await request("/api/v1/admin/provider-gateway-subscriptions");
+      const data = await request(`/api/v1/admin/provider-gateway-subscriptions${fresh ? "?refresh=true" : ""}`);
       state.gatewaySubscriptions = data.items || [];
       renderGatewaySubscriptions();
       setText("gatewaySubscriptionsStatus", `${state.gatewaySubscriptions.length} active recurring subscription${state.gatewaySubscriptions.length === 1 ? "" : "s"}.`);
@@ -52,7 +76,7 @@
     setText("gatewaySubscriptionsStatus", `Cancelling subscription ${id} with Flutterwave...`);
     try {
       await request(`/api/v1/admin/provider-gateway-subscriptions/${id}/cancel`, { method: "POST" });
-      await loadGatewaySubscriptions();
+      await loadGatewaySubscriptions(true);
       setText("gatewaySubscriptionsStatus", `Flutterwave confirmed subscription ${id} is no longer active.`);
     } catch (error) {
       setText("gatewaySubscriptionsStatus", error.message);
@@ -268,7 +292,7 @@
       await request("/api/v1/admin/provider-subscription-plans", { method: "POST", body: { code: form.get("code"), name: form.get("name"), description: form.get("description"), amount_ngn: Number(form.get("amount_ngn")), listing_limit: Number(form.get("listing_limit")), flutterwave_plan_id: form.get("flutterwave_plan_id") ? Number(form.get("flutterwave_plan_id")) : null, features: { verified_badge: true, public_contact: true } } });
       setText("providerPlanStatus", "Subscription plan saved. Providers can now refresh their Subscription page.");
       formElement.reset();
-      await loadProviderPlans();
+      await loadProviderPlans(true);
     } catch (error) {
       setText("providerPlanStatus", error.message);
     } finally {
@@ -276,13 +300,13 @@
     }
   }
 
-  async function loadProviderPlans() {
-    setText("providerPlansStatus", "Loading subscription plans...");
+  async function loadProviderPlans(verify = false) {
+    setText("providerPlansStatus", verify ? "Checking Flutterwave plan prices..." : "Loading subscription plans...");
     try {
-      const data = await request("/api/v1/admin/provider-subscription-plans");
+      const data = await request(`/api/v1/admin/provider-subscription-plans${verify ? "?verify=true" : ""}`);
       state.providerPlans = data.items || [];
       renderProviderPlans();
-      setText("providerPlansStatus", `${state.providerPlans.filter((plan) => plan.is_active).length} active subscription plan${state.providerPlans.filter((plan) => plan.is_active).length === 1 ? "" : "s"}.`);
+      setText("providerPlansStatus", `${state.providerPlans.filter((plan) => plan.is_active).length} active subscription plan${state.providerPlans.filter((plan) => plan.is_active).length === 1 ? "" : "s"}.${verify ? " Flutterwave prices checked." : " Checking Flutterwave prices in the background."}`);
     } catch (error) {
       setText("providerPlansStatus", error.message);
     }
@@ -313,7 +337,7 @@
     setText("providerPlansStatus", "Matching the monthly price with Flutterwave...");
     try {
       const result = await request(`/api/v1/admin/provider-subscription-plans/${planID}/price`, { method: "POST", body: { amount_ngn: amount } });
-      await loadProviderPlans();
+      await loadProviderPlans(true);
       setText("providerPlansStatus", `Price saved at NGN ${amount.toLocaleString()}/month; Flutterwave plan ${result.flutterwave_plan_id} is linked for future subscriptions. Existing subscriptions were not repriced.`);
     } catch (error) {
       setText("providerPlansStatus", error.message);
@@ -327,7 +351,7 @@
     setText("providerPlansStatus", "Removing subscription plan from sale...");
     try {
       await request(`/api/v1/admin/provider-subscription-plans/${planID}`, { method: "DELETE" });
-      await loadProviderPlans();
+      await loadProviderPlans(true);
     } catch (error) {
       setText("providerPlansStatus", error.message);
     }
@@ -344,8 +368,8 @@
   $("providerPlanForm")?.addEventListener("submit", saveProviderPlan);
   $("providerAccessForm")?.addEventListener("submit", saveProviderAccess);
   $("providerAccessMode")?.addEventListener("change", () => { $("providerPaidStartAt").disabled = $("providerAccessMode").value !== "paid"; });
-  $("reloadProviderPlansButton")?.addEventListener("click", loadProviderPlans);
-  $("reloadGatewaySubscriptionsButton")?.addEventListener("click", loadGatewaySubscriptions);
+  $("reloadProviderPlansButton")?.addEventListener("click", () => loadProviderPlans(true));
+  $("reloadGatewaySubscriptionsButton")?.addEventListener("click", () => loadGatewaySubscriptions(true));
   $("reloadMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts({ reset: true }));
   $("loadMoreMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts());
   $("merchantProductSearch")?.addEventListener("input", debounce(() => loadMerchantProducts({ reset: true }), 300));
