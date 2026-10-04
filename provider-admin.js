@@ -8,7 +8,7 @@
     return ["super_admin", "catalog_admin"].includes(role) && !withFulfilment.includes("providers") ? [...withFulfilment.slice(0, 2), "providers", ...withFulfilment.slice(2)] : withFulfilment;
   };
   const originalLoadTabData = loadTabData;
-  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true }), loadMerchantProducts({ reset: true }), loadProviderPlans()]) : tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
+  loadTabData = (tab, options = {}) => tab === "providers" ? Promise.all([loadProviders({ reset: true }), loadProviderListings({ reset: true }), loadMerchantProducts({ reset: true }), loadProviderPlans(), loadProviderAccess(), loadGatewaySubscriptions()]) : tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
 
   state.providers = [];
   state.providerListings = [];
@@ -23,6 +23,92 @@
   state.merchantFulfillmentCursor = "";
   state.merchantFulfillmentHasMore = false;
   state.providerPlans = [];
+  state.providerAccess = null;
+  state.gatewaySubscriptions = [];
+
+  async function loadGatewaySubscriptions() {
+    setText("gatewaySubscriptionsStatus", "Checking active Flutterwave renewals...");
+    try {
+      const data = await request("/api/v1/admin/provider-gateway-subscriptions");
+      state.gatewaySubscriptions = data.items || [];
+      renderGatewaySubscriptions();
+      setText("gatewaySubscriptionsStatus", `${state.gatewaySubscriptions.length} active recurring subscription${state.gatewaySubscriptions.length === 1 ? "" : "s"}.`);
+    } catch (error) {
+      setText("gatewaySubscriptionsStatus", error.message);
+    }
+  }
+
+  function renderGatewaySubscriptions() {
+    const table = $("gatewaySubscriptionsTable");
+    table.innerHTML = `<thead><tr><th>Subscription</th><th>Customer</th><th>Flutterwave plan</th><th>Recurring amount</th><th>Action</th></tr></thead><tbody>${state.gatewaySubscriptions.map((item) => `<tr><td>${escapeHtml(String(item.id))}</td><td>${escapeHtml(item.customer_email || "Unavailable")}</td><td>${escapeHtml(String(item.plan_id))}</td><td>NGN ${Number(item.amount_ngn || 0).toLocaleString()} / month</td><td><button type="button" class="danger-button" data-stop-renewal="${item.id}">Stop renewal</button></td></tr>`).join("") || '<tr><td colspan="5">No active renewals found for linked provider plans.</td></tr>'}</tbody>`;
+    table.querySelectorAll("[data-stop-renewal]").forEach((button) => button.addEventListener("click", () => cancelGatewaySubscription(button.dataset.stopRenewal)));
+  }
+
+  async function cancelGatewaySubscription(id) {
+    const subscription = state.gatewaySubscriptions.find((item) => String(item.id) === String(id));
+    if (!subscription || !confirm(`Stop future Flutterwave renewals for subscription ${id} (${subscription.customer_email || "unknown customer"})? This does not refund earlier charges. Paid access will require a new subscription after the free period.`)) return;
+    const button = document.querySelector(`[data-stop-renewal="${id}"]`);
+    button.disabled = true;
+    setText("gatewaySubscriptionsStatus", `Cancelling subscription ${id} with Flutterwave...`);
+    try {
+      await request(`/api/v1/admin/provider-gateway-subscriptions/${id}/cancel`, { method: "POST" });
+      await loadGatewaySubscriptions();
+      setText("gatewaySubscriptionsStatus", `Flutterwave confirmed subscription ${id} is no longer active.`);
+    } catch (error) {
+      setText("gatewaySubscriptionsStatus", error.message);
+      button.disabled = false;
+    }
+  }
+
+  function localDateTimeValue(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (part) => String(part).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function renderProviderAccess() {
+    const access = state.providerAccess;
+    if (!access) return;
+    $("providerAccessMode").value = access.enforced ? "paid" : "free";
+    $("providerPaidStartAt").value = access.enforced ? localDateTimeValue(access.start_at) : "";
+    $("providerPaidStartAt").disabled = !access.enforced;
+    const schedule = access.enforced && access.start_at ? ` Paid billing starts ${new Date(access.start_at).toLocaleString()}.` : "";
+    setText("providerAccessStatus", `${access.required ? "Paid access is active." : "Provider access is free now."}${schedule} Setting source: ${access.source}.`);
+  }
+
+  async function loadProviderAccess() {
+    try {
+      state.providerAccess = await request("/api/v1/admin/provider-subscription-access");
+      renderProviderAccess();
+    } catch (error) {
+      setText("providerAccessStatus", error.message);
+    }
+  }
+
+  async function saveProviderAccess(event) {
+    event.preventDefault();
+    const enforced = $("providerAccessMode").value === "paid";
+    const localStart = $("providerPaidStartAt").value;
+    const parsedStart = enforced && localStart ? new Date(localStart) : null;
+    if (parsedStart && Number.isNaN(parsedStart.getTime())) return setText("providerAccessStatus", "Choose a valid paid start time.");
+    const message = enforced
+      ? "Enable paid provider access? Approved providers without an active subscription will lose public listing visibility and messaging until they subscribe. All active plan prices must match Flutterwave."
+      : "Enable free provider access? This stops new subscription checkout in the app, but existing Flutterwave recurring subscriptions will keep charging until separately cancelled.";
+    if (!confirm(message)) return;
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true;
+    setText("providerAccessStatus", "Saving provider access...");
+    try {
+      state.providerAccess = await request("/api/v1/admin/provider-subscription-access", { method: "PUT", body: { enforced, start_at: parsedStart ? parsedStart.toISOString() : null } });
+      renderProviderAccess();
+    } catch (error) {
+      setText("providerAccessStatus", error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
 
   function queryParams(searchID, statusID, cursor) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
@@ -207,13 +293,33 @@
     if (!table) return;
     table.innerHTML = `<thead><tr><th>Plan</th><th>Price</th><th>Listings</th><th>Flutterwave</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerPlans.map((plan) => `<tr>
       <td><strong>${escapeHtml(plan.name)}</strong><br><span class="muted">${escapeHtml(plan.code)}</span></td>
-      <td>NGN ${Number(plan.amount_ngn || 0).toLocaleString()} / ${escapeHtml(plan.billing_interval || "month")}</td>
+      <td>NGN ${Number(plan.amount_ngn || 0).toLocaleString()} / ${escapeHtml(plan.billing_interval || "month")}${plan.is_active && plan.gateway_plan_status === "unavailable" ? '<br><span class="muted">Flutterwave price could not be checked</span>' : plan.is_active && plan.gateway_price_matches === false && plan.gateway_plan_amount_ngn != null ? `<br><strong>Flutterwave: NGN ${Number(plan.gateway_plan_amount_ngn).toLocaleString()} — mismatch</strong>` : ""}</td>
       <td>${Number(plan.listing_limit || 0).toLocaleString()}</td>
       <td>${escapeHtml(String(plan.flutterwave_plan_id || "Not configured"))}</td>
       <td><span class="status-pill ${plan.is_active ? "active" : "inactive"}">${plan.is_active ? "ACTIVE" : "REMOVED"}</span></td>
-      <td>${plan.is_active ? `<button type="button" class="danger-button" data-deactivate-plan="${plan.id}">Remove from sale</button>` : "-"}</td>
+      <td>${plan.is_active ? `<label>New monthly price NGN <input type="number" min="1" step="1" value="${Number(plan.amount_ngn || 0)}" data-new-price="${plan.id}" style="max-width:7rem" /></label><button type="button" data-change-price="${plan.id}">Save price</button><button type="button" class="danger-button" data-deactivate-plan="${plan.id}">Remove from sale</button>` : "-"}</td>
     </tr>`).join("") || `<tr><td colspan="6">No subscription plans configured.</td></tr>`}</tbody>`;
     table.querySelectorAll("[data-deactivate-plan]").forEach((button) => button.addEventListener("click", () => deactivateProviderPlan(button.dataset.deactivatePlan)));
+    table.querySelectorAll("[data-change-price]").forEach((button) => button.addEventListener("click", () => changeProviderPlanPrice(button.dataset.changePrice)));
+  }
+
+  async function changeProviderPlanPrice(planID) {
+    const input = document.querySelector(`[data-new-price="${planID}"]`);
+    const amount = Number(input?.value);
+    if (!Number.isSafeInteger(amount) || amount < 1) return setText("providerPlansStatus", "Enter a positive whole-naira monthly price.");
+    if (!confirm(`Set the monthly price to NGN ${amount.toLocaleString()} for future provider signups? The portal will reuse a matching Flutterwave plan or create a new one. Existing subscriptions keep their current price.`)) return;
+    const button = document.querySelector(`[data-change-price="${planID}"]`);
+    button.disabled = true;
+    setText("providerPlansStatus", "Matching the monthly price with Flutterwave...");
+    try {
+      const result = await request(`/api/v1/admin/provider-subscription-plans/${planID}/price`, { method: "POST", body: { amount_ngn: amount } });
+      await loadProviderPlans();
+      setText("providerPlansStatus", `Price saved at NGN ${amount.toLocaleString()}/month; Flutterwave plan ${result.flutterwave_plan_id} is linked for future subscriptions. Existing subscriptions were not repriced.`);
+    } catch (error) {
+      setText("providerPlansStatus", error.message);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function deactivateProviderPlan(planID) {
@@ -236,7 +342,10 @@
   $("providerListingSearch")?.addEventListener("input", debounce(() => loadProviderListings({ reset: true }), 300));
   $("providerListingModerationStatus")?.addEventListener("change", () => loadProviderListings({ reset: true }));
   $("providerPlanForm")?.addEventListener("submit", saveProviderPlan);
+  $("providerAccessForm")?.addEventListener("submit", saveProviderAccess);
+  $("providerAccessMode")?.addEventListener("change", () => { $("providerPaidStartAt").disabled = $("providerAccessMode").value !== "paid"; });
   $("reloadProviderPlansButton")?.addEventListener("click", loadProviderPlans);
+  $("reloadGatewaySubscriptionsButton")?.addEventListener("click", loadGatewaySubscriptions);
   $("reloadMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts({ reset: true }));
   $("loadMoreMerchantProductsButton")?.addEventListener("click", () => loadMerchantProducts());
   $("merchantProductSearch")?.addEventListener("input", debounce(() => loadMerchantProducts({ reset: true }), 300));

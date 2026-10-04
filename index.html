@@ -33,7 +33,7 @@
     </script>
     <link rel="stylesheet" href="./styles.20260927.css" />
     <script src="./app.20260927.js?v=20261003-support-tickets" defer></script>
-    <script src="./provider-admin.js?v=seller-fulfilment-20260929" defer></script>
+    <script src="./provider-admin.js?v=provider-billing-20261004" defer></script>
   </head>
   <body>
     <main class="shell">
@@ -345,10 +345,17 @@
               <div class="section-head">
                 <div>
                   <h2>Monthly Subscription Plans</h2>
-                  <p class="muted">Create the matching monthly plan in Flutterwave first, then save its numeric plan ID here.</p>
+                  <p class="muted">Manage provider access and the recurring price. Existing Flutterwave subscriptions keep their own billing terms until cancelled separately.</p>
                 </div>
                 <button type="button" id="reloadProviderPlansButton" class="secondary-button">Reload plans</button>
               </div>
+              <form id="providerAccessForm" class="form-grid">
+                <label>Provider access <select name="access_mode" id="providerAccessMode"><option value="free">Free access</option><option value="paid">Paid subscription</option></select></label>
+                <label>Start paid access at (optional, local time) <input name="start_at" id="providerPaidStartAt" type="datetime-local" /></label>
+                <button type="submit">Save provider access</button>
+              </form>
+              <p id="providerAccessStatus" class="muted"></p>
+              <p class="muted">Free access stops new subscription checkout in the app. Existing Flutterwave recurring charges continue until separately cancelled. When paid access starts, providers without an active paid subscription lose public listing visibility and messaging until they subscribe.</p>
               <form id="providerPlanForm" class="form-grid">
                 <label>Code <input name="code" placeholder="starter" required /></label>
                 <label>Name <input name="name" placeholder="Starter" required /></label>
@@ -358,9 +365,13 @@
                 <label>Description <input name="description" /></label>
                 <button type="submit">Save plan</button>
               </form>
+              <p class="muted">To change a plan's price, use its price control below. The portal will reuse a matching Flutterwave plan or create a new one and link it for future subscribers. Existing recurring subscriptions are not repriced.</p>
           <p id="providerPlanStatus" class="success"></p>
           <p id="providerPlansStatus" class="muted"></p>
               <div class="table-wrap"><table id="providerPlansTable"></table></div>
+              <div class="section-head"><div><h3>Existing Flutterwave renewals</h3><p class="muted">These continue billing independently of the Free/Paid app setting. Cancel each subscription deliberately before a fully free launch.</p></div><button type="button" id="reloadGatewaySubscriptionsButton" class="secondary-button">Refresh renewals</button></div>
+              <p id="gatewaySubscriptionsStatus" class="muted"></p>
+              <div class="table-wrap"><table id="gatewaySubscriptionsTable"></table></div>
             </section>
           </section>
 
