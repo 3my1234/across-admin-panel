@@ -9,7 +9,7 @@
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
     account: null,
-    provider: null, plans: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0, conversations: [], currentConversation: null, payoutBanks: [],
+    provider: null, plans: [], buyerMarkets: [], listings: [], requests: [], documents: [], products: [], merchantOrders: [], manifests: [], notifications: [], unreadNotifications: 0, conversations: [], currentConversation: null, payoutBanks: [],
     listingCursor: "", listingHasMore: false, requestCursor: "", requestHasMore: false,
     productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingRetainedMediaUrls: [], listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
@@ -236,6 +236,7 @@
   async function loadBuyerMarkets() {
     try {
       const data = await api("/buyer-markets");
+      state.buyerMarkets = data.markets || [];
       $("enabledBuyerMarkets").textContent = `Currently enabled buyer checkout markets: ${(data.markets || []).map(market => `${market.country_code} (${market.currency_code})`).join(", ") || "none"}.`;
     } catch {
       $("enabledBuyerMarkets").textContent = "Could not load enabled buyer markets. Refresh before adding a new destination.";
@@ -493,7 +494,17 @@
 
   function setProductFormOpen(open, { reset = false } = {}) {
     const form = $("productForm"); const toggle = $("toggleProductForm");
-    if (reset) { form.reset(); state.editingProductID = ""; syncProductFulfillment(); }
+    if (reset) {
+      form.reset(); state.editingProductID = "";
+      const country = String(state.provider?.country_code || "NG").toUpperCase();
+      const market = state.buyerMarkets.find(item => item.country_code === country);
+      form.elements.inventory_country_code.value = country;
+      if (market) {
+        form.elements.currency_code.value = market.currency_code;
+        form.elements.delivery_areas.value = `${country} | | | | 0 | ${market.currency_code}`;
+      }
+      syncProductFulfillment();
+    }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create product"; toggle.setAttribute("aria-expanded", String(open));
     if (open) requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
@@ -508,18 +519,18 @@
     values.currency_code = String(values.currency_code || "").trim().toUpperCase();
     values.delivery_areas = String(values.delivery_areas || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
       const parts = line.split("|").map(part => part.trim());
-      if (parts.length > 5 || !/^[A-Za-z]{2}$/.test(parts[0]) || (parts[2] && !parts[1])) throw new Error("Use country | state | city | price | currency for each delivery area.");
+      if (parts.length > 6 || !/^[A-Za-z]{2}$/.test(parts[0]) || (parts[2] && !parts[1])) throw new Error("Use country | state | city | product price | delivery charge | currency for each area.");
       const fallback = parts[0].toUpperCase() === "NG" && values.currency_code === "NGN";
-      const areaPrice = parts[3] ? Number(parts[3]) : fallback ? price : NaN;
-      const currency = String(parts[4] || (fallback ? values.currency_code : "")).toUpperCase();
-      if (!Number.isFinite(areaPrice) || areaPrice <= 0 || !/^[A-Z]{3}$/.test(currency)) throw new Error("Each delivery area needs a positive total price and three-letter currency.");
-      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", delivered_price: areaPrice, currency_code: currency };
+      const itemPrice = parts[3] ? Number(parts[3]) : fallback ? price : NaN;
+      const deliveryFee = parts.length === 6 ? Number(parts[4]) : 0;
+      const currency = String((parts.length === 6 ? parts[5] : parts[4]) || (fallback ? values.currency_code : "")).toUpperCase();
+      if (!Number.isFinite(itemPrice) || itemPrice <= 0 || !Number.isFinite(deliveryFee) || deliveryFee < 0 || !/^[A-Z]{3}$/.test(currency)) throw new Error("Each area needs a positive product price, nonnegative delivery charge, and three-letter currency.");
+      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", item_price: itemPrice, delivery_fee: deliveryFee, currency_code: currency };
     });
     if (!values.delivery_areas.length || values.delivery_areas.length > 20) throw new Error("Choose between 1 and 20 delivery areas.");
     if (values.fulfillment_mode === "merchant_local") {
       values.stock_state = "locally_available";
       if (values.inventory_latitude === "" || values.inventory_longitude === "") throw new Error("Use current stock location so nearby buyers can discover this product.");
-      if (values.delivery_areas.some(area => area.country_code !== values.inventory_country_code)) throw new Error("Local products can only be delivered in the stock country. Use the international route for other countries.");
     }
     return values;
   }
@@ -578,7 +589,7 @@
     const data = await api(`/providers/me/products?${params}`); state.products = reset ? (data.items || []) : [...state.products, ...(data.items || [])]; state.productCursor = data.page?.next_cursor || ""; state.productHasMore = Boolean(data.page?.has_more); renderProducts(); renderOverview();
   }
   function renderProducts() {
-    $("productRows").innerHTML = state.products.length ? state.products.map((item) => `<article class="list-row listing-row">${item.image_urls?.[0] ? `<img class="listing-thumb" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.moderation_status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.sku)} · ${money(item.local_selling_price, item.currency_code)} · ${item.inventory_count} in stock</p><p>${escapeHtml(human(item.fulfillment_mode))} · ${escapeHtml([item.inventory_city, item.inventory_country_code].filter(Boolean).join(", "))} · ${item.delivery_min_days}-${item.delivery_max_days} days</p><p>Delivers to: ${escapeHtml((item.delivery_areas || []).map(area => [area.city, area.state, area.country_code].filter(Boolean).join(", ")).join("; ") || "No area set")}</p>${item.moderation_notes ? `<p>${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions"><button class="secondary" data-edit-product="${item.id}">Edit</button>${["draft","rejected"].includes(item.moderation_status) ? `<button data-submit-product="${item.id}">Submit for review</button>` : ""}<button class="secondary" data-archive-product="${item.id}">Archive</button></div></article>`).join("") : "<p>No matching products.</p>";
+    $("productRows").innerHTML = state.products.length ? state.products.map((item) => `<article class="list-row listing-row">${item.image_urls?.[0] ? `<img class="listing-thumb" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.moderation_status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.sku)} · ${money(item.local_selling_price, item.currency_code)} · ${item.inventory_count} in stock</p><p>${escapeHtml(human(item.fulfillment_mode))} · ${escapeHtml([item.inventory_city, item.inventory_country_code].filter(Boolean).join(", "))} · ${item.delivery_min_days}-${item.delivery_max_days} days</p><p>Delivers to: ${escapeHtml((item.delivery_areas || []).map(area => `${[area.city, area.state, area.country_code].filter(Boolean).join(", ")}: ${money(Number(area.delivered_price) - Number(area.delivery_fee || 0), area.currency_code)} + ${money(area.delivery_fee || 0, area.currency_code)} delivery`).join("; ") || "No area set")}</p>${item.moderation_notes ? `<p>${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions"><button class="secondary" data-edit-product="${item.id}">Edit</button>${["draft","rejected"].includes(item.moderation_status) ? `<button data-submit-product="${item.id}">Submit for review</button>` : ""}<button class="secondary" data-archive-product="${item.id}">Archive</button></div></article>`).join("") : "<p>No matching products.</p>";
     $("loadMoreProducts").classList.toggle("hidden", !state.productHasMore);
     document.querySelectorAll("[data-submit-product]").forEach((button) => button.onclick = async () => { button.disabled = true; try { await api(`/providers/me/products/${button.dataset.submitProduct}/submit`, { method: "POST" }); setMessage("Product submitted for moderation.", true); await loadProducts({ reset: true }); } catch (error) { setMessage(error.message); } finally { button.disabled = false; } });
     document.querySelectorAll("[data-edit-product]").forEach((button) => button.onclick = () => editProduct(button.dataset.editProduct));
@@ -595,7 +606,7 @@
       form.elements[name].value = item[name] ?? "";
     });
     form.elements.stock_state.value = item.stock_state || (item.fulfillment_mode === "merchant_cross_border" ? "foreign_stock" : "locally_available");
-    form.elements.delivery_areas.value = (item.delivery_areas || []).map(area => [area.country_code, area.state || "", area.city || "", area.delivered_price, area.currency_code].join(" | ")).join("\n") || `${item.inventory_country_code || "NG"} | | | ${item.local_selling_price} | ${item.currency_code || "NGN"}`;
+    form.elements.delivery_areas.value = (item.delivery_areas || []).map(area => [area.country_code, area.state || "", area.city || "", Number(area.delivered_price) - Number(area.delivery_fee || 0), area.delivery_fee || 0, area.currency_code].join(" | ")).join("\n") || `${item.inventory_country_code || "NG"} | | | ${item.local_selling_price} | 0 | ${item.currency_code || "NGN"}`;
     form.elements.category.value = item.category_path?.[0] || "";
     form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
     form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
