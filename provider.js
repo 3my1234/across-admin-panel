@@ -38,6 +38,7 @@
   function hasPendingSubscription() { return Boolean(readPendingSubscription()) || state.provider?.subscription?.status === "pending"; }
 
   async function api(path, options = {}) {
+    const authToken = state.token;
     const headers = { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
     if (state.token) headers.Authorization = `Bearer ${state.token}`;
     const controller = new AbortController();
@@ -54,6 +55,7 @@
     const raw = response.status === 204 ? "" : await response.text();
     let data = null;
     if (raw) { try { data = JSON.parse(raw); } catch (_) { data = null; } }
+    if (authToken !== state.token) throw new Error("Session changed; previous response ignored.");
     if (!response.ok) {
       const safeText = raw && !raw.trim().startsWith("<") ? raw.trim().slice(0, 300) : "";
       const fallback = response.status === 402 ? "An active monthly provider subscription is required." : `Request failed (${response.status})`;
@@ -588,9 +590,11 @@
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { showFormError(error.message); } finally { button.disabled = false; }
   }
+  let productsGeneration = 0;
   async function loadProducts({ reset = false } = {}) {
+    const generation = ++productsGeneration;
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); const search = $("productSearch").value.trim(), status = $("productStatus").value; if (search) params.set("search", search); if (status) params.set("status", status); if (!reset && state.productCursor) params.set("cursor", state.productCursor);
-    const data = await api(`/providers/me/products?${params}`); state.products = reset ? (data.items || []) : [...state.products, ...(data.items || [])]; state.productCursor = data.page?.next_cursor || ""; state.productHasMore = Boolean(data.page?.has_more); renderProducts(); renderOverview();
+    const data = await api(`/providers/me/products?${params}`); if (generation !== productsGeneration) return; state.products = reset ? (data.items || []) : [...state.products, ...(data.items || [])]; state.productCursor = data.page?.next_cursor || ""; state.productHasMore = Boolean(data.page?.has_more); renderProducts(); renderOverview();
   }
   function renderProducts() {
     $("productRows").innerHTML = state.products.length ? state.products.map((item) => `<article class="list-row listing-row">${item.image_urls?.[0] ? `<img class="listing-thumb" src="${escapeHtml(item.image_urls[0])}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.moderation_status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.sku)} · ${money(item.local_selling_price, item.currency_code)} · ${item.inventory_count} in stock</p><p>${escapeHtml(human(item.fulfillment_mode))} · ${escapeHtml([item.inventory_city, item.inventory_country_code].filter(Boolean).join(", "))} · ${item.delivery_min_days}-${item.delivery_max_days} days</p><p>Delivers to: ${escapeHtml((item.delivery_areas || []).map(area => `${[area.city, area.state, area.country_code].filter(Boolean).join(", ")}: ${money(Number(area.delivered_price) - Number(area.delivery_fee || 0), area.currency_code)} + ${money(area.delivery_fee || 0, area.currency_code)} delivery`).join("; ") || "No area set")}</p>${item.moderation_notes ? `<p>${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions"><button class="secondary" data-edit-product="${item.id}">Edit</button>${["draft","rejected"].includes(item.moderation_status) ? `<button data-submit-product="${item.id}">Submit for review</button>` : ""}<button class="secondary" data-archive-product="${item.id}">Archive</button></div></article>`).join("") : "<p>No matching products.</p>";
@@ -649,8 +653,10 @@
     if (!form.elements.confirm_custom_prices.checked) usePrimaryDeliveryPrices();
     else updateProductPriceGuidance();
   }
+  let merchantOrdersGeneration = 0;
   async function loadMerchantOrders({ reset = false } = {}) {
-    const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); if (!reset && state.merchantOrderCursor) params.set("cursor", state.merchantOrderCursor); const data = await api(`/providers/me/merchant-orders?${params}`); state.merchantOrders = reset ? (data.items || []) : [...state.merchantOrders, ...(data.items || [])]; state.merchantOrderCursor = data.page?.next_cursor || ""; state.merchantOrderHasMore = Boolean(data.page?.has_more); renderMerchantOrders();
+    const generation = ++merchantOrdersGeneration; const authToken = state.token;
+    const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); if (!reset && state.merchantOrderCursor) params.set("cursor", state.merchantOrderCursor); const data = await api(`/providers/me/merchant-orders?${params}`); if (generation !== merchantOrdersGeneration || authToken !== state.token) return; state.merchantOrders = reset ? (data.items || []) : [...state.merchantOrders, ...(data.items || [])]; state.merchantOrderCursor = data.page?.next_cursor || ""; state.merchantOrderHasMore = Boolean(data.page?.has_more); renderMerchantOrders();
   }
   function renderMerchantOrders() {
     const transitions = {
@@ -742,7 +748,9 @@
     }
   }
 
-  async function loadManifests({reset=false}={}) { const params=new URLSearchParams({limit:String(PAGE_SIZE)}); if(!reset&&state.manifestCursor) params.set("cursor",state.manifestCursor); const data=await api(`/providers/me/manifests?${params}`); state.manifests=reset?(data.items||[]):[...state.manifests,...(data.items||[])]; state.manifestCursor=data.next_cursor||""; state.manifestHasMore=Boolean(data.has_more); renderManifests(); }
+  let manifestsGeneration = 0;
+  async function loadManifests({reset=false}={}) {
+    const generation = ++manifestsGeneration; const authToken = state.token; const params=new URLSearchParams({limit:String(PAGE_SIZE)}); if(!reset&&state.manifestCursor) params.set("cursor",state.manifestCursor); const data=await api(`/providers/me/manifests?${params}`); if (generation !== manifestsGeneration || authToken !== state.token) return; state.manifests=reset?(data.items||[]):[...state.manifests,...(data.items||[])]; state.manifestCursor=data.next_cursor||""; state.manifestHasMore=Boolean(data.has_more); renderManifests(); }
   function renderManifests(){ const next={open:"closed",closed:"dispatched",dispatched:"completed"}; $("manifestRows").innerHTML=state.manifests.length?state.manifests.map(item=>`<article class="list-row"><div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.manifest_code)}</h3><p>${item.order_count} orders · ${escapeHtml(item.origin_city)}, ${escapeHtml(item.origin_country_code)} · cutoff ${new Date(item.cutoff_at).toLocaleString()}</p></div><div class="list-actions"><button class="secondary" data-print-manifest="${item.id}">View / print</button>${next[item.status]?`<button data-manifest-transition="${item.id}" data-next="${next[item.status]}" data-version="${item.version}">${escapeHtml(human(next[item.status]))}</button>`:""}</div></article>`).join(""):"<p>No merchant manifests yet.</p>"; $("loadMoreManifests").classList.toggle("hidden",!state.manifestHasMore); document.querySelectorAll("[data-print-manifest]").forEach(button=>button.onclick=()=>printManifest(button.dataset.printManifest)); document.querySelectorAll("[data-manifest-transition]").forEach(button=>button.onclick=()=>transitionManifest(button)); }
   async function createManifest(){ const order_ids=[...document.querySelectorAll("[data-manifest-order]:checked")].map(input=>input.dataset.manifestOrder); if(!order_ids.length) return setMessage("Select at least one imported order."); const origin_country_code=(prompt("Two-letter origin country code","")||"").trim().toUpperCase(); const origin_city=(prompt("Origin city","")||"").trim(); if(!origin_country_code||!origin_city)return; try{await api("/providers/me/manifests",{method:"POST",body:JSON.stringify({order_ids,origin_country_code,origin_city,cutoff_at:new Date().toISOString()})}); await Promise.all([loadManifests({reset:true}),loadMerchantOrders({reset:true})]);}catch(error){setMessage(error.message);} }
   async function transitionManifest(button){button.disabled=true;try{await api(`/providers/me/manifests/${button.dataset.manifestTransition}`,{method:"PATCH",body:JSON.stringify({status:button.dataset.next,expected_version:Number(button.dataset.version),idempotency_key:crypto.randomUUID(),notes:""})});await loadManifests({reset:true});}catch(error){setMessage(error.message);}finally{button.disabled=false;}}
@@ -867,10 +875,12 @@
     setListingLocationStatus("Service location set to " + latitude.toFixed(6) + ", " + longitude.toFixed(6) + ".", "ready");
   }
 
+  let listingsGeneration = 0;
   async function loadListings({ reset = false } = {}) {
+    const generation = ++listingsGeneration;
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); const search = $("listingSearch").value.trim(), status = $("listingStatus").value;
     if (search) params.set("search", search); if (status) params.set("status", status); if (!reset && state.listingCursor) params.set("cursor", state.listingCursor);
-    const data = await api(`/providers/me/listings?${params}`); state.listings = reset ? (data.items || []) : [...state.listings, ...(data.items || [])]; state.listingCursor = data.next_cursor || ""; state.listingHasMore = Boolean(data.has_more); renderListings(); renderOverview();
+    const data = await api(`/providers/me/listings?${params}`); if (generation !== listingsGeneration) return; state.listings = reset ? (data.items || []) : [...state.listings, ...(data.items || [])]; state.listingCursor = data.next_cursor || ""; state.listingHasMore = Boolean(data.has_more); renderListings(); renderOverview();
   }
   function renderListings() {
     $("listingRows").innerHTML = state.listings.length ? state.listings.map((item) => {
@@ -911,9 +921,11 @@
     catch (error) { setMessage(error.message, false, "availabilityMessage"); } finally { button.disabled = false; }
   }
 
+  let requestsGeneration = 0;
   async function loadRequests({ reset = false } = {}) {
+    const generation = ++requestsGeneration; const authToken = state.token;
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); const status = $("requestStatus").value, search = $("requestSearch").value.trim(); if (status) params.set("status", status); if (search) params.set("search", search); if (!reset && state.requestCursor) params.set("cursor", state.requestCursor);
-    const data = await api(`/providers/me/requests?${params}`); state.requests = reset ? (data.items || []) : [...state.requests, ...(data.items || [])]; state.requestCursor = data.next_cursor || ""; state.requestHasMore = Boolean(data.has_more); renderRequests(); renderOverview();
+    const data = await api(`/providers/me/requests?${params}`); if (generation !== requestsGeneration || authToken !== state.token) return; state.requests = reset ? (data.items || []) : [...state.requests, ...(data.items || [])]; state.requestCursor = data.next_cursor || ""; state.requestHasMore = Boolean(data.has_more); renderRequests(); renderOverview();
   }
   async function updateRequest(id, status) { try { await api(`/providers/me/requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }); setMessage(`Request marked ${status}.`, true); await loadRequests({ reset: true }); } catch (error) { setMessage(error.message); } }
   function renderRequests() {
@@ -922,9 +934,13 @@
     $("loadMoreRequests").classList.toggle("hidden", !state.requestHasMore); document.querySelectorAll("[data-request]").forEach((button) => button.onclick = () => updateRequest(button.dataset.request, button.dataset.status));
   }
 
+  let conversationsGeneration = 0;
+  let conversationGeneration = 0;
   async function loadConversations() {
+    const generation = ++conversationsGeneration; const authToken = state.token;
     if (!state.provider) return;
     const data = await api("/providers/me/conversations");
+    if (generation !== conversationsGeneration || authToken !== state.token) return;
     state.conversations = data.items || [];
     renderConversations();
   }
@@ -933,18 +949,20 @@
     document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation));
   }
   async function openConversation(id) {
+    const generation = ++conversationGeneration; const authToken = state.token;
     const conversation = state.conversations.find((item) => item.id === id);
     if (!conversation) return;
     state.currentConversation = conversation;
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
     const data = await api(`/providers/me/conversations/${id}/messages`);
+    if (generation !== conversationGeneration || authToken !== state.token || state.currentConversation?.id !== id) return;
     $("conversationMessages").innerHTML = (data.items || []).map((item) => `<article class="alert-item ${item.sender_type === "provider" ? "unread" : ""}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p><small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
     const reply = $("conversationReplyForm");
     reply.querySelector("textarea").disabled = !conversation.subscription_active;
     reply.querySelector("button").disabled = !conversation.subscription_active;
     if (!conversation.subscription_active) setMessage("Renew your subscription to reply.", false, "conversationMessage");
-    $("conversationDialog").showModal();
+    if (!$("conversationDialog").open) $("conversationDialog").showModal();
     conversation.unread_count = 0;
     renderConversations();
   }
@@ -1012,12 +1030,32 @@
     renderPlans();
     renderProviderTools(p);
   }
+  let visibleProviderRefreshing = false;
+  async function refreshVisibleProviderPage() {
+    if (!state.token || !state.provider || state.booting || document.hidden || visibleProviderRefreshing || document.activeElement?.matches("input,textarea,select")) return;
+    const dialog = document.querySelector("dialog[open]");
+    if (dialog && dialog.id !== "conversationDialog") return;
+    visibleProviderRefreshing = true;
+    try {
+      if (state.activeView === "requests") await loadRequests({reset:true});
+      else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
+      else if (state.activeView === "messages") { await loadConversations(); if ($("conversationDialog").open && state.currentConversation) await openConversation(state.currentConversation.id); }
+      else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
+      else if (state.activeView === "products" && $("productForm").classList.contains("hidden")) await loadProducts({reset:true});
+      else if (state.activeView === "listings" && $("listingForm").classList.contains("hidden")) await loadListings({reset:true});
+    } catch(error) {setMessage(error.message || "This page could not refresh. Retry when connected.");}
+    finally {visibleProviderRefreshing=false;}
+  }
+  setInterval(() => { if (!["products","listings"].includes(state.activeView)) void refreshVisibleProviderPage(); },12000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshVisibleProviderPage(); });
+  window.addEventListener("focus", () => { void refreshVisibleProviderPage(); });
   function switchView(view, { persist = true } = {}) {
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
     if (persist) localStorage.setItem(ACTIVE_VIEW_KEY, nextView);
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
     document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== nextView));
+    void refreshVisibleProviderPage();
   }
   function resetAuthForms() {
     ["loginForm", "signupForm"].forEach((id) => {
