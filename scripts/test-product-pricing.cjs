@@ -17,13 +17,20 @@ const values = {
 };
 const form = { reportValidity: () => true, elements: Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { value }])) };
 form.elements.is_flash_sale = { checked: false };
+form.elements.confirm_custom_prices = { checked: false };
 const nodes = { productForm: form, productPriceGuidance: {}, usePrimaryDeliveryPrices: {} };
-const context = vm.createContext({ $: id => nodes[id], FormData: class {
+const context = vm.createContext({ $: id => nodes[id], money: (value, currency) => `${currency} ${value}`, FormData: class {
   *[Symbol.iterator]() { for (const [key, input] of Object.entries(form.elements)) if ("value" in input) yield [key, input.value]; }
 } });
-vm.runInContext(["validatedProductValues", "updateProductPriceGuidance", "usePrimaryDeliveryPrices"].map(extract).join("\n"), context);
+vm.runInContext(["validatedProductValues", "updateProductPriceGuidance", "usePrimaryDeliveryPrices", "followMainPriceEdit"].map(extract).join("\n"), context);
 const validate = () => context.validatedProductValues(form);
-assert.equal(validate().delivery_areas[0].item_price, 20, "an explicitly separate price stays separate");
+assert.throws(validate, /would still pay/, "a silent stale destination price must not save");
+form.elements.confirm_custom_prices.checked = true;
+assert.equal(validate().delivery_areas[0].item_price, 20, "a deliberately confirmed separate price stays separate");
+assert.equal(validate().delivery_areas[0].independent_price_confirmed, true);
+form.elements.confirm_custom_prices.checked = false;
+context.followMainPriceEdit();
+assert.equal(validate().delivery_areas[0].item_price, 100, "editing the main price must synchronize old numeric NG offers automatically");
 context.usePrimaryDeliveryPrices();
 assert.match(form.elements.delivery_areas.value, /NG\s*\|\s*\|\s*\|\s*primary\s*\|\s*5\s*\|\s*NGN/);
 assert.match(form.elements.delivery_areas.value, /US \| \| \| 30 \| 10 \| USD/);
