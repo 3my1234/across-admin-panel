@@ -506,7 +506,7 @@
       syncProductFulfillment();
     }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create product"; toggle.setAttribute("aria-expanded", String(open));
-    if (open) requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
+    if (open) { updateProductPriceGuidance(); requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" })); }
   }
 
   function validatedProductValues(form) {
@@ -521,11 +521,13 @@
       const parts = line.split("|").map(part => part.trim());
       if (parts.length > 6 || !/^[A-Za-z]{2}$/.test(parts[0]) || (parts[2] && !parts[1])) throw new Error("Use country | state | city | product price | delivery charge | currency for each area.");
       const fallback = parts[0].toUpperCase() === "NG" && values.currency_code === "NGN";
-      const itemPrice = parts[3] ? Number(parts[3]) : fallback ? price : NaN;
+      const usesPrimaryPrice = String(parts[3] || "primary").toLowerCase() === "primary";
+      const itemPrice = usesPrimaryPrice ? price : Number(parts[3]);
       const deliveryFee = parts.length === 6 ? Number(parts[4]) : 0;
       const currency = String((parts.length === 6 ? parts[5] : parts[4]) || (fallback ? values.currency_code : "")).toUpperCase();
+      if (usesPrimaryPrice && currency !== values.currency_code) throw new Error("An area using the primary price must use the primary currency. Enter a separate price for other currencies.");
       if (!Number.isFinite(itemPrice) || itemPrice <= 0 || !Number.isFinite(deliveryFee) || deliveryFee < 0 || !/^[A-Z]{3}$/.test(currency)) throw new Error("Each area needs a positive product price, nonnegative delivery charge, and three-letter currency.");
-      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", item_price: itemPrice, delivery_fee: deliveryFee, currency_code: currency };
+      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", item_price: itemPrice, delivery_fee: deliveryFee, currency_code: currency, uses_primary_price: usesPrimaryPrice };
     });
     if (!values.delivery_areas.length || values.delivery_areas.length > 20) throw new Error("Choose between 1 and 20 delivery areas.");
     if (values.fulfillment_mode === "merchant_local") {
@@ -606,11 +608,38 @@
       form.elements[name].value = item[name] ?? "";
     });
     form.elements.stock_state.value = item.stock_state || (item.fulfillment_mode === "merchant_cross_border" ? "foreign_stock" : "locally_available");
-    form.elements.delivery_areas.value = (item.delivery_areas || []).map(area => [area.country_code, area.state || "", area.city || "", Number(area.delivered_price) - Number(area.delivery_fee || 0), area.delivery_fee || 0, area.currency_code].join(" | ")).join("\n") || `${item.inventory_country_code || "NG"} | | | ${item.local_selling_price} | 0 | ${item.currency_code || "NGN"}`;
+    form.elements.delivery_areas.value = (item.delivery_areas || []).map(area => [area.country_code, area.state || "", area.city || "", area.uses_primary_price ? "primary" : Number(area.delivered_price) - Number(area.delivery_fee || 0), area.delivery_fee || 0, area.currency_code].join(" | ")).join("\n") || `${item.inventory_country_code || "NG"} | | | primary | 0 | ${item.currency_code || "NGN"}`;
     form.elements.category.value = item.category_path?.[0] || "";
     form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
     form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
+    updateProductPriceGuidance();
     setProductFormOpen(true);
+  }
+
+  function updateProductPriceGuidance() {
+    const form = $("productForm"), primary = Number(form.elements.local_selling_price.value);
+    const currency = String(form.elements.currency_code.value).trim().toUpperCase();
+    const separate = String(form.elements.delivery_areas.value).split(/\r?\n/).some(line => {
+      const parts = line.split("|").map(part => part.trim());
+      const areaCurrency = (parts.length === 6 ? parts[5] : parts[4]) || currency;
+      return parts[3] && parts[3].toLowerCase() !== "primary" && areaCurrency.toUpperCase() === currency && Number(parts[3]) !== primary;
+    });
+    $("productPriceGuidance").textContent = separate
+      ? "A delivery area has a separate item price. Buyers in that area will see that price. Enter primary in its product-price column if it should follow the main price."
+      : "Areas using primary follow the primary selling price automatically, plus their delivery charge.";
+    $("usePrimaryDeliveryPrices").textContent = `Use main price for ${currency || "matching-currency"} delivery areas`;
+  }
+
+  function usePrimaryDeliveryPrices() {
+    const form = $("productForm"), currency = String(form.elements.currency_code.value).trim().toUpperCase();
+    form.elements.delivery_areas.value = String(form.elements.delivery_areas.value).split(/\r?\n/).map(line => {
+      const parts = line.split("|").map(part => part.trim());
+      if (!parts[0]) return line;
+      const areaCurrency = String((parts.length === 6 ? parts[5] : parts[4]) || (parts[0].toUpperCase() === "NG" ? "NGN" : "")).toUpperCase();
+      if (areaCurrency !== currency) return line;
+      return [parts[0], parts[1] || "", parts[2] || "", "primary", parts.length === 6 ? parts[4] || "0" : "0", currency].join(" | ");
+    }).join("\n");
+    updateProductPriceGuidance();
   }
   async function loadMerchantOrders({ reset = false } = {}) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); if (!reset && state.merchantOrderCursor) params.set("cursor", state.merchantOrderCursor); const data = await api(`/providers/me/merchant-orders?${params}`); state.merchantOrders = reset ? (data.items || []) : [...state.merchantOrders, ...(data.items || [])]; state.merchantOrderCursor = data.page?.next_cursor || ""; state.merchantOrderHasMore = Boolean(data.page?.has_more); renderMerchantOrders();
@@ -1022,6 +1051,8 @@
   });
   $("cancelProductForm").addEventListener("click", () => setProductFormOpen(false, { reset: true }));
   $("productFulfillmentMode").addEventListener("change", () => syncProductFulfillment());
+  ["local_selling_price", "currency_code", "delivery_areas"].forEach(name => $("productForm").elements[name].addEventListener("input", updateProductPriceGuidance));
+  $("usePrimaryDeliveryPrices").addEventListener("click", usePrimaryDeliveryPrices);
   $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true })));
   $("productStatus").addEventListener("change", () => loadProducts({ reset: true }));
   $("loadMoreProducts").addEventListener("click", () => loadProducts());
