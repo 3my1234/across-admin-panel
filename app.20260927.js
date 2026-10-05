@@ -128,7 +128,7 @@ $("clearAdminNotifications")?.addEventListener("click", async () => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && state.token) void pollAdminActivity();
+  if (document.visibilityState === "visible" && state.token) { void pollAdminActivity(); void refreshVisibleAdminPage(); }
 });
 $("reloadProductsButton").addEventListener("click", () => loadProducts({ reset: true }));
 $("reloadBatchesButton").addEventListener("click", loadBatches);
@@ -304,6 +304,15 @@ async function loadDashboard({ force = false } = {}) {
   if (failure) throw failure.reason;
 }
 
+let visibleAdminRefreshing = false;
+async function refreshVisibleAdminPage() {
+  if (!state.token || document.hidden || visibleAdminRefreshing || document.querySelector("dialog[open]") || document.activeElement?.matches("input,textarea,select")) return;
+  visibleAdminRefreshing = true;
+  try { await loadTabData(state.activeTab, {force: true}); if (state.activeTab === "support" && currentTicketId) await openTicketView(currentTicketId, $("ticketSubject").textContent); }
+  catch(error) { showListError(state.activeTab,error); }
+  finally { visibleAdminRefreshing = false; }
+}
+
 function startAdminActivityPolling() {
   stopAdminActivityPolling();
   state.activityItems = [];
@@ -311,7 +320,7 @@ function startAdminActivityPolling() {
   renderAdminNotifications();
   void pollAdminActivity();
   state.activityTimer = window.setInterval(() => {
-    if (document.visibilityState === "visible") void pollAdminActivity();
+    if (document.visibilityState === "visible") { void pollAdminActivity(); void refreshVisibleAdminPage(); }
   }, 12000);
 }
 
@@ -407,7 +416,7 @@ async function loadOverview() {
   writeAdminCache("overview", overview);
 }
 
-async function loadTabData(tab, { force = false } = {}) {
+async function loadTabData(tab, { force = true } = {}) {
   if (tab === "products") return loadProducts({ reset: force || !state.products.length });
   if (tab === "orders") return loadNamedList("orders", { reset: force || !state.orders.length });
   if (tab === "transactions") return loadNamedList("transactions", { reset: force || !state.transactions.length });
@@ -1288,7 +1297,11 @@ function logout() {
 }
 
 async function request(path, options = {}) {
+  const authToken = state.token;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(),20000);
   const response = await fetch(`${state.apiUrl}${path}`, {
+    signal: controller.signal,
     method: options.method || "GET",
     cache: "no-store",
     headers: {
@@ -1296,8 +1309,10 @@ async function request(path, options = {}) {
       ...(options.auth === false ? {} : { Authorization: `Bearer ${state.token}` })
     },
     body: options.body ? JSON.stringify(options.body) : undefined
-  });
+  }).catch(error => {clearTimeout(timeout); throw error;});
   const raw = await response.text();
+  clearTimeout(timeout);
+  if (options.auth !== false && authToken !== state.token) throw new Error("Session changed; previous response ignored.");
   let data = {};
   if (raw) {
     try {
@@ -2335,6 +2350,10 @@ function escapeHtml(value) {
 
 // ---- Support Tickets ----
 let currentTicketId = null;
+let ticketRequestSequence = 0;
+let ticketListSequence = 0;
+let ticketHistory = [];
+let ticketCursor = "";
 
 $("reloadTicketsButton").addEventListener("click", loadTickets);
 $("closeTicketView").addEventListener("click", () => {
@@ -2344,8 +2363,10 @@ $("closeTicketView").addEventListener("click", () => {
 $("sendTicketReply").addEventListener("click", sendTicketReply);
 
 async function loadTickets() {
+  const seq = ++ticketListSequence; const authToken = state.token;
   try {
     const data = await request("/api/v1/admin/support/tickets");
+    if (seq !== ticketListSequence || authToken !== state.token) return;
     state.supportTickets = data.tickets || [];
     renderTicketsTable(state.supportTickets);
   } catch (error) {
@@ -2416,15 +2437,22 @@ function renderTicketCards(tickets) {
   });
 }
 
-async function openTicketView(ticketId, subject) {
+async function openTicketView(ticketId, subject, cursor = "") {
+  const seq = ++ticketRequestSequence; const authToken = state.token;
+  if (currentTicketId !== ticketId) {ticketHistory = []; ticketCursor = "";}
   currentTicketId = ticketId;
   setText("ticketSubject", subject);
   $("ticketMessages").classList.remove("hidden");
   setText("ticketStatus", "");
   try {
-    const data = await request(`/api/v1/admin/support/tickets/${ticketId}/messages`);
+    const data = await request(`/api/v1/admin/support/tickets/${ticketId}/messages?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+    if (seq !== ticketRequestSequence || currentTicketId !== ticketId || authToken !== state.token) return;
+    const hadHistory = ticketHistory.length > 0;
+    const merged = new Map(); [...ticketHistory, ...(data.messages || [])].forEach(message => merged.set(message.id || `${message.created_at}:${message.message}`,message));
+    ticketHistory = [...merged.values()].sort((a,b) => a.created_at.localeCompare(b.created_at) || String(a.id).localeCompare(String(b.id)));
+    if (cursor || !hadHistory) ticketCursor = data.next_cursor || "";
     const ticket = state.supportTickets.find(item => item.id === ticketId);
-    const messages = (data.messages || []).length ? data.messages : (ticket?.message ? [{ sender_type: "user", message: ticket.message, created_at: ticket.created_at }] : []);
+    const messages = ticketHistory.length ? ticketHistory : (ticket?.message ? [{ sender_type: "user", message: ticket.message, created_at: ticket.created_at }] : []);
     const container = $("ticketMessagesList");
     container.innerHTML = messages.length ? messages.map(m => `
       <div style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
@@ -2433,9 +2461,8 @@ async function openTicketView(ticketId, subject) {
         <p style="font-size:11px;color:#8C8C8C;margin-top:4px;">${format(m.created_at)}</p>
       </div>
     `).join("") : `<p style="color:#66736F;">This ticket has no message content. Reload the ticket list, then try again.</p>`;
-  } catch (error) {
-    setText("ticketStatus", error.message);
-  }
+    if (ticketCursor) { const earlier = document.createElement("button"); earlier.textContent = "Load earlier messages"; earlier.onclick = () => openTicketView(ticketId,subject,ticketCursor); container.prepend(earlier); }
+  } catch (error) { if (seq === ticketRequestSequence && authToken === state.token) setText("ticketStatus", error.message); }
 }
 
 async function sendTicketReply() {
