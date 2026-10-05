@@ -227,6 +227,22 @@ body.auth-mode .auth-card {
 .form-grid.compact { grid-template-columns: 1fr; }
 .form-grid label { display: grid; gap: .35rem; font-weight: 700; min-width: 0; }
 .form-grid .wide { grid-column: 1 / -1; }
+.form-grid label.check-option {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+.form-grid .check-option input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--brand);
+}
+.form-grid .check-option span { min-width: 0; line-height: 1.35; }
 
 .provider-type-fieldset {
   margin: 0;
