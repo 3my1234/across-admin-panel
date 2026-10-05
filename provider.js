@@ -44,7 +44,7 @@
     const timeout = setTimeout(() => controller.abort(), 20000);
     let response;
     try {
-      response = await fetch(`${API}${path}`, { ...options, headers, signal: options.signal || controller.signal });
+      response = await fetch(`${API}${path}`, { cache: "no-store", ...options, headers, signal: options.signal || controller.signal });
     } catch (error) {
       if (error.name === "AbortError") throw new Error("The server took too long to respond.");
       throw error;
@@ -527,7 +527,9 @@
       const currency = String((parts.length === 6 ? parts[5] : parts[4]) || (fallback ? values.currency_code : "")).toUpperCase();
       if (usesPrimaryPrice && currency !== values.currency_code) throw new Error("An area using the primary price must use the primary currency. Enter a separate price for other currencies.");
       if (!Number.isFinite(itemPrice) || itemPrice <= 0 || !Number.isFinite(deliveryFee) || deliveryFee < 0 || !/^[A-Z]{3}$/.test(currency)) throw new Error("Each area needs a positive product price, nonnegative delivery charge, and three-letter currency.");
-      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", item_price: itemPrice, delivery_fee: deliveryFee, currency_code: currency, uses_primary_price: usesPrimaryPrice };
+      const independentConfirmed = Boolean(form.elements.confirm_custom_prices?.checked);
+      if (!usesPrimaryPrice && currency === values.currency_code && itemPrice !== price && !independentConfirmed) throw new Error(`Buyers in ${parts[0].toUpperCase()} would still pay ${money(itemPrice, currency)} for the item, while the main price is ${money(price, currency)}. Use main price below, or explicitly confirm the separate destination prices.`);
+      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", item_price: itemPrice, delivery_fee: deliveryFee, currency_code: currency, uses_primary_price: usesPrimaryPrice, independent_price_confirmed: independentConfirmed };
     });
     if (!values.delivery_areas.length || values.delivery_areas.length > 20) throw new Error("Choose between 1 and 20 delivery areas.");
     if (values.fulfillment_mode === "merchant_local") {
@@ -612,6 +614,7 @@
     form.elements.category.value = item.category_path?.[0] || "";
     form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
     form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
+    form.elements.confirm_custom_prices.checked = false;
     updateProductPriceGuidance();
     setProductFormOpen(true);
   }
@@ -640,6 +643,11 @@
       return [parts[0], parts[1] || "", parts[2] || "", "primary", parts.length === 6 ? parts[4] || "0" : "0", currency].join(" | ");
     }).join("\n");
     updateProductPriceGuidance();
+  }
+  function followMainPriceEdit() {
+    const form = $("productForm");
+    if (!form.elements.confirm_custom_prices.checked) usePrimaryDeliveryPrices();
+    else updateProductPriceGuidance();
   }
   async function loadMerchantOrders({ reset = false } = {}) {
     const params = new URLSearchParams({ limit: String(PAGE_SIZE) }); if (!reset && state.merchantOrderCursor) params.set("cursor", state.merchantOrderCursor); const data = await api(`/providers/me/merchant-orders?${params}`); state.merchantOrders = reset ? (data.items || []) : [...state.merchantOrders, ...(data.items || [])]; state.merchantOrderCursor = data.page?.next_cursor || ""; state.merchantOrderHasMore = Boolean(data.page?.has_more); renderMerchantOrders();
@@ -1051,7 +1059,8 @@
   });
   $("cancelProductForm").addEventListener("click", () => setProductFormOpen(false, { reset: true }));
   $("productFulfillmentMode").addEventListener("change", () => syncProductFulfillment());
-  ["local_selling_price", "currency_code", "delivery_areas"].forEach(name => $("productForm").elements[name].addEventListener("input", updateProductPriceGuidance));
+  $("productForm").elements.local_selling_price.addEventListener("input", followMainPriceEdit);
+  ["currency_code", "delivery_areas"].forEach(name => $("productForm").elements[name].addEventListener("input", updateProductPriceGuidance));
   $("usePrimaryDeliveryPrices").addEventListener("click", usePrimaryDeliveryPrices);
   $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true })));
   $("productStatus").addEventListener("change", () => loadProducts({ reset: true }));
@@ -1077,4 +1086,13 @@
   $("cancelSessionRestore").addEventListener("click", signOut);
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
   boot().catch((error) => setMessage(error.message));
+  window.watchCatalogChanges({
+    url: `${API}/catalog/version`,
+    enabled: () => Boolean(state.token && state.provider && !state.booting),
+    refresh: async () => {
+      // Refresh lists only: never reset the provider's open edit form.
+      if (state.activeView === "products") await loadProducts({ reset: true });
+      else if (state.activeView === "listings") await loadListings({ reset: true });
+    }
+  });
 })();

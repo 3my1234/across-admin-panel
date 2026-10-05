@@ -39,6 +39,7 @@
   state.gatewaySubscriptions = [];
   let billingLoadedAt = 0;
   let billingLoadPromise = null;
+  let productLoadRevision = 0, listingLoadRevision = 0;
 
   function loadProviderBilling() {
     if (billingLoadPromise) return billingLoadPromise;
@@ -155,23 +156,29 @@
   }
 
   async function loadProviderListings({ reset = false } = {}) {
+    const revision = ++listingLoadRevision;
     setText("providerListingStatus", "Loading listings...");
     try {
       const data = await request(`/api/v1/admin/provider-listings?${queryParams("providerListingSearch", "providerListingModerationStatus", reset ? "" : state.providerListingCursor)}`);
+      if (revision !== listingLoadRevision) return false;
       state.providerListings = reset ? (data.items || []) : [...state.providerListings, ...(data.items || [])];
       state.providerListingCursor = data.next_cursor || ""; state.providerListingHasMore = Boolean(data.has_more);
       renderProviderListings(); setText("providerListingStatus", `${state.providerListings.length} listings loaded.`);
-    } catch (error) { setText("providerListingStatus", error.message); }
+      return true;
+    } catch (error) { if (revision === listingLoadRevision) setText("providerListingStatus", error.message); return false; }
   }
 
   async function loadMerchantProducts({ reset = false } = {}) {
+    const revision = ++productLoadRevision;
     setText("merchantProductModerationStatus", "Loading merchant products...");
     try {
       const data = await request(`/api/v1/admin/merchant-products?${queryParams("merchantProductSearch", "merchantProductStatus", reset ? "" : state.merchantProductCursor)}`);
+      if (revision !== productLoadRevision) return false;
       state.merchantProducts = reset ? (data.items || []) : [...state.merchantProducts, ...(data.items || [])];
       state.merchantProductCursor = data.page?.next_cursor || ""; state.merchantProductHasMore = Boolean(data.page?.has_more);
       renderMerchantProducts(); setText("merchantProductModerationStatus", `${state.merchantProducts.length} merchant products loaded.`);
-    } catch (error) { setText("merchantProductModerationStatus", error.message); }
+      return true;
+    } catch (error) { if (revision === productLoadRevision) setText("merchantProductModerationStatus", error.message); return false; }
   }
 
   function renderProviders() {
@@ -234,13 +241,23 @@
     } catch (error) { setText("providerListingStatus", error.message); }
     finally { buttons.forEach(item => { item.disabled = false; }); }
   }
+  function merchantBuyerPriceSummary(item) {
+    return (item.delivery_areas || []).map(area => {
+      const itemPrice = Number(area.delivered_price) - Number(area.delivery_fee || 0);
+      const mismatch = area.currency_code === item.currency_code && itemPrice !== Number(item.local_selling_price);
+      return `<br><span class="${mismatch ? "error" : "muted"}">Buyer ${escapeHtml([area.country_code, area.state, area.city].filter(Boolean).join(" / "))}: ${escapeHtml(area.currency_code)} ${itemPrice.toFixed(2)} + ${Number(area.delivery_fee || 0).toFixed(2)} delivery${mismatch ? " — separate from main price" : ""}</span>`;
+    }).join("");
+  }
   function renderMerchantProducts() {
-    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>NGN ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
+    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.currency_code)} ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}${merchantBuyerPriceSummary(item)}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
     $("loadMoreMerchantProductsButton")?.classList.toggle("hidden", !state.merchantProductHasMore);
     $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProductVerified(button));
   }
   async function moderateMerchantProductVerified(button) {
     const id = button.dataset.id; const status = button.dataset.productStatus;
+    const product = state.merchantProducts.find(item => item.id === id);
+    const separate = (product?.delivery_areas || []).filter(area => area.currency_code === product.currency_code && Number(area.delivered_price) - Number(area.delivery_fee || 0) !== Number(product.local_selling_price));
+    if (status === "approved" && separate.length && !confirm(`Buyers will pay separate destination item prices (${separate.map(area => `${area.country_code}: ${area.currency_code} ${(Number(area.delivered_price) - Number(area.delivery_fee || 0)).toFixed(2)}`).join(", ")}), rather than the main price ${product.currency_code} ${product.local_selling_price}. Approve those exact buyer prices? Cancel and ask the provider to use the main price if this is unintended.`)) return;
     const notes = prompt(`${status} product. Add a moderation note (optional):`, ""); if (notes === null) return;
     const buttons = [...document.querySelectorAll("[data-product-status]")].filter(item => item.dataset.id === id); buttons.forEach(item => { item.disabled = true; });
     try {
@@ -380,4 +397,13 @@
   $("merchantFulfillmentRoute")?.addEventListener("change", () => loadMerchantFulfillments({ reset: true }));
   $("merchantFulfillmentStatusFilter")?.addEventListener("input", debounce(() => loadMerchantFulfillments({ reset: true }), 300));
   setNavVisibility();
+  window.watchCatalogChanges({
+    url: `${state.apiUrl}/api/v1/catalog/version`,
+    enabled: () => Boolean(state.token && state.activeTab === "providers" && ["super_admin", "catalog_admin"].includes(state.role)),
+    refresh: async () => {
+      if (document.querySelector("dialog[open]") || document.querySelector("[data-product-status]:disabled")) return false;
+      const results = await Promise.all([loadMerchantProducts({ reset: true }), loadProviderListings({ reset: true })]);
+      return results.every(result => result !== false);
+    }
+  });
 })();
