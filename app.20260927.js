@@ -1210,6 +1210,7 @@ async function reconcileFlutterwavePayment(event) {
   if (!isSuperAdmin()) return;
   const form = event.currentTarget;
   const button = $("reconcilePaymentButton");
+  if (button.disabled) return;
   const status = $("paymentReconciliationStatus");
   const values = new FormData(form);
   const orderId = String(values.get("order_id") || "").trim();
@@ -1231,7 +1232,7 @@ async function reconcileFlutterwavePayment(event) {
       return;
     }
     status.className = "success";
-    status.textContent = `Payment verified. Order ${result.order_id} is now available in tracking and its daily batch.`;
+    status.textContent = `Payment confirmed. Order ${result.order_id} is now available in the buyer's Track page. Seller bank payout is handled separately by Flutterwave. No new charge was made.`;
     state.transactions = [];
     await Promise.allSettled([loadOverview(), loadNamedList("transactions", { reset: true })]);
   } catch (error) {
@@ -1372,7 +1373,43 @@ function renderNamedList(name) {
     const rows = state.transactions;
     renderTable("transactionsTable", ["email", "provider", "purpose", "payment_status", "refund_status", "chargeback_status", "settlement_status", "total_amount", "currency", "provider_reference", "provider_transaction_id"], rows);
     renderTransactionCards(rows);
+    attachTransactionRecoveryActions(rows);
     updateListControls(name, state.transactions);
+  }
+}
+
+function canRecoverTransaction(row) {
+  return isSuperAdmin() && row.provider === "flutterwave" && row.purpose === "order" && row.payment_status !== "succeeded" && Boolean(row.order_id && row.provider_reference);
+}
+
+function recoverTransaction(row) {
+  if (!canRecoverTransaction(row) || $("reconcilePaymentButton")?.disabled) return;
+  const form = $("paymentReconciliationForm");
+  form.elements.order_id.value = row.order_id;
+  form.elements.tx_ref.value = row.provider_reference;
+  form.scrollIntoView?.({behavior: "smooth", block: "center"});
+  void reconcileFlutterwavePayment({preventDefault() {}, currentTarget: form});
+}
+
+function attachTransactionRecoveryActions(rows) {
+  if (!isSuperAdmin()) return;
+  const table = $("transactionsTable");
+  const header = table?.querySelector("thead tr");
+  if (header) {const cell=document.createElement("th");cell.textContent="Recovery";header.insertBefore(cell,header.firstChild);}
+  const tableRows = table?.querySelectorAll("tbody tr") || [];
+  const cards = $("transactionsCards")?.querySelectorAll("article") || [];
+  for (let index=0;index<rows.length;index++) {
+    const row=rows[index];
+    for (const [target,isTable] of [[tableRows[index],true],[cards[index],false]]) {
+      if (!target) continue;
+      const container=document.createElement(isTable?"td":"div");container.className="table-actions";
+      if (canRecoverTransaction(row)) {
+        const button=document.createElement("button");button.type="button";button.className="secondary-button";button.textContent="Check and recover";
+        button.title="Verify this existing payment with Flutterwave. No new charge.";
+        button.addEventListener("click",()=>recoverTransaction(row));container.append(button);
+      } else {container.textContent=row.payment_status==="succeeded"?"Confirmed":"-";}
+      if (isTable) target.insertBefore(container,target.firstChild);else target.append(container);
+    }
   }
 }
 
