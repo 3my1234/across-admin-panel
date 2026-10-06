@@ -397,14 +397,7 @@
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index]; setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
       const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing" }) });
-      let put;
-      try {
-        put = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      } catch (_) {
-        throw new Error("The image could not reach storage. Ask the administrator to allow provider.atlxpres.com in the S3 bucket CORS settings, then try again.");
-      }
-      if (!put.ok) throw new Error(`Image storage rejected the upload (${put.status}). Check the S3 CORS policy, file type, and upload permissions.`);
-      urls.push(signed.view_url);
+      urls.push(await PortalStorageUpload.upload(file, signed));
     }
     return urls;
   }
@@ -429,8 +422,7 @@
     try {
       setMessage("Uploading document...", false, "verificationMessage");
       const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "verification" }) });
-      const put = await fetch(signed.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      if (!put.ok) throw new Error(`Document upload failed (${put.status})`);
+      await PortalStorageUpload.upload(file, signed);
       await api("/providers/me/verification-documents", { method: "POST", body: JSON.stringify({ document_type: documentType, document_url: signed.view_url }) });
       form.reset(); setMessage("Document submitted for review.", true, "verificationMessage"); await loadVerificationDocuments();
     } catch (error) { setMessage(error.message, false, "verificationMessage"); } finally { button.disabled = false; }
