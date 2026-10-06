@@ -14,11 +14,12 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20261005-checkbox-alignment" />
+  <link rel="stylesheet" href="./provider.css?v=20261006-simple-forms" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./storage-upload.js?v=20261006-storage-errors" defer></script>
-  <script src="./provider.js?v=20261006-storage-errors" defer></script>
+  <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
+  <script src="./provider.js?v=20261006-simple-forms" defer></script>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -77,9 +78,9 @@
           <div class="section-heading"><div><span class="eyebrow">Merchant catalogue</span><h2>Physical products</h2><p>Create a private draft, check it, then submit it for Atlantic Express review.</p></div><button id="toggleProductForm" type="button" aria-expanded="false">Create product</button></div>
           <div id="productSubscriptionGate" class="subscription-gate hidden"></div>
           <form id="productForm" class="form-grid hidden">
-            <label>Product name<input name="title" required /></label><label>Your SKU<input name="sku" placeholder="Optional unique stock code" /></label>
+            <label>Product name<input name="title" required /></label><label>Stock code (optional)<input name="sku" placeholder="Leave empty if you do not use stock codes" /><small>We create a code for you if you leave this empty.</small></label>
             <label>Primary selling price<input name="local_selling_price" type="number" min="0.01" step="0.01" required /></label><label>Primary price currency<input name="currency_code" maxlength="3" value="NGN" required /><small>Three-letter code, such as NGN, USD, GBP, or EUR.</small></label><label>Crossed-out primary price<input name="compare_at_price" type="number" min="0" step="0.01" /></label>
-            <label>Inventory<input name="inventory_count" type="number" min="0" value="1" required /></label><label>Category<input name="category" placeholder="Phones, clothing, solar" required /></label>
+            <label>Inventory<input name="inventory_count" type="number" min="0" value="1" required /></label><label>Category<input name="category" placeholder="e.g. Shoes, phones or clothing" maxlength="120" required /><small>Type the category that best describes your product.</small></label>
             <label class="check-option"><input name="is_flash_sale" type="checkbox" /><span>Flash sale</span></label><label>Flash price (primary currency)<input name="flash_sale_price" type="number" min="0" step="0.01" /></label>
             <label>How is the stock supplied?<select id="productFulfillmentMode" name="fulfillment_mode" required><option value="merchant_local">Already available at the stock location</option><option value="merchant_cross_border">Sourced or imported by the seller</option></select><small>This describes your stock. The buyer's delivery country determines whether an order is local or international.</small></label><label>Stock state<select id="productStockState" name="stock_state" required><option value="locally_available">Available now</option></select><small id="productStockHelp">Stock already available in its stated country may also be sold abroad.</small></label>
             <label>Stock country code<input id="productCountryCode" name="inventory_country_code" maxlength="2" value="NG" required /></label><label>Stock city<input name="inventory_city" placeholder="e.g. Abuja" required /></label>
@@ -89,8 +90,7 @@
             <p class="wide form-note">Location is required for locally available products so nearby buyers see local stock first.</p>
             <label>Handling time (hours)<input name="handling_time_hours" type="number" min="0" value="24" required /></label><label>Estimated delivery (days)<span class="field-pair"><input name="delivery_min_days" type="number" min="0" value="1" required /><input name="delivery_max_days" type="number" min="0" value="3" required /></span></label>
             <label class="wide">Delivery methods (comma separated)<input name="delivery_methods" value="delivery,pickup" required /></label><label class="wide">Returns policy<textarea name="return_policy" rows="3" required></textarea></label>
-            <label class="wide">Where can you deliver, and what will you charge? <textarea name="delivery_areas" rows="3" required>NG</textarea><small>One area per line: country | state | city | product price | delivery charge | currency. Example: US | California | Los Angeles | 30 | 5 | USD. The buyer sees USD 30 + USD 5 delivery. Leave state/city blank to cover the country. Use primary in the product-price column to follow the main price automatically, for example NG | | | primary | 0 | NGN. Enter a number only for an independent destination price. For NG alone, the primary NGN price and zero delivery charge apply. Include any duties or taxes you will collect in your prices. One listing can serve buyers at home and abroad; enter each destination separately.</small><small id="productPriceGuidance" role="status">Areas using primary follow the primary selling price automatically, plus their delivery charge.</small><small id="enabledBuyerMarkets">Checking enabled buyer markets...</small></label><div class="wide form-actions"><button id="usePrimaryDeliveryPrices" class="secondary" type="button">Use main price for NGN delivery areas</button></div>
-            <label class="wide check-option"><input type="checkbox" name="confirm_custom_prices"><span>Keep separate destination item prices even when they differ from the main price. I have checked what buyers will pay.</span></label>
+            <div class="wide"><h3>Where can you deliver?</h3><p>Add each area you deliver to, and the delivery charge. Your product price stays the same unless you choose a different price below.</p><div id="productDeliveryAreas"></div><button id="addProductDeliveryArea" class="secondary" type="button">Add another delivery area</button><small id="enabledBuyerMarkets">Checking available countries...</small></div>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
             <label class="wide">Product images<input id="productImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload 1-20 accurate images. Existing images remain when editing unless replacements are selected.</small></label>
             <p class="wide form-note"><strong>Private draft:</strong> saving does not publish this product. Check the details, then submit it for Atlantic Express review.</p>
@@ -152,7 +152,7 @@
             <label>State / region<input name="state" required /></label><label>Street / area<input name="address_line" /></label>
             <label>Country code<input name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" autocapitalize="characters" required /><small>Two-letter ISO code, for example NG, GB, US, or CA.</small></label>
             <label>Currency code<input name="currency_code" maxlength="3" pattern="[A-Za-z]{3}" value="NGN" autocapitalize="characters" required /><small>Three-letter ISO code, for example NGN, GBP, USD, or CAD.</small></label>
-            <label>Price<input name="price" type="number" min="0" step="0.01" /></label><label>Price is for<input name="pricing_unit" placeholder="e.g. one visit, one hour, one night" /><small>Describe what the customer receives for this price.</small></label><label id="listingCapacityField">How many customers can you serve at the same time?<input name="capacity" type="number" min="1" value="1" /><small>For example: guests for a hotel, vehicles for a car wash, or people for an appointment.</small></label>
+            <label>How do you set your price?<select id="listingPriceMode" name="price_mode"><option value="fixed">One set price</option><option value="from">Price starts from an amount</option><option value="quote">I need to see the job before giving a price</option></select><small>For repairs, choose a starting price or give a price after checking the problem.</small></label><label id="listingPriceField">Price (<span id="listingPriceLabel">set amount</span>)<input name="price" type="number" min="0" step="0.01" /><small id="listingPriceHelp">What the customer pays for the service described.</small></label><label class="wide">What can change the price? (optional)<input name="price_notes" maxlength="500" placeholder="e.g. Final price depends on the repair and replacement parts." /></label><label>Price is for<input name="pricing_unit" placeholder="e.g. one visit, one hour, one night" /><small>Describe what the customer receives for this price.</small></label><label id="listingCapacityField">How many customers can you serve at the same time?<input name="capacity" type="number" min="1" value="1" /><small>For example: guests for a hotel, vehicles for a car wash, or people for an appointment.</small></label>
             <label>Contact email<input name="contact_email" type="email" /></label><label>Contact phone<input name="contact_phone" inputmode="tel" /></label>
             <div class="wide location-card">
               <div><h3>Service location</h3><p>Search the service address, then click the map or drag the pin to the exact property or workplace. Customers never see the coordinates; they are only used to find nearby services.</p></div>
@@ -200,6 +200,7 @@
     </dialog>
     <dialog id="conversationDialog">
       <div class="section-heading"><div><span class="eyebrow">Atlantic Express messages</span><h2 id="conversationTitle">Conversation</h2></div><button type="button" id="closeConversation" class="secondary">Close</button></div>
+      <button type="button" id="loadEarlierConversation" class="secondary hidden">Load earlier messages</button>
       <div id="conversationMessages" class="alert-rows"></div>
       <form id="conversationReplyForm" class="form-grid compact">
         <label>Reply<textarea name="message" rows="3" maxlength="2000" required></textarea></label>

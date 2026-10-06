@@ -13,9 +13,9 @@
       $("providerBillingSection")?.classList.toggle("hidden", state.role !== "super_admin");
       if (state.role === "super_admin") void loadProviderBilling();
       return Promise.all([
-        options.force || !state.providers.length ? loadProviders({ reset: true }) : Promise.resolve(),
-        options.force || !state.providerListings.length ? loadProviderListings({ reset: true }) : Promise.resolve(),
-        options.force || !state.merchantProducts.length ? loadMerchantProducts({ reset: true }) : Promise.resolve(),
+        loadProviders({ reset: true }),
+        loadProviderListings({ reset: true }),
+        loadMerchantProducts({ reset: true }),
         ...(state.role === "super_admin" ? [loadProviderAccess()] : [])
       ]);
     }
@@ -218,7 +218,7 @@
     $("providerListingsTable").innerHTML = `<thead><tr><th>Images</th><th>Listing</th><th>Provider</th><th>Service</th><th>Location</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerListings.map((item) => `<tr>
       <td><div class="moderation-media">${(item.media_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td>
       <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
-      <td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td><td>${item.price == null ? "Enquiry" : `${escapeHtml(item.currency_code)} ${format(item.price)} / ${escapeHtml(item.pricing_unit || "unit")}`}</td>
+      <td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td><td>${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : `${item.attributes?.price_mode === "from" ? "From " : ""}${escapeHtml(item.currency_code)} ${format(item.price)} / ${escapeHtml(item.pricing_unit || "unit")}`}</td>
       <td><span class="status-pill ${item.status === "approved" ? "active" : item.status === "rejected" ? "inactive" : ""}">${escapeHtml(item.status)}</span></td><td class="table-actions"><button data-listing-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-listing-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-listing-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
     </tr>`).join("") || `<tr><td colspan="8">No matching listings.</td></tr>`}</tbody>`;
     $("loadMoreProviderListingsButton")?.classList.toggle("hidden", !state.providerListingHasMore);
@@ -401,7 +401,7 @@
     url: `${state.apiUrl}/api/v1/catalog/version`,
     enabled: () => Boolean(state.token && state.activeTab === "providers" && ["super_admin", "catalog_admin"].includes(state.role)),
     refresh: async () => {
-      if (document.querySelector("dialog[open]") || document.querySelector("[data-product-status]:disabled")) return false;
+      if (document.querySelector("#editListingDialog[open], #editProductDialog[open]") || document.querySelector("[data-product-status]:disabled")) return false;
       const results = await Promise.all([loadMerchantProducts({ reset: true }), loadProviderListings({ reset: true })]);
       return results.every(result => result !== false);
     }
