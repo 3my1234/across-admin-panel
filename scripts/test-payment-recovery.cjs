@@ -1,0 +1,12 @@
+const assert=require("node:assert/strict");const fs=require("node:fs");const path=require("node:path");const vm=require("node:vm");
+const source=fs.readFileSync(path.join(__dirname,"../app.20260927.js"),"utf8");
+let role="super_admin",calls=0,request;
+const form={elements:{order_id:{value:""},tx_ref:{value:""}},scrollIntoView:()=>{}};const button={disabled:false};
+const context=vm.createContext({isSuperAdmin:()=>role==="super_admin",$:id=>id==="paymentReconciliationForm"?form:button,reconcileFlutterwavePayment:event=>{calls++;request=event;}});
+vm.runInContext(source.slice(source.indexOf("function canRecoverTransaction("),source.indexOf("function attachTransactionRecoveryActions(")),context);
+const payment={provider:"flutterwave",purpose:"order",payment_status:"processing",order_id:"saved-order",provider_reference:"ACROSS-existing"};
+context.recoverTransaction(payment);assert.equal(calls,1);assert.equal(form.elements.order_id.value,"saved-order");assert.equal(form.elements.tx_ref.value,"ACROSS-existing");assert.equal(request.currentTarget,form);
+button.disabled=true;context.recoverTransaction(payment);assert.equal(calls,1,"must not submit while verification is in progress");button.disabled=false;
+role="catalog_admin";context.recoverTransaction(payment);assert.equal(calls,1,"only a super-admin can reconcile");role="super_admin";
+context.recoverTransaction({...payment,payment_status:"succeeded"});context.recoverTransaction({...payment,purpose:"provider_subscription"});context.recoverTransaction({...payment,provider_reference:""});assert.equal(calls,1);
+console.log("Payment recovery regressions passed: stored identity, in-flight guard, role and payment eligibility.");
