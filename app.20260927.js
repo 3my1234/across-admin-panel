@@ -903,6 +903,7 @@ function renderTransactionCards(rows) {
         <h3 class="mobile-card-title">${escapeHtml(row.email)}</h3>
         <p class="mobile-card-meta">${escapeHtml(row.provider || "-")} · ${escapeHtml((row.purpose || "payment").replaceAll("_", " "))}</p>
         <p class="mobile-card-meta">Payment ${escapeHtml(row.payment_status)} · refund ${escapeHtml(row.refund_status)}</p>
+        <p class="mobile-card-meta">Order ID: ${escapeHtml(row.order_id || "-")}</p>
         <p class="mobile-card-meta">Chargeback ${escapeHtml(row.chargeback_status)} · settlement ${escapeHtml(row.settlement_status)}</p>
         <p class="mobile-card-meta">${escapeHtml(row.currency)} ${format(row.total_amount)}</p>
         <p class="mobile-card-meta">${escapeHtml(row.provider_reference || row.flutterwave_tx_ref || "-")}</p>
@@ -1371,7 +1372,7 @@ function renderNamedList(name) {
   }
   if (name === "transactions") {
     const rows = state.transactions;
-    renderTable("transactionsTable", ["email", "provider", "purpose", "payment_status", "refund_status", "chargeback_status", "settlement_status", "total_amount", "currency", "provider_reference", "provider_transaction_id"], rows);
+    renderTable("transactionsTable", ["order_id", "email", "provider", "purpose", "payment_status", "refund_status", "chargeback_status", "settlement_status", "total_amount", "currency", "provider_reference", "provider_transaction_id"], rows);
     renderTransactionCards(rows);
     attachTransactionRecoveryActions(rows);
     updateListControls(name, state.transactions);
