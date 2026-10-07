@@ -239,7 +239,7 @@
     try {
       const data = await api("/buyer-markets");
       state.buyerMarkets = data.markets || [];
-      $("enabledBuyerMarkets").textContent = `Currently enabled buyer checkout markets: ${(data.markets || []).map(market => `${market.country_code} (${market.currency_code})`).join(", ") || "none"}.`;
+      $("enabledBuyerMarkets").textContent = `You can currently deliver to: ${(data.markets || []).map(market => market.country_name || (market.country_code === "NG" ? "Nigeria" : market.country_code)).join(", ") || "no countries yet"}.`;
     } catch {
       $("enabledBuyerMarkets").textContent = "Could not load enabled buyer markets. Refresh before adding a new destination.";
     }
@@ -443,6 +443,15 @@
     });
   }
 
+  function syncListingPriceMode() {
+    const form = $("listingForm"), mode = form.elements.price_mode.value;
+    const quote = mode === "quote";
+    $("listingPriceField").classList.toggle("hidden", quote);
+    form.elements.price.disabled = quote; form.elements.price.required = !quote;
+    form.elements.price.min = mode === "from" ? "0.01" : "0";
+    $("listingPriceLabel").textContent = mode === "from" ? "starting amount" : "set amount";
+    $("listingPriceHelp").textContent = mode === "from" ? "The lowest price. Tell customers below what may cost extra." : "What the customer pays for the service described.";
+  }
   function setListingFormOpen(open, { reset = false } = {}) {
     const form = $("listingForm"); const toggle = $("toggleListingForm");
     if (reset) {
@@ -452,6 +461,7 @@
       setListingLocationStatus("Search for the address or use this device's location, then verify the pin.");
     }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
+    syncListingPriceMode();
     if (open) {
       ensureListingMap();
       setTimeout(() => state.listingMap?.invalidateSize(), 0);
@@ -486,6 +496,10 @@
     }
   }
 
+  const deliveryEditor = new ProviderDeliveryAreas.Editor($("productDeliveryAreas"), {
+    markets: () => state.buyerMarkets, mainPrice: () => Number($("productForm").elements.local_selling_price.value),
+    mainCurrency: () => $("productForm").elements.currency_code.value.trim().toUpperCase(), formatMoney: money
+  });
   function setProductFormOpen(open, { reset = false } = {}) {
     const form = $("productForm"); const toggle = $("toggleProductForm");
     if (reset) {
@@ -495,12 +509,14 @@
       form.elements.inventory_country_code.value = country;
       if (market) {
         form.elements.currency_code.value = market.currency_code;
-        form.elements.delivery_areas.value = `${country} | | | | 0 | ${market.currency_code}`;
+
       }
+      form.elements.sku.readOnly = false;
+      deliveryEditor.reset(country);
       syncProductFulfillment();
     }
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create product"; toggle.setAttribute("aria-expanded", String(open));
-    if (open) { updateProductPriceGuidance(); requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" })); }
+    if (open) { if (!deliveryEditor.rows.length) deliveryEditor.reset(state.provider?.country_code || "NG"); deliveryEditor.refresh(); requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" })); }
   }
 
   function validatedProductValues(form) {
@@ -511,21 +527,7 @@
     if (Number(values.delivery_max_days) < Number(values.delivery_min_days)) throw new Error("Maximum delivery days cannot be less than minimum delivery days.");
     values.inventory_country_code = String(values.inventory_country_code).trim().toUpperCase();
     values.currency_code = String(values.currency_code || "").trim().toUpperCase();
-    values.delivery_areas = String(values.delivery_areas || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
-      const parts = line.split("|").map(part => part.trim());
-      if (parts.length > 6 || !/^[A-Za-z]{2}$/.test(parts[0]) || (parts[2] && !parts[1])) throw new Error("Use country | state | city | product price | delivery charge | currency for each area.");
-      const fallback = parts[0].toUpperCase() === "NG" && values.currency_code === "NGN";
-      const usesPrimaryPrice = String(parts[3] || "primary").toLowerCase() === "primary";
-      const itemPrice = usesPrimaryPrice ? price : Number(parts[3]);
-      const deliveryFee = parts.length === 6 ? Number(parts[4]) : 0;
-      const currency = String((parts.length === 6 ? parts[5] : parts[4]) || (fallback ? values.currency_code : "")).toUpperCase();
-      if (usesPrimaryPrice && currency !== values.currency_code) throw new Error("An area using the primary price must use the primary currency. Enter a separate price for other currencies.");
-      if (!Number.isFinite(itemPrice) || itemPrice <= 0 || !Number.isFinite(deliveryFee) || deliveryFee < 0 || !/^[A-Z]{3}$/.test(currency)) throw new Error("Each area needs a positive product price, nonnegative delivery charge, and three-letter currency.");
-      const independentConfirmed = Boolean(form.elements.confirm_custom_prices?.checked);
-      if (!usesPrimaryPrice && currency === values.currency_code && itemPrice !== price && !independentConfirmed) throw new Error(`Buyers in ${parts[0].toUpperCase()} would still pay ${money(itemPrice, currency)} for the item, while the main price is ${money(price, currency)}. Use main price below, or explicitly confirm the separate destination prices.`);
-      return { country_code: parts[0].toUpperCase(), state: parts[1] || "", city: parts[2] || "", item_price: itemPrice, delivery_fee: deliveryFee, currency_code: currency, uses_primary_price: usesPrimaryPrice, independent_price_confirmed: independentConfirmed };
-    });
-    if (!values.delivery_areas.length || values.delivery_areas.length > 20) throw new Error("Choose between 1 and 20 delivery areas.");
+    values.delivery_areas = deliveryEditor.values();
     if (values.fulfillment_mode === "merchant_local") {
       values.stock_state = "locally_available";
       if (values.inventory_latitude === "" || values.inventory_longitude === "") throw new Error("Use current stock location so nearby buyers can discover this product.");
@@ -556,8 +558,8 @@
       }
       const uploadedMedia = files.length ? await uploadImages(files) : [];
       const media_urls = [...retainedMedia, ...uploadedMedia];
-      const attributes = { ...(existing?.attributes || {}), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
-      const payload = { ...values, price: values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes };
+      const attributes = { ...(existing?.attributes || {}), price_mode: values.price_mode, price_notes: String(values.price_notes || "").trim(), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
+      const payload = { ...values, price: values.price_mode === "quote" || values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes };
       const path = state.editingListingID ? "/providers/me/listings/" + state.editingListingID : "/providers/me/listings";
       await api(path, { method: state.editingListingID ? "PATCH" : "POST", body: JSON.stringify(payload) });
       setListingFormOpen(false, { reset: true }); setMessage(existing ? "Service updated and returned for review." : "Service draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "uploadProgress"); await loadListings({ reset: true });
@@ -606,45 +608,15 @@
       form.elements[name].value = item[name] ?? "";
     });
     form.elements.stock_state.value = item.stock_state || (item.fulfillment_mode === "merchant_cross_border" ? "foreign_stock" : "locally_available");
-    form.elements.delivery_areas.value = (item.delivery_areas || []).map(area => [area.country_code, area.state || "", area.city || "", area.uses_primary_price ? "primary" : Number(area.delivered_price) - Number(area.delivery_fee || 0), area.delivery_fee || 0, area.currency_code].join(" | ")).join("\n") || `${item.inventory_country_code || "NG"} | | | primary | 0 | ${item.currency_code || "NGN"}`;
+    deliveryEditor.load(item.delivery_areas || []);
+    form.elements.sku.readOnly = true;
     form.elements.category.value = item.category_path?.[0] || "";
     form.elements.delivery_methods.value = (item.delivery_methods || []).join(",");
     form.elements.is_flash_sale.checked = Boolean(item.is_flash_sale);
-    form.elements.confirm_custom_prices.checked = false;
-    updateProductPriceGuidance();
+
     setProductFormOpen(true);
   }
 
-  function updateProductPriceGuidance() {
-    const form = $("productForm"), primary = Number(form.elements.local_selling_price.value);
-    const currency = String(form.elements.currency_code.value).trim().toUpperCase();
-    const separate = String(form.elements.delivery_areas.value).split(/\r?\n/).some(line => {
-      const parts = line.split("|").map(part => part.trim());
-      const areaCurrency = (parts.length === 6 ? parts[5] : parts[4]) || currency;
-      return parts[3] && parts[3].toLowerCase() !== "primary" && areaCurrency.toUpperCase() === currency && Number(parts[3]) !== primary;
-    });
-    $("productPriceGuidance").textContent = separate
-      ? "A delivery area has a separate item price. Buyers in that area will see that price. Enter primary in its product-price column if it should follow the main price."
-      : "Areas using primary follow the primary selling price automatically, plus their delivery charge.";
-    $("usePrimaryDeliveryPrices").textContent = `Use main price for ${currency || "matching-currency"} delivery areas`;
-  }
-
-  function usePrimaryDeliveryPrices() {
-    const form = $("productForm"), currency = String(form.elements.currency_code.value).trim().toUpperCase();
-    form.elements.delivery_areas.value = String(form.elements.delivery_areas.value).split(/\r?\n/).map(line => {
-      const parts = line.split("|").map(part => part.trim());
-      if (!parts[0]) return line;
-      const areaCurrency = String((parts.length === 6 ? parts[5] : parts[4]) || (parts[0].toUpperCase() === "NG" ? "NGN" : "")).toUpperCase();
-      if (areaCurrency !== currency) return line;
-      return [parts[0], parts[1] || "", parts[2] || "", "primary", parts.length === 6 ? parts[4] || "0" : "0", currency].join(" | ");
-    }).join("\n");
-    updateProductPriceGuidance();
-  }
-  function followMainPriceEdit() {
-    const form = $("productForm");
-    if (!form.elements.confirm_custom_prices.checked) usePrimaryDeliveryPrices();
-    else updateProductPriceGuidance();
-  }
   let merchantOrdersGeneration = 0;
   async function loadMerchantOrders({ reset = false } = {}) {
     const generation = ++merchantOrdersGeneration; const authToken = state.token;
@@ -877,7 +849,7 @@
   function renderListings() {
     $("listingRows").innerHTML = state.listings.length ? state.listings.map((item) => {
       const image = item.media_urls?.[0]; const canSubmit = ["draft", "rejected"].includes(item.status); const direct = ["hotel", "short_let", "car_rental", "car_wash", "mechanic", "plumber", "carpenter", "fuel_station", "food_vendor", "artisan"].includes(item.listing_type);
-      return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null ? "Enquiry" : money(item.price)}</p>${item.moderation_notes ? `<p class="moderation-note">Moderator note: ${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}${direct ? `<button class="secondary" data-availability="${item.id}" data-title="${escapeHtml(item.title)}">Add availability</button>` : ""}</div></article>`;
+      return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : (item.attributes?.price_mode === "from" ? "From " : "") + money(item.price, item.currency_code)}</p>${item.moderation_notes ? `<p class="moderation-note">Moderator note: ${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}${direct ? `<button class="secondary" data-availability="${item.id}" data-title="${escapeHtml(item.title)}">Add availability</button>` : ""}</div></article>`;
     }).join("") : "<p>No matching listings.</p>";
     [...$("listingRows").children].forEach((row, index) => {
       const actions = row.querySelector(".list-actions"); const item = state.listings[index];
@@ -899,6 +871,8 @@
     });
     form.elements.is_mobile_service.checked = Boolean(item.is_mobile_service);
     form.elements.is_available_now.checked = Boolean(item.is_available_now);
+    form.elements.price_mode.value = item.attributes?.price_mode || (item.price == null ? "quote" : "fixed");
+    form.elements.price_notes.value = item.attributes?.price_notes || "";
     setListingFormOpen(true);
     state.editingListingID = id;
     state.listingLocationAccuracy = Number.isFinite(item.attributes?.location_accuracy_m) ? Number(item.attributes.location_accuracy_m) : null;
@@ -940,16 +914,25 @@
     $("conversationRows").innerHTML = state.conversations.length ? state.conversations.map((item) => `<article class="list-row"><div><span class="badge">${item.unread_count ? `${item.unread_count} unread` : "Up to date"}</span><h3>${escapeHtml(item.listing_title)}</h3><p><strong>${escapeHtml(item.counterpart_name)}</strong> · ${new Date(item.last_message_at).toLocaleString()}</p><p>${escapeHtml(item.last_message || "No messages yet")}</p>${item.subscription_active ? "" : '<p class="moderation-note">Subscription inactive — replies are paused.</p>'}</div><div class="list-actions"><button type="button" data-conversation="${item.id}">Open</button></div></article>`).join("") : "<p>No buyer conversations yet.</p>";
     document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation));
   }
-  async function openConversation(id) {
+  let conversationItems = [], conversationCursor = "";
+  async function openConversation(id, { cursor = "" } = {}) {
     const generation = ++conversationGeneration; const authToken = state.token;
     const conversation = state.conversations.find((item) => item.id === id);
     if (!conversation) return;
+    const same = state.currentConversation?.id === id;
+    if (!same) { conversationItems = []; conversationCursor = ""; }
     state.currentConversation = conversation;
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
-    const data = await api(`/providers/me/conversations/${id}/messages`);
+    const data = await api(`/providers/me/conversations/${id}/messages?limit=50${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`);
     if (generation !== conversationGeneration || authToken !== state.token || state.currentConversation?.id !== id) return;
-    $("conversationMessages").innerHTML = (data.items || []).map((item) => `<article class="alert-item ${item.sender_type === "provider" ? "unread" : ""}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p><small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
+    const thread = $("conversationMessages"), oldHeight = thread.scrollHeight, oldTop = thread.scrollTop;
+    const atBottom = !same || oldHeight - oldTop - thread.clientHeight < 100;
+    conversationItems = Array.from(new Map([...(cursor ? data.items || [] : conversationItems), ...(cursor ? conversationItems : data.items || [])].map(item => [item.id, item])).values()).sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    if (cursor || !same) conversationCursor = data.next_cursor || "";
+    $("loadEarlierConversation").classList.toggle("hidden", !conversationCursor);
+    $("conversationMessages").innerHTML = conversationItems.map((item) => `<article class="alert-item ${item.sender_type === "provider" ? "unread" : ""}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p><small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
+    thread.scrollTop = cursor ? oldTop + thread.scrollHeight - oldHeight : atBottom ? thread.scrollHeight : oldTop;
     const reply = $("conversationReplyForm");
     reply.querySelector("textarea").disabled = !conversation.subscription_active;
     reply.querySelector("button").disabled = !conversation.subscription_active;
@@ -958,6 +941,7 @@
     conversation.unread_count = 0;
     renderConversations();
   }
+  $("loadEarlierConversation").addEventListener("click", () => { if (state.currentConversation && conversationCursor) void openConversation(state.currentConversation.id, {cursor: conversationCursor}).catch(error => setMessage(error.message, false, "conversationMessage")); });
   async function sendConversationReply(event) {
     event.preventDefault();
     if (!state.currentConversation) return;
@@ -1070,6 +1054,7 @@
     $("providerTypeOtherField").classList.toggle("hidden", !isOther);
     $("providerTypeOtherField").querySelector("input").required = isOther;
   }));
+  $("listingPriceMode").addEventListener("change", syncListingPriceMode);
   $("refreshConversations").addEventListener("click", () => void loadConversations());
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);
@@ -1089,9 +1074,9 @@
   });
   $("cancelProductForm").addEventListener("click", () => setProductFormOpen(false, { reset: true }));
   $("productFulfillmentMode").addEventListener("change", () => syncProductFulfillment());
-  $("productForm").elements.local_selling_price.addEventListener("input", followMainPriceEdit);
-  ["currency_code", "delivery_areas"].forEach(name => $("productForm").elements[name].addEventListener("input", updateProductPriceGuidance));
-  $("usePrimaryDeliveryPrices").addEventListener("click", usePrimaryDeliveryPrices);
+  $("productForm").elements.local_selling_price.addEventListener("input", () => deliveryEditor.refresh());
+  $("productForm").elements.currency_code.addEventListener("change", () => deliveryEditor.refresh());
+  $("addProductDeliveryArea").addEventListener("click", () => { try { deliveryEditor.add(); } catch (error) { setMessage(error.message, false, "productUploadProgress"); } });
   $("productSearch").addEventListener("input", debounce(() => loadProducts({ reset: true })));
   $("productStatus").addEventListener("change", () => loadProducts({ reset: true }));
   $("loadMoreProducts").addEventListener("click", () => loadProducts());

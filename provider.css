@@ -439,3 +439,15 @@ small { font-weight: 400; color: var(--muted); }
 .existing-media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .75rem; }
 .existing-media-grid figure { margin: 0; display: grid; gap: .45rem; }
 .existing-media-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.delivery-area-card { border: 1px solid #d5e1dd; border-radius: 12px; padding: 16px; margin: 12px 0; min-width: 0; }
+.delivery-area-card h4 { margin: 0 0 12px; }
+.delivery-area-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.delivery-area-fields label, .delivery-price-options label { display: grid; gap: 6px; min-width: 0; }
+.delivery-area-fields input, .delivery-area-fields select, .delivery-price-options input[type=number] { width: 100%; min-width: 0; box-sizing: border-box; }
+.delivery-price-options { margin-top: 14px; }
+.delivery-price-options summary { cursor: pointer; font-weight: 600; }
+.delivery-price-options label { margin-top: 12px; }
+.delivery-price-options .check-option { display: flex; align-items: flex-start; gap: 8px; }
+.delivery-price-options input[type=checkbox] { width: 18px; height: 18px; flex-shrink: 0; }
+.delivery-price-summary { padding: 12px; border-radius: 8px; background: #edf4f1; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .delivery-area-fields { grid-template-columns: 1fr; } .delivery-area-card { padding: 12px; } }
