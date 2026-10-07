@@ -1286,6 +1286,11 @@ async function restoreSession() {
 
 function logout() {
   stopAdminActivityPolling();
+  ticketListSequence++; ticketRequestSequence++; ticketListBusy = false;
+  state.supportTickets = []; ticketHistory = []; ticketCursor = ""; ticketListCursor = ""; currentTicketId = null;
+  $("ticketMessages").classList.add("hidden"); $("ticketMessagesList").textContent = "";
+  $("ticketsTable").innerHTML = ""; $("ticketsCards").innerHTML = "";
+  $("earlierTicketsButton").classList.add("hidden"); setText("ticketListStatus", "");
   state.token = "";
   state.adminId = "";
   state.role = "";
@@ -1300,35 +1305,33 @@ function logout() {
 
 async function request(path, options = {}) {
   const authToken = state.token;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(),20000);
-  const response = await fetch(`${state.apiUrl}${path}`, {
-    signal: controller.signal,
-    method: options.method || "GET",
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.auth === false ? {} : { Authorization: `Bearer ${state.token}` })
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
-  }).catch(error => {clearTimeout(timeout); throw error;});
-  const raw = await response.text();
-  clearTimeout(timeout);
-  if (options.auth !== false && authToken !== state.token) throw new Error("Session changed; previous response ignored.");
-  let data = {};
-  if (raw) {
+  const readOnly = !options.method || options.method === "GET";
+  for (let attempt = 0; attempt < (readOnly ? 2 : 1); attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      data = JSON.parse(raw);
-    } catch {
-      data = { message: raw };
-    }
+      const response = await fetch(`${state.apiUrl}${path}`, {
+        signal: controller.signal, method: options.method || "GET", cache: "no-store",
+        headers: { "Content-Type": "application/json", ...(options.auth === false ? {} : { Authorization: `Bearer ${authToken}` }) },
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+      const raw = await response.text();
+      if (options.auth !== false && authToken !== state.token) throw new Error("Session changed; previous response ignored.");
+      let data = {};
+      if (raw) { try { data = JSON.parse(raw); } catch { data = {message: raw.trim().startsWith("<") ? "The service is temporarily unavailable." : raw}; } }
+      if (!response.ok) {
+        const error = new Error(data.message || data.error || `Request failed: ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      return data;
+    } catch (error) {
+      const transient = error.name === "AbortError" || error instanceof TypeError || [502,503,504].includes(error.status);
+      if (readOnly && attempt === 0 && transient && authToken === state.token) continue;
+      if (error.name === "AbortError" || error instanceof TypeError) throw new Error("Unable to connect. Previously loaded conversations are kept. Please retry.");
+      throw error;
+    } finally { clearTimeout(timeout); }
   }
-  if (!response.ok) {
-    const error = new Error(data.message || data.error || `Request failed: ${response.status}`);
-    error.status = response.status;
-    throw error;
-  }
-  return data;
 }
 
 function updateListControls(name, rows) {
@@ -2392,23 +2395,39 @@ let ticketRequestSequence = 0;
 let ticketListSequence = 0;
 let ticketHistory = [];
 let ticketCursor = "";
+let ticketListCursor = "";
+let ticketListBusy = false;
 
-$("reloadTicketsButton").addEventListener("click", loadTickets);
+$("reloadTicketsButton").addEventListener("click", () => loadTickets("", true));
+$("ticketStatusFilter").addEventListener("change", () => { ticketListSequence++; ticketListBusy = false; ticketListCursor = ""; state.supportTickets = []; renderTicketsTable([]); loadTickets("", true); });
+$("earlierTicketsButton").addEventListener("click", () => loadTickets(ticketListCursor));
 $("closeTicketView").addEventListener("click", () => {
   currentTicketId = null;
   $("ticketMessages").classList.add("hidden");
 });
 $("sendTicketReply").addEventListener("click", sendTicketReply);
 
-async function loadTickets() {
+async function loadTickets(cursor = "", reset = false) {
+  if (ticketListBusy) return;
+  ticketListBusy = true;
   const seq = ++ticketListSequence; const authToken = state.token;
+  const filter = $("ticketStatusFilter").value;
+  $("earlierTicketsButton").disabled = true;
+  setText("ticketListStatus", "Loading conversations…");
   try {
-    const data = await request("/api/v1/admin/support/tickets");
+    const data = await request(`/api/v1/admin/support/tickets?limit=50&status=${encodeURIComponent(filter)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
     if (seq !== ticketListSequence || authToken !== state.token) return;
-    state.supportTickets = data.tickets || [];
+    const hadHistory = state.supportTickets.length > 0;
+    const merged = new Map(); [...(reset ? [] : state.supportTickets), ...(data.tickets || [])].forEach(ticket => merged.set(ticket.id, ticket));
+    state.supportTickets = [...merged.values()].filter(ticket => filter === "all" || ticket.status === filter).sort((a,b) => b.updated_at.localeCompare(a.updated_at) || b.id.localeCompare(a.id));
+    if (cursor || reset || !hadHistory) ticketListCursor = data.next_cursor || "";
     renderTicketsTable(state.supportTickets);
+    $("earlierTicketsButton").classList.toggle("hidden", !ticketListCursor);
+    setText("ticketListStatus", `${state.supportTickets.length} conversations shown.`);
   } catch (error) {
-    setText("ticketStatus", error.message);
+    if (seq === ticketListSequence && authToken === state.token) setText("ticketListStatus", error.message);
+  } finally {
+    if (seq === ticketListSequence) { ticketListBusy = false; $("earlierTicketsButton").disabled = false; }
   }
 }
 
@@ -2477,7 +2496,7 @@ function renderTicketCards(tickets) {
 
 async function openTicketView(ticketId, subject, cursor = "") {
   const seq = ++ticketRequestSequence; const authToken = state.token;
-  if (currentTicketId !== ticketId) {ticketHistory = []; ticketCursor = "";}
+  if (currentTicketId !== ticketId) {ticketHistory = []; ticketCursor = ""; $("ticketMessagesList").textContent = "Loading conversation…";}
   currentTicketId = ticketId;
   setText("ticketSubject", subject);
   $("ticketMessages").classList.remove("hidden");

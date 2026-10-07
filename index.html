@@ -32,7 +32,7 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css" />
-    <script src="./app.20260927.js?v=20261006-payment-recovery" defer></script>
+    <script src="./app.20260927.js?v=20261007-support-history" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./provider-admin.js?v=20261006-simple-forms" defer></script>
   </head>
@@ -467,8 +467,12 @@
                 </div>
                 <button type="button" id="reloadTicketsButton" class="secondary-button">Reload tickets</button>
               </div>
+              <label for="ticketStatusFilter">Show support tickets</label>
+              <select id="ticketStatusFilter"><option value="all">All conversations</option><option value="open">Waiting for a reply</option><option value="responded">Answered</option><option value="closed">Closed</option></select>
+              <p id="ticketListStatus" role="status"></p>
               <div class="table-wrap desktop-only"><table id="ticketsTable"></table></div>
               <div class="mobile-card-list" id="ticketsCards"></div>
+              <button type="button" id="earlierTicketsButton" class="secondary-button hidden">Load earlier conversations</button>
               <div id="ticketMessages" class="hidden" style="margin-top:16px;padding:16px;background:#F8FBFA;border-radius:8px;border:1px solid #D9E0DD;">
                 <h3 id="ticketSubject">Ticket</h3>
                 <div id="ticketMessagesList"></div>

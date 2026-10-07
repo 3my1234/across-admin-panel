@@ -19,7 +19,7 @@
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./storage-upload.js?v=20261006-storage-errors" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./provider.js?v=20261006-simple-forms" defer></script>
+  <script src="./provider.js?v=20261007-conversation-history" defer></script>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -182,7 +182,9 @@
         </section>
         <section data-view-panel="messages" class="card hidden">
           <div class="section-heading"><div><span class="eyebrow">Customer conversations</span><h2>Messages</h2><p>Reply to buyers inside Atlantic Express. New conversations and replies require an active subscription.</p></div><button id="refreshConversations" class="secondary">Refresh</button></div>
-          <div id="conversationRows" class="stack-list"><p>No buyer conversations yet.</p></div>
+          <p id="conversationListStatus" class="message" role="status"></p>
+          <div id="conversationRows" class="stack-list"><p>Loading conversations...</p></div>
+          <button id="loadEarlierConversations" type="button" class="secondary hidden">Load earlier conversations</button>
         </section>
       </div>
     </section>
