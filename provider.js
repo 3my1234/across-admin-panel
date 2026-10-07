@@ -41,18 +41,22 @@
     const authToken = state.token;
     const headers = { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), ...(options.headers || {}) };
     if (state.token) headers.Authorization = `Bearer ${state.token}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    let response;
-    try {
-      response = await fetch(`${API}${path}`, { cache: "no-store", ...options, headers, signal: options.signal || controller.signal });
-    } catch (error) {
-      if (error.name === "AbortError") throw new Error("The server took too long to respond.");
-      throw error;
-    } finally {
-      clearTimeout(timeout);
+    let response, raw;
+    const readOnly = !options.method || options.method === "GET";
+    for (let attempt = 0; attempt < (readOnly ? 2 : 1); attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        response = await fetch(`${API}${path}`, { cache: "no-store", ...options, headers, signal: options.signal || controller.signal });
+        raw = response.status === 204 ? "" : await response.text();
+        if (readOnly && attempt === 0 && [502,503,504].includes(response.status) && authToken === state.token) continue;
+        break;
+      } catch (error) {
+        if (readOnly && attempt === 0 && !options.signal?.aborted && authToken === state.token && (error.name === "AbortError" || error instanceof TypeError)) continue;
+        if (error.name === "AbortError" || error instanceof TypeError) throw new Error("Unable to connect. Previously loaded conversations are kept. Please retry.");
+        throw error;
+      } finally { clearTimeout(timeout); }
     }
-    const raw = response.status === 204 ? "" : await response.text();
     let data = null;
     if (raw) { try { data = JSON.parse(raw); } catch (_) { data = null; } }
     if (authToken !== state.token) throw new Error("Session changed; previous response ignored.");
@@ -114,6 +118,11 @@
 
   function signOut() {
     state.booting = false;
+    conversationsGeneration++; conversationGeneration++; conversationListFlight = null; conversationListCursor = "";
+    conversationItems = []; conversationCursor = "";
+    if ($("conversationDialog").open) $("conversationDialog").close();
+    $("conversationMessages").textContent = ""; $("conversationRows").textContent = "";
+    $("loadEarlierConversations").classList.add("hidden");
     state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
     document.body.classList.add("auth-mode");
@@ -187,7 +196,7 @@
       const listingChanged = state.notifications.some(item => !known.has(item.id) && ["listing_approved", "listing_rejected", "listing_suspended"].includes(item.event_type));
       if (silent && state.unreadNotifications > previous) playProviderAlert();
       if (silent && listingChanged) await loadListings({ reset: true });
-      if (silent && state.notifications.some(item => !known.has(item.id) && item.event_type === "conversation_message")) await loadConversations();
+      if (silent && state.notifications.some(item => !known.has(item.id) && ["conversation_message", "request_created"].includes(item.event_type))) await loadConversations();
     }
     catch (error) { if (!silent) setMessage(error.message); }
   }
@@ -902,17 +911,36 @@
 
   let conversationsGeneration = 0;
   let conversationGeneration = 0;
-  async function loadConversations() {
-    const generation = ++conversationsGeneration; const authToken = state.token;
+  let conversationListCursor = "";
+  let conversationListFlight = null;
+  async function loadConversations(cursor = "") {
     if (!state.provider) return;
-    const data = await api("/providers/me/conversations");
-    if (generation !== conversationsGeneration || authToken !== state.token) return;
-    state.conversations = data.items || [];
-    renderConversations();
+    const authToken = state.token;
+    if (conversationListFlight?.token === authToken) return;
+    const generation = ++conversationsGeneration;
+    conversationListFlight = {token: authToken, generation};
+    $("loadEarlierConversations").disabled = true;
+    setMessage("Loading conversations...", false, "conversationListStatus");
+    try {
+      const data = await api(`/providers/me/conversations?limit=50${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`);
+      if (generation !== conversationsGeneration || authToken !== state.token) return;
+      const hadHistory = state.conversations.length > 0;
+      const merged = new Map(); [...state.conversations, ...(data.items || [])].forEach(item => merged.set(item.id, item));
+      state.conversations = [...merged.values()].sort((a,b) => b.last_message_at.localeCompare(a.last_message_at) || b.id.localeCompare(a.id));
+      if (cursor || !hadHistory) conversationListCursor = data.next_cursor || "";
+      $("loadEarlierConversations").classList.toggle("hidden", !conversationListCursor);
+      setMessage(`${state.conversations.length} conversations shown.`, true, "conversationListStatus");
+      renderConversations();
+    } catch (error) {
+      if (generation === conversationsGeneration && authToken === state.token) setMessage(error.message, false, "conversationListStatus");
+    } finally {
+      if (conversationListFlight?.generation === generation) { conversationListFlight = null; $("loadEarlierConversations").disabled = false; }
+    }
   }
+  $("loadEarlierConversations").addEventListener("click", () => { if (conversationListCursor) void loadConversations(conversationListCursor); });
   function renderConversations() {
     $("conversationRows").innerHTML = state.conversations.length ? state.conversations.map((item) => `<article class="list-row"><div><span class="badge">${item.unread_count ? `${item.unread_count} unread` : "Up to date"}</span><h3>${escapeHtml(item.listing_title)}</h3><p><strong>${escapeHtml(item.counterpart_name)}</strong> · ${new Date(item.last_message_at).toLocaleString()}</p><p>${escapeHtml(item.last_message || "No messages yet")}</p>${item.subscription_active ? "" : '<p class="moderation-note">Subscription inactive — replies are paused.</p>'}</div><div class="list-actions"><button type="button" data-conversation="${item.id}">Open</button></div></article>`).join("") : "<p>No buyer conversations yet.</p>";
-    document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation));
+    document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation).catch(error => setMessage(error.message, false, "conversationListStatus")));
   }
   let conversationItems = [], conversationCursor = "";
   async function openConversation(id, { cursor = "" } = {}) {
@@ -920,10 +948,11 @@
     const conversation = state.conversations.find((item) => item.id === id);
     if (!conversation) return;
     const same = state.currentConversation?.id === id;
-    if (!same) { conversationItems = []; conversationCursor = ""; }
+    if (!same) { conversationItems = []; conversationCursor = ""; $("conversationMessages").textContent = "Loading conversation..."; }
     state.currentConversation = conversation;
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
+    if (!$("conversationDialog").open) $("conversationDialog").showModal();
     const data = await api(`/providers/me/conversations/${id}/messages?limit=50${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`);
     if (generation !== conversationGeneration || authToken !== state.token || state.currentConversation?.id !== id) return;
     const thread = $("conversationMessages"), oldHeight = thread.scrollHeight, oldTop = thread.scrollTop;
