@@ -25,9 +25,9 @@
     const detail = guidance[code] || "Storage rejected the upload. Please contact Atlantic Express support with this error.";
     return new Error(`${detail} (HTTP ${status}${code ? `; ${code}` : ""}${requestID ? `; request ${requestID}` : ""})`);
   }
-  async function upload(file, signed) {
+  async function upload(file, signed, timeoutMs = 120000) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       let response;
       try {
