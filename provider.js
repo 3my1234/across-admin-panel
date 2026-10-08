@@ -119,7 +119,8 @@
   function signOut() {
     state.booting = false;
     conversationsGeneration++; conversationGeneration++; conversationListFlight = null; conversationListCursor = "";
-    conversationItems = []; conversationCursor = "";
+    conversationItems = []; conversationCursor = ""; pendingConversationReply = null;
+    $("conversationReplyForm")?.reset();
     if ($("conversationDialog").open) $("conversationDialog").close();
     $("conversationMessages").textContent = ""; $("conversationRows").textContent = "";
     $("loadEarlierConversations").classList.add("hidden");
@@ -347,15 +348,9 @@
       openSubscription();
       return false;
     }
-    if (kind === "products" && state.provider?.payout_account?.status !== "active") {
-      setMessage("Connect the seller's Flutterwave settlement account before creating products.");
-      switchView("overview");
-      $("sellerSettlement").scrollIntoView({ behavior: "smooth", block: "start" });
-      return false;
-    }
     return true;
   }
-  async function subscribe(planId) {
+  async function subscribe(planId, paymentMethod = "card") {
     if (state.provider?.subscription?.launch_access_active) return setMessage("Provider access is free during launch. No subscription payment is needed.", true);
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
     document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
@@ -371,7 +366,7 @@
       }
       const returnURL = new URL(location.href);
       returnURL.searchParams.set("subscription_return", "1");
-      const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, redirect_url: returnURL.toString() }) });
+      const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, payment_method:paymentMethod, redirect_url: returnURL.toString() }) });
       if (!data.checkout_link || !data.tx_ref) throw new Error("Checkout link unavailable");
       savePendingSubscription({ tx_ref: data.tx_ref, transaction_id: "", plan_id: planId, created_at: new Date().toISOString() });
       location.href = data.checkout_link;
@@ -385,9 +380,9 @@
     const approved = state.provider?.verification_status === "approved";
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
-    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free launch access is active.</strong> Approved providers can create and submit products and services without paying a subscription." : active ? `<strong>Subscription active.</strong> You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
-    $("plans").innerHTML = freeLaunch ? "" : state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Subscribe securely"}</button></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
-    document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe));
+    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free launch access is active.</strong> Approved providers can create and submit products and services without paying a subscription." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Paid for one month by transfer. Pay again when it expires." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
+    $("plans").innerHTML = freeLaunch ? "" : state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" data-method="card" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Pay by card (auto-renews)"}</button><button data-subscribe="${plan.id}" data-method="banktransfer" ${!state.provider || active || !approved ? "disabled" : ""}>${pending ? "Check payment status" : "Pay by transfer (one month)"}</button><p>Card payments renew automatically. Bank transfer buys one month; pay again when it expires. Transfer only the exact amount to the account shown by Flutterwave. Your plan activates after payment is verified.</p></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
+    document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method));
     renderSubscriptionGates();
   }
   function renderSubscriptionGates() {
@@ -588,7 +583,7 @@
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
-      const payload = { title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), currency_code: values.currency_code, compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), delivery_areas: values.delivery_areas, return_policy: values.return_policy };
+      const payload = { payment_mode:values.payment_mode, title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), currency_code: values.currency_code, compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), delivery_areas: values.delivery_areas, return_policy: values.return_policy };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { showFormError(error.message); } finally { button.disabled = false; }
@@ -611,6 +606,7 @@
     if (!item) return;
     const form = $("productForm");
     state.editingProductID = id;
+    form.elements.payment_mode.value = item.payment_mode || "flutterwave";
     form.elements.fulfillment_mode.value = item.fulfillment_mode || "merchant_local";
     syncProductFulfillment(item.stock_state);
     ["title", "sku", "description", "local_selling_price", "currency_code", "compare_at_price", "inventory_count", "flash_sale_price", "inventory_country_code", "inventory_city", "inventory_location", "inventory_latitude", "inventory_longitude", "handling_time_hours", "delivery_min_days", "delivery_max_days", "return_policy"].forEach((name) => {
@@ -948,7 +944,7 @@
     const conversation = state.conversations.find((item) => item.id === id);
     if (!conversation) return;
     const same = state.currentConversation?.id === id;
-    if (!same) { conversationItems = []; conversationCursor = ""; $("conversationMessages").textContent = "Loading conversation..."; }
+    if (!same) { conversationItems = []; conversationCursor = ""; pendingConversationReply = null; $("conversationReplyForm")?.reset(); $("conversationMessages").textContent = "Loading conversation..."; }
     state.currentConversation = conversation;
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
@@ -960,34 +956,49 @@
     conversationItems = Array.from(new Map([...(cursor ? data.items || [] : conversationItems), ...(cursor ? conversationItems : data.items || [])].map(item => [item.id, item])).values()).sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     if (cursor || !same) conversationCursor = data.next_cursor || "";
     $("loadEarlierConversation").classList.toggle("hidden", !conversationCursor);
-    $("conversationMessages").innerHTML = conversationItems.map((item) => `<article class="alert-item ${item.sender_type === "provider" ? "unread" : ""}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p><small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
+    $("conversationMessages").innerHTML = conversationItems.map((item) => `<article class="chat-bubble ${item.sender_type === "provider" ? "chat-mine" : "chat-theirs"}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p>${(item.media_urls || []).map(url=>`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img class="chat-photo" src="${escapeHtml(url)}" alt="Chat attachment" /></a>`).join("")}<small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
     thread.scrollTop = cursor ? oldTop + thread.scrollHeight - oldHeight : atBottom ? thread.scrollHeight : oldTop;
     const reply = $("conversationReplyForm");
-    reply.querySelector("textarea").disabled = !conversation.subscription_active;
-    reply.querySelector("button").disabled = !conversation.subscription_active;
+    reply.querySelector("textarea").disabled = conversationReplyBusy || !conversation.subscription_active;
+    $("conversationImages").disabled = conversationReplyBusy || !conversation.subscription_active;
+    reply.querySelector("button").disabled = conversationReplyBusy || !conversation.subscription_active;
     if (!conversation.subscription_active) setMessage("Renew your subscription to reply.", false, "conversationMessage");
     if (!$("conversationDialog").open) $("conversationDialog").showModal();
     conversation.unread_count = 0;
     renderConversations();
   }
   $("loadEarlierConversation").addEventListener("click", () => { if (state.currentConversation && conversationCursor) void openConversation(state.currentConversation.id, {cursor: conversationCursor}).catch(error => setMessage(error.message, false, "conversationMessage")); });
+  let conversationReplyBusy = false, pendingConversationReply = null;
   async function sendConversationReply(event) {
     event.preventDefault();
-    if (!state.currentConversation) return;
-    const form = event.currentTarget;
-    const button = form.querySelector("button");
-    const message = form.elements.message.value.trim();
-    if (!message) return;
-    button.disabled = true;
+    if (!state.currentConversation || conversationReplyBusy) return;
+    const form = event.currentTarget, button = form.querySelector("button");
+    const conversationID = state.currentConversation.id, actor = state.token;
+    const message = form.elements.message.value.trim(), files = Array.from($("conversationImages").files);
+    if (!message && !files.length) return;
+    if (files.length > 4 || files.some(file => file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) return setMessage("Choose up to four JPG, PNG or WebP photos, no larger than 5 MB each.", false, "conversationMessage");
+    const fingerprint = JSON.stringify([actor,conversationID,message,files.map(file => [file.name,file.size,file.lastModified])]);
+    if (pendingConversationReply?.fingerprint !== fingerprint) pendingConversationReply = {fingerprint,id:crypto.randomUUID(),keys:[]};
+    const pendingReply = pendingConversationReply;
+    conversationReplyBusy = true; button.disabled = true; form.elements.message.disabled = true; $("conversationImages").disabled = true;
     try {
-      await api(`/providers/me/conversations/${state.currentConversation.id}/messages`, { method: "POST", body: JSON.stringify({ message }) });
-      form.reset();
-      await Promise.all([loadConversations(), openConversation(state.currentConversation.id)]);
-    } catch (error) {
-      setMessage(error.message, false, "conversationMessage");
-    } finally {
-      button.disabled = !state.currentConversation?.subscription_active;
-    }
+      for (let index = pendingReply.keys.length; index < files.length; index++) {
+        if (actor !== state.token || conversationID !== state.currentConversation?.id) return;
+        const file = files[index]; setMessage(`Uploading photo ${index+1} of ${files.length}...`, false, "conversationMessage");
+        const signed = await api("/marketplace/chat-images/presign", {method:"POST",body:JSON.stringify({filename:file.name,mime_type:file.type,size:file.size})});
+        await PortalStorageUpload.upload(file,signed,45000);
+        pendingReply.keys.push(signed.key);
+      }
+      if (actor !== state.token || conversationID !== state.currentConversation?.id) return;
+      const saved = await api(`/providers/me/conversations/${conversationID}/messages`, {method:"POST",body:JSON.stringify({message,media_keys:pendingReply.keys,client_message_id:pendingReply.id})});
+      if (actor !== state.token || conversationID !== state.currentConversation?.id) return;
+      if (pendingConversationReply === pendingReply) pendingConversationReply = null; form.reset();
+      conversationItems = Array.from(new Map([...conversationItems,saved].map(item=>[item.id,item])).values());
+      setMessage("Message sent.",true,"conversationMessage");
+      try {await Promise.all([loadConversations(),openConversation(conversationID)]);}
+      catch {setMessage("Message sent. Refresh the conversation to load the latest replies.",true,"conversationMessage");}
+    } catch(error) {if(actor===state.token && conversationID===state.currentConversation?.id)setMessage(error.message,false,"conversationMessage");}
+    finally {conversationReplyBusy=false;button.disabled=!state.currentConversation?.subscription_active;form.elements.message.disabled=!state.currentConversation?.subscription_active;$("conversationImages").disabled=!state.currentConversation?.subscription_active;}
   }
 
   function renderProviderTools(provider) {
@@ -1018,7 +1029,7 @@
     const freeLaunch = p?.subscription?.launch_access_active === true;
     const subscriptionLabel = freeLaunch ? "Free launch" : subscriptionActive ? "Active" : subscription === "active" ? "Expired" : subscription;
     $("businessName").textContent = p?.business_name || "Provider setup"; $("verificationState").textContent = human(verification); $("metricVerification").textContent = human(verification); $("metricSubscription").textContent = human(subscriptionLabel); $("metricListings").textContent = state.listings.length + state.products.length; $("metricRequests").textContent = state.requests.filter((item) => ["pending", "accepted"].includes(item.status)).length; $("providerStatus").textContent = p ? `${p.business_name} - ${human(verification)}` : "Complete provider onboarding";
-    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : p.can_sell_products && p.payout_account?.status !== "active" ? "<strong>Settlement setup required.</strong> Connect the product seller's Flutterwave settlement account before products can appear to buyers." : freeLaunch ? "<strong>Ready for buyers.</strong> Free launch access is active for approved providers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
+    $("accountGuidance").innerHTML = !p ? "Create your provider profile to begin." : verification !== "approved" ? `<strong>Verification ${escapeHtml(verification)}.</strong> Listings remain private until an administrator approves your business and each listing.${p.verification_notes ? `<br>${escapeHtml(p.verification_notes)}` : ""}` : !subscriptionActive ? "<strong>Business verified.</strong> Choose an active monthly plan so approved listings and contact details can appear to buyers." : p.can_sell_products && p.payout_account?.status !== "active" ? "<strong>Settlement setup required.</strong> Connect your Flutterwave settlement account to accept payments in the app. You can publish contact-only products without this account." : freeLaunch ? "<strong>Ready for buyers.</strong> Free launch access is active for approved providers." : `<strong>Ready for buyers.</strong> Your verification and subscription are active${p.subscription.current_period_end ? ` until ${new Date(p.subscription.current_period_end).toLocaleDateString()}` : ""}.`;
     const settlement = $("sellerSettlement"); const payout = p?.payout_account || {};
     settlement.classList.toggle("hidden", !p?.can_sell_products);
     if (p?.can_sell_products) {

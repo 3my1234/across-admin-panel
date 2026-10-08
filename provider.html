@@ -14,12 +14,12 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20261006-simple-forms" />
+  <link rel="stylesheet" href="./provider.css?v=20261008-product-chat" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
-  <script src="./storage-upload.js?v=20261006-storage-errors" defer></script>
+  <script src="./storage-upload.js?v=20261008-chat" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./provider.js?v=20261007-conversation-history" defer></script>
+  <script src="./provider.js?v=20261008-product-payments-chat" defer></script>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -78,6 +78,8 @@
           <div class="section-heading"><div><span class="eyebrow">Merchant catalogue</span><h2>Physical products</h2><p>Create a private draft, check it, then submit it for Atlantic Express review.</p></div><button id="toggleProductForm" type="button" aria-expanded="false">Create product</button></div>
           <div id="productSubscriptionGate" class="subscription-gate hidden"></div>
           <form id="productForm" class="form-grid hidden">
+            <label class="wide">How can customers buy this product?<select name="payment_mode"><option value="flutterwave">Pay through Flutterwave only</option><option value="contact">Message me to arrange payment</option><option value="both">Let customers choose either option</option></select><small>Message me opens a private chat in Atlantic Express. Agree payment and delivery with the customer there.</small></label>
+            <p class="wide form-note">Flutterwave confirms the customer's payment first, then sends your share to your registered bank account. Local payments usually settle the next business day; international payments usually take five business days. Weekends, holidays, verification checks or other delays may make this longer. Check Seller funds on your orders before relying on a payout. This is not money held until delivery.</p>
             <label>Product name<input name="title" required /></label><label>Stock code (optional)<input name="sku" placeholder="Leave empty if you do not use stock codes" /><small>We create a code for you if you leave this empty.</small></label>
             <label>Primary selling price<input name="local_selling_price" type="number" min="0.01" step="0.01" required /></label><label>Primary price currency<input name="currency_code" maxlength="3" value="NGN" required /><small>Three-letter code, such as NGN, USD, GBP, or EUR.</small></label><label>Crossed-out primary price<input name="compare_at_price" type="number" min="0" step="0.01" /></label>
             <label>Inventory<input name="inventory_count" type="number" min="0" value="1" required /></label><label>Category<input name="category" placeholder="e.g. Shoes, phones or clothing" maxlength="120" required /><small>Type the category that best describes your product.</small></label>
@@ -114,7 +116,7 @@
           <div id="accountGuidance" class="notice"></div>
           <section id="sellerSettlement" class="verification-box hidden">
             <div class="section-heading"><div><span class="eyebrow">Product seller settlement</span><h3>Connect your Flutterwave settlement account</h3></div><span id="payoutStatus" class="badge">Not configured</span></div>
-            <p>Required for product sellers. Customers pay securely through Atlantic Express; Flutterwave sends the seller portion to this account and the 1% Atlantic Express service fee to the marketplace account.</p>
+            <p>Required when you offer Flutterwave checkout. Contact-only products do not need this account. Customers pay securely through Atlantic Express; Flutterwave sends the seller portion to this account and the 1% Atlantic Express service fee to the marketplace account.</p>
             <div id="payoutSummary" class="notice hidden"></div>
             <form id="payoutForm" class="form-grid compact">
               <label>Bank country<input id="payoutCountry" name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" required /><small>Two-letter code, such as NG, GH, KE, GB, or US.</small></label>
@@ -205,7 +207,7 @@
       <button type="button" id="loadEarlierConversation" class="secondary hidden">Load earlier messages</button>
       <div id="conversationMessages" class="alert-rows"></div>
       <form id="conversationReplyForm" class="form-grid compact">
-        <label>Reply<textarea name="message" rows="3" maxlength="2000" required></textarea></label>
+        <label>Reply<textarea name="message" rows="3" maxlength="2000"></textarea></label><label>Attach photos<input id="conversationImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Up to four images, no larger than 5 MB each.</small></label>
         <button type="submit">Send reply</button>
         <p id="conversationMessage" class="message"></p>
       </form>

@@ -24,3 +24,13 @@ Preserve existing CORS rules needed by the admin/mobile upload paths. CORS does 
 Sources: [AWS presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html), [AWS CORS troubleshooting](https://docs.aws.amazon.com/AmazonS3/latest/userguide/cors-troubleshooting.html).
 
 Validation: `node scripts/test-storage-upload.cjs`; real DOMParser and mocked upload outcomes in Chrome. Successful production upload remains dependent on the deployed AWS credentials and bucket configuration.
+
+
+Buyer and seller chat photos use `user-uploads/private-chat/<user-id>/*`.
+The backend signing key needs `s3:PutObject` and `s3:GetObject` (including HEAD)
+on that prefix. Preserve public access blocking and existing CORS for the
+provider origin. Chat photos are excluded from the public image proxy and
+receive 15-minute signed view URLs only after conversation membership is
+checked. Each message supports four JPG, PNG or WebP photos up to 5 MB each.
+Do not add public bucket access for this prefix. Validate a real buyer upload,
+provider reply with a photo, and history reload after deployment.
