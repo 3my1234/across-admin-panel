@@ -244,7 +244,7 @@
     finally { button.disabled = false; }
   }
 
-  async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; renderPlans(); }
+  async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; state.transferMonths = (data.transfer_months || [1]).filter(months=>[1,3,6,12].includes(months)); renderPlans(); }
   async function loadBuyerMarkets() {
     try {
       const data = await api("/buyer-markets");
@@ -350,7 +350,7 @@
     }
     return true;
   }
-  async function subscribe(planId, paymentMethod = "card") {
+  async function subscribe(planId, paymentMethod = "card", durationMonths = 1) {
     if (state.provider?.subscription?.launch_access_active) return setMessage("Provider access is free during launch. No subscription payment is needed.", true);
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
     document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
@@ -366,7 +366,7 @@
       }
       const returnURL = new URL(location.href);
       returnURL.searchParams.set("subscription_return", "1");
-      const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, payment_method:paymentMethod, redirect_url: returnURL.toString() }) });
+      const data = await api("/providers/me/subscription-checkout", { method: "POST", body: JSON.stringify({ plan_id: planId, payment_method:paymentMethod, duration_months:durationMonths, redirect_url: returnURL.toString() }) });
       if (!data.checkout_link || !data.tx_ref) throw new Error("Checkout link unavailable");
       savePendingSubscription({ tx_ref: data.tx_ref, transaction_id: "", plan_id: planId, created_at: new Date().toISOString() });
       location.href = data.checkout_link;
@@ -380,9 +380,9 @@
     const approved = state.provider?.verification_status === "approved";
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
-    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free launch access is active.</strong> Approved providers can create and submit products and services without paying a subscription." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Paid for one month by transfer. Pay again when it expires." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
-    $("plans").innerHTML = freeLaunch ? "" : state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" data-method="card" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Pay by card (auto-renews)"}</button><button data-subscribe="${plan.id}" data-method="banktransfer" ${!state.provider || active || !approved ? "disabled" : ""}>${pending ? "Check payment status" : "Pay by transfer (one month)"}</button><p>Card payments renew automatically. Bank transfer buys one month; pay again when it expires. Transfer only the exact amount to the account shown by Flutterwave. Your plan activates after payment is verified.</p></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
-    document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method));
+    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free launch access is active.</strong> Approved providers can create and submit products and services without paying a subscription." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid by transfer. Pay again when your paid period expires." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Subscription required.</strong> Choose a monthly plan below. Product and service creation unlocks after Flutterwave confirms payment." : "Your business must be approved before you can purchase a provider plan.";
+    $("plans").innerHTML = freeLaunch ? "" : state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><strong>${money(plan.amount_ngn)}/month</strong><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" data-method="card" ${!state.provider || active || !approved ? "disabled" : ""}>${active ? "Current plan active" : pending ? "Check payment status" : "Pay by card (auto-renews)"}</button><label>How long do you want to pay for by transfer?<select data-transfer-months="${plan.id}" ${pending || active ? "disabled" : ""}>${(state.transferMonths || [1]).map(months=>`<option value="${months}">${months} month${months===1 ? "" : "s"} - ${money(Number(plan.amount_ngn)*months)} total</option>`).join("")}</select></label><button data-subscribe="${plan.id}" data-method="banktransfer" ${!state.provider || active || !approved ? "disabled" : ""}>${pending ? "Check payment status" : "Pay by transfer"}</button><p>Card payments renew automatically. Bank transfer pays for the period you choose and does not renew automatically. The total is the monthly price multiplied by your chosen months, before any Flutterwave fee. Transfer only the exact amount to the account shown by Flutterwave. Your plan activates after payment is verified.</p></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>';
+    document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method,button.dataset.method==="banktransfer" ? Number(document.querySelector(`[data-transfer-months="${button.dataset.subscribe}"]`)?.value || 1) : 1));
     renderSubscriptionGates();
   }
   function renderSubscriptionGates() {
