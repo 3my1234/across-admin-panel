@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="./theme.js?v=20261008-appearance"></script>
   <title>Atlantic Express Provider Portal</title>
   <script>
     try {
@@ -14,17 +15,18 @@
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="./provider.css?v=20261008-product-chat" />
+  <link rel="stylesheet" href="./provider.css?v=20261008-appearance" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./storage-upload.js?v=20261008-chat" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./provider.js?v=20261008-product-payments-chat" defer></script>
+  <script src="./provider.js?v=20261009-prepaid-periods" defer></script>
+  <link rel="stylesheet" href="./theme.css?v=20261008-appearance" />
 </head>
 <body class="auth-mode">
   <header class="provider-header">
     <div><span class="eyebrow">Atlantic Express</span><h1>Provider Portal</h1></div>
-    <div class="header-actions"><span id="providerStatus">Secure provider access</span><button id="providerAlerts" class="secondary hidden" type="button">Alerts <span id="providerAlertCount" class="alert-count hidden">0</span></button><button id="signOut" class="secondary hidden">Sign out</button></div>
+    <div class="header-actions"><label class="appearance-control">Theme <select data-theme-preference aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><span id="providerStatus">Secure provider access</span><button id="providerAlerts" class="secondary hidden" type="button">Alerts <span id="providerAlertCount" class="alert-count hidden">0</span></button><button id="signOut" class="secondary hidden">Sign out</button></div>
   </header>
   <main>
     <section id="authPanel" class="card auth-card">

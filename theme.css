@@ -1,0 +1,18 @@
+/* Semantic surfaces: the light theme keeps each original fallback. */
+:root[data-theme="dark"] {
+  --bg:#111815; --panel:#1c2522; --white:#1c2522; --ink:#f1f4f3;
+  --muted:#b5c0bc; --soft:#29342f; --line:#394540; --border:#394540;
+  --danger:#ff9299;
+  --theme-surface:#1c2522; --theme-background:#111815; --theme-soft:#29342f;
+  --theme-border:#394540; --theme-red-soft:#3a2428; --theme-green-soft:#20392f;
+  --theme-amber-soft:#3b3021; --theme-amber:#ffd18a; --theme-green:#75d6af;
+  --theme-red:#ff9299; --theme-text:#f1f4f3; --theme-muted:#b5c0bc;
+}
+.appearance-control {display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);}
+.appearance-control select {min-height:40px;max-width:120px;margin:0;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel,var(--white));color:var(--ink);font:inherit;}
+:root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select {color:var(--ink);background-color:var(--panel,var(--white));border-color:var(--line);}
+:root[data-theme="dark"] input::placeholder, :root[data-theme="dark"] textarea::placeholder {color:var(--muted);opacity:1;}
+:root[data-theme="dark"] body.auth-mode {background-image:linear-gradient(rgba(17,24,21,.84),rgba(17,24,21,.92)),url("./provider-background.png");}
+:root[data-theme="dark"].admin-session-restoring body::before {background:#111815;color:#b5c0bc;}
+:root[data-theme="dark"] a {color:#ff9299;}
+@media(max-width:640px){.header-actions{flex-wrap:wrap;} .appearance-control{font-size:11px;}}

@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script src="./theme.js?v=20261008-appearance"></script>
     <title>Atlantic Express Admin</title>
     <link rel="preconnect" href="https://api.atlxpres.com" crossorigin />
     <link rel="dns-prefetch" href="//api.atlxpres.com" />
@@ -31,14 +32,16 @@
         document.documentElement.classList.add("admin-session-restoring");
       }
     </script>
-    <link rel="stylesheet" href="./styles.20260927.css" />
+    <link rel="stylesheet" href="./styles.20260927.css?v=20261008-appearance" />
     <script src="./app.20260927.js?v=20261007-support-history" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./provider-admin.js?v=20261006-simple-forms" defer></script>
+  <link rel="stylesheet" href="./theme.css?v=20261008-appearance" />
   </head>
   <body>
     <main class="shell">
       <section class="panel auth-panel" id="authPanel">
+        <label class="appearance-control">Theme <select data-theme-preference aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <div>
           <p class="eyebrow">Atlantic Express</p>
           <h1>Admin Control</h1>
@@ -103,6 +106,7 @@
                   <div id="adminNotificationList" class="notification-list"></div>
                 </section>
               </div>
+              <label class="appearance-control">Theme <select data-theme-preference aria-label="Appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
               <button id="refreshButton">Refresh</button>
               <button id="logoutButton" class="danger-button">Sign out</button>
             </div>
