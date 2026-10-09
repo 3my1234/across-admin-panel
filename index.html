@@ -35,9 +35,12 @@
     <link rel="stylesheet" href="./styles.20260927.css?v=20261008-appearance" />
     <script src="./app.20260927.js?v=20261007-support-history" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
+    <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
+    <script src="./xp-withdrawals.js?v=20261009-wallet" defer></script>
     <script src="./provider-admin.js?v=20261006-simple-forms" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261008-appearance" />
-  </head>
+    <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
+</head>
   <body>
     <main class="shell">
       <section class="panel auth-panel" id="authPanel">
@@ -78,6 +81,8 @@
             <button class="nav-item" data-tab="merchant-fulfillments">Merchant Fulfilment</button>
             <button class="nav-item" data-tab="orders">Orders</button>
             <button class="nav-item" data-tab="transactions">Transactions</button>
+            <button class="nav-item" data-tab="waitlist">Launch waitlist</button>
+            <button class="nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
             <button class="nav-item" data-tab="admins">Admins</button>
             <button class="nav-item" data-tab="support">Support</button>
             <button class="nav-item" data-tab="analytics">Analytics</button>
@@ -392,7 +397,11 @@
             </section>
           </section>
 
-          <section class="tab-panel hidden" data-panel="transactions">
+          <section class="tab-panel hidden" data-panel="waitlist"><div class="panel"><h2>Launch waitlist</h2><p>People who opted in for launch emails. Keep this contact list private and use it for the purpose they agreed to.</p><div class="form-actions"><button id="waitlistRefresh">Refresh</button><button id="waitlistExport">Export CSV</button></div><p id="waitlistStatus" role="status"></p><div class="table-wrap"><table><thead><tr><th>Email</th><th>Name</th><th>Phone</th><th>Interest</th><th>Source</th><th>Joined</th></tr></thead><tbody id="waitlistRows"></tbody></table></div></div></section>
+ <section class="tab-panel hidden" data-panel="xp-withdrawals">
+ <div class="panel"><h2>XP withdrawals</h2><p>1 XP = NGN 1. Minimum: 1,000 XP. Check the customer's identity, bank details and reward history before paying. Mark processing first, make the bank transfer, then record its unique reference as paid. Rejection returns reserved XP. No transfer is sent by this page.</p><button id="xpWithdrawalRefresh">Refresh requests</button><p id="xpWithdrawalStatus" role="status"></p><div id="xpWithdrawalList" style="display:grid;gap:16px"></div></div>
+ </section>
+ <section class="tab-panel hidden" data-panel="transactions">
             <section class="panel">
               <h2>Transactions</h2>
               <form id="paymentReconciliationForm" class="reconciliation-panel hidden">
@@ -500,6 +509,8 @@
             <button class="mobile-nav-item" data-tab="merchant-fulfillments">Fulfilment</button>
             <button class="mobile-nav-item" data-tab="orders">Orders</button>
             <button class="mobile-nav-item" data-tab="transactions">Transactions</button>
+            <button class="mobile-nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
+            <button class="mobile-nav-item" data-tab="waitlist">Waitlist</button>
             <button class="mobile-nav-item" data-tab="admins">Admins</button>
           </div>
         </nav>
