@@ -26,7 +26,21 @@
   };
   const debounce = (fn, wait = 300) => { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; };
   const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-  const setMessage = (text, ok = false, target = "portalMessage") => { const node = $(target); if (!node) return; node.textContent = text || ""; node.className = `message${target === "portalMessage" ? " portal-message" : ""}${ok ? " success" : ""}`; };
+  const messageTimers = new Map();
+  const setMessage = (text, ok = false, target = "portalMessage") => {
+    const node = $(target); if (!node) return;
+    clearTimeout(messageTimers.get(target)); messageTimers.delete(target);
+    node.replaceChildren();
+    node.className = `message${target === "portalMessage" ? " portal-message" : ""}${ok ? " success" : ""}`;
+    if (!text) return;
+    const copy = document.createElement("span"); copy.textContent = text;
+    const close = document.createElement("button"); close.type = "button";
+    close.className = "message-dismiss"; close.textContent = "Close";
+    close.setAttribute("aria-label", "Dismiss message");
+    close.addEventListener("click", () => setMessage("", false, target));
+    node.append(copy, close);
+    if (ok) messageTimers.set(target, setTimeout(() => setMessage("", false, target), 8000));
+  };
   function readPendingSubscription() {
     try {
       const value = JSON.parse(localStorage.getItem(PENDING_SUBSCRIPTION_KEY) || "null");
