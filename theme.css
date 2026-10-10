@@ -16,3 +16,5 @@
 :root[data-theme="dark"].admin-session-restoring body::before {background:#111815;color:#b5c0bc;}
 :root[data-theme="dark"] a {color:#ff9299;}
 @media(max-width:640px){.header-actions{flex-wrap:wrap;} .appearance-control{font-size:11px;}}
+input,textarea,select {scroll-margin-block:80px;}
+dialog {max-height:calc(var(--visible-viewport-height, 100dvh) - 24px);overflow-y:auto;}

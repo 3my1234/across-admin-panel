@@ -22,3 +22,27 @@
   });
   window.addEventListener("storage",event=>{if(event.key===key){preference=["system","light","dark"].includes(event.newValue) ? event.newValue : "system";apply();}});
 })();
+
+// Shared by admin and provider pages, including forms inside dialogs.
+(() => {
+  const viewport = window.visualViewport;
+  let revealTimer;
+  function revealFocusedField() {
+    const field = document.activeElement;
+    if (!field?.matches("input:not([type=checkbox]):not([type=radio]),textarea,select")) return;
+    const bounds = field.getBoundingClientRect();
+    const top = viewport?.offsetTop || 0;
+    const bottom = top + (viewport?.height || window.innerHeight);
+    if (bounds.bottom > bottom - 64 || bounds.top < top + 12) field.scrollIntoView({block:"center",behavior:"auto"});
+  }
+  function updateViewport() {
+    document.documentElement.style.setProperty("--visible-viewport-height", `${viewport?.height || window.innerHeight}px`);
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(revealFocusedField, 80);
+  }
+  viewport?.addEventListener("resize", updateViewport);
+  viewport?.addEventListener("scroll", updateViewport);
+  window.addEventListener("resize", updateViewport);
+  document.addEventListener("focusin", () => { clearTimeout(revealTimer); revealTimer=setTimeout(revealFocusedField,350); });
+  document.addEventListener("DOMContentLoaded", updateViewport);
+})();

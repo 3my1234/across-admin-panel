@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <script src="./theme.js?v=20261008-appearance"></script>
+    <script src="./theme.js?v=20261010-keyboard"></script>
     <title>Atlantic Express Admin</title>
     <link rel="preconnect" href="https://api.atlxpres.com" crossorigin />
     <link rel="dns-prefetch" href="//api.atlxpres.com" />
@@ -32,13 +32,13 @@
         document.documentElement.classList.add("admin-session-restoring");
       }
     </script>
-    <link rel="stylesheet" href="./styles.20260927.css?v=20261008-appearance" />
+    <link rel="stylesheet" href="./styles.20260927.css?v=20261010-keyboard" />
     <script src="./app.20260927.js?v=20261010-admin-auth" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261009-wallet" defer></script>
-    <script src="./provider-admin.js?v=20261010-plan-access" defer></script>
-  <link rel="stylesheet" href="./theme.css?v=20261008-appearance" />
+    <script src="./provider-admin.js?v=20261010-plan-link" defer></script>
+  <link rel="stylesheet" href="./theme.css?v=20261010-keyboard" />
     <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
 </head>
   <body>
@@ -365,7 +365,7 @@
                 <button type="submit">Save provider access</button>
               </form>
               <p id="providerAccessStatus" class="muted"></p>
-              <p class="muted">Choose Free access to let approved providers use the platform without paying. Choose Paid subscription to show the active plans and require payment. Leave the start date empty to begin immediately, or choose a future date. Transfer payments are prepaid and do not renew automatically. Each card-renewal tier needs its own matching Flutterwave plan: use Save price on that tier to create or link it, even when the price stays the same.</p>
+              <p class="muted">Choose Free access to let approved providers use the platform without paying. Choose Paid subscription to show the active plans and require payment. Leave the start date empty to begin immediately, or choose a future date. Transfer payments are prepaid and do not renew automatically. Each card-renewal tier needs its own matching Flutterwave plan. If you already created it in Flutterwave, enter its ID in that tier's row below and use Save price / link plan. Leave the ID empty only if you want us to reuse or create a plan. You do not need to fill in the new-plan form again for an existing tier.</p>
               <p class="muted">Free access stops new subscription checkout in the app. Existing Flutterwave recurring charges continue until separately cancelled. When paid access starts, providers without an active paid subscription lose public listing visibility and messaging until they subscribe.</p>
               <form id="providerPlanForm" class="form-grid">
                 <label>Code <input name="code" placeholder="starter" required /></label>
