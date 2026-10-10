@@ -67,7 +67,13 @@
         break;
       } catch (error) {
         if (readOnly && attempt === 0 && !options.signal?.aborted && authToken === state.token && (error.name === "AbortError" || error instanceof TypeError)) continue;
-        if (error.name === "AbortError" || error instanceof TypeError) throw new Error("Unable to connect. Previously loaded conversations are kept. Please retry.");
+        if (error.name === "AbortError" || error instanceof TypeError) {
+          const message = path === "/providers/me/payout-account"
+            ? "We could not confirm whether your bank account was saved. Refresh this page to check before trying again. If it is still missing, contact support@atlxpres.com."
+            : readOnly ? "Unable to connect. Your previously loaded information is kept. Please retry."
+            : "We could not confirm the result. Check whether your changes were saved before trying again.";
+          throw new Error(message);
+        }
         throw error;
       } finally { clearTimeout(timeout); }
     }
@@ -124,10 +130,14 @@
   }
 
   async function resendVerification() {
+    const button = $("resendVerification");
+    if (button.disabled) return;
     const email = document.querySelector("#loginForm [name=email]").value.trim();
     if (!email) return setMessage("Enter your email first.", false, "loginMessage");
+    button.disabled = true;
     try { const data = await api("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }); setMessage(data.message || "Verification email queued.", true, "loginMessage"); }
     catch (error) { setMessage(error.message, false, "loginMessage"); }
+    finally { button.disabled = false; }
   }
 
   function signOut() {
@@ -246,13 +256,20 @@
 
   async function configurePayoutAccount(event) {
     event.preventDefault();
+    const form = event.currentTarget; const button = form.querySelector("button[type=submit]");
+    if (button.disabled) return;
     if (!confirm("Confirm this is the provider's settlement account. Replacing it later requires support review.")) return;
-    const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
+    button.disabled = true;
     const payload = Object.fromEntries(new FormData(form)); payload.country_code = String(payload.country_code || "").trim().toUpperCase();
     try {
-      await api("/providers/me/payout-account", { method: "POST", body: JSON.stringify(payload) });
-      state.provider = await api("/providers/me");
+      const saved = await api("/providers/me/payout-account", { method: "POST", body: JSON.stringify(payload) });
+      state.provider = { ...state.provider, payout_account: saved };
       form.reset(); renderOverview();
+      try { state.provider = await api("/providers/me"); renderOverview(); }
+      catch (_) {
+        setMessage("Your bank account was connected successfully. Other account details could not refresh; refresh the page when your connection returns.", true, "payoutMessage");
+        return;
+      }
       setMessage("Flutterwave settlement account connected.", true, "payoutMessage");
     } catch (error) { setMessage(error.message, false, "payoutMessage"); }
     finally { button.disabled = false; }
