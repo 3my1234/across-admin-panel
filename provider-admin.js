@@ -338,7 +338,7 @@
       <td>${Number(plan.listing_limit || 0).toLocaleString()}</td>
       <td>${escapeHtml(String(plan.flutterwave_plan_id || "Not configured"))}</td>
       <td><span class="status-pill ${plan.is_active ? "active" : "inactive"}">${plan.is_active ? "ACTIVE" : "REMOVED"}</span></td>
-      <td>${plan.is_active ? `<label>New monthly price NGN <input type="number" min="1" step="1" value="${Number(plan.amount_ngn || 0)}" data-new-price="${plan.id}" style="max-width:7rem" /></label><button type="button" data-change-price="${plan.id}">Save price</button><button type="button" class="danger-button" data-deactivate-plan="${plan.id}">Remove from sale</button>` : "-"}</td>
+      <td>${plan.is_active ? `<label>New monthly price NGN <input type="number" min="1" step="1" value="${Number(plan.amount_ngn || 0)}" data-new-price="${plan.id}" style="max-width:7rem" /></label><label>Existing Flutterwave plan ID (optional)<input type="number" min="1" step="1" data-link-plan="${plan.id}" placeholder="Plan ID" style="max-width:8rem" /></label><button type="button" data-change-price="${plan.id}">Save price / link plan</button><button type="button" class="danger-button" data-deactivate-plan="${plan.id}">Remove from sale</button>` : "-"}</td>
     </tr>`).join("") || `<tr><td colspan="6">No subscription plans configured.</td></tr>`}</tbody>`;
     table.querySelectorAll("[data-deactivate-plan]").forEach((button) => button.addEventListener("click", () => deactivateProviderPlan(button.dataset.deactivatePlan)));
     table.querySelectorAll("[data-change-price]").forEach((button) => button.addEventListener("click", () => changeProviderPlanPrice(button.dataset.changePrice)));
@@ -347,13 +347,16 @@
   async function changeProviderPlanPrice(planID) {
     const input = document.querySelector(`[data-new-price="${planID}"]`);
     const amount = Number(input?.value);
+    const planIDText = document.querySelector(`[data-link-plan="${planID}"]`)?.value.trim() || "";
+    const gatewayID = planIDText ? Number(planIDText) : null;
+    if (gatewayID !== null && (!Number.isSafeInteger(gatewayID) || gatewayID < 1)) return setText("providerPlansStatus", "Enter a valid positive Flutterwave plan ID.");
     if (!Number.isSafeInteger(amount) || amount < 1) return setText("providerPlansStatus", "Enter a positive whole-naira monthly price.");
-    if (!confirm(`Set the monthly price to NGN ${amount.toLocaleString()} for future provider signups? The portal will reuse a matching Flutterwave plan or create a new one. Existing subscriptions keep their current price.`)) return;
+    if (!confirm(`Set the monthly price to NGN ${amount.toLocaleString()} for future provider signups? ${gatewayID ? `Link existing Flutterwave plan ${gatewayID} after verifying its price and monthly interval.` : "The portal will reuse a matching Flutterwave plan or create a new one."} Existing subscriptions keep their current price.`)) return;
     const button = document.querySelector(`[data-change-price="${planID}"]`);
     button.disabled = true;
     setText("providerPlansStatus", "Matching the monthly price with Flutterwave...");
     try {
-      const result = await request(`/api/v1/admin/provider-subscription-plans/${planID}/price`, { method: "POST", body: { amount_ngn: amount } });
+      const result = await request(`/api/v1/admin/provider-subscription-plans/${planID}/price`, { method: "POST", body: { amount_ngn: amount, ...(gatewayID ? {flutterwave_plan_id:gatewayID} : {}) } });
       await loadProviderPlans(true);
       setText("providerPlansStatus", `Price saved at NGN ${amount.toLocaleString()}/month; Flutterwave plan ${result.flutterwave_plan_id} is linked for future subscriptions. Existing subscriptions were not repriced.`);
     } catch (error) {
