@@ -4,7 +4,7 @@
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
-  const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests", "messages"]);
+  const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
   const $ = (id) => document.getElementById(id);
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
@@ -141,6 +141,7 @@
   }
 
   function signOut() {
+    resetProviderSupport();
     state.booting = false;
     conversationsGeneration++; conversationGeneration++; conversationListFlight = null; conversationListCursor = "";
     conversationItems = []; conversationCursor = ""; pendingConversationReply = null;
@@ -1078,13 +1079,77 @@
     renderProviderTools(p);
   }
   let visibleProviderRefreshing = false;
+  let supportTickets = [], supportTicketCursor = "", supportMessages = [], supportMessageCursor = "", supportTicket = null, loadedSupportID = "";
+  let supportListSequence = 0, supportThreadSequence = 0;
+  function resetProviderSupport() {
+    supportListSequence++; supportThreadSequence++;
+    supportTickets = []; supportTicketCursor = ""; supportMessages = []; supportMessageCursor = ""; supportTicket = null; loadedSupportID = "";
+    ["providerSupportTickets", "providerSupportMessages", "providerSupportStatus"].forEach(id => { $(id).textContent = ""; });
+    $("providerSupportThread").classList.add("hidden");
+    $("providerSupportForm").reset(); $("providerSupportReply").reset();
+  }
+  async function loadProviderSupport(older = false) {
+    const seq = ++supportListSequence, token = state.token;
+    setMessage("Loading support conversations...", false, "providerSupportStatus");
+    try {
+      const data = await api(`/support/tickets${older && supportTicketCursor ? `?cursor=${encodeURIComponent(supportTicketCursor)}` : ""}`);
+      if (seq !== supportListSequence || token !== state.token) return;
+      supportTickets = [...new Map([...supportTickets, ...(data.tickets || [])].map(ticket => [ticket.id, ticket])).values()].sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)));
+      if (older || !supportTicketCursor) supportTicketCursor = data.next_cursor || "";
+      $("providerSupportTickets").innerHTML = supportTickets.map(ticket => `<button type="button" class="secondary" data-support-ticket="${escapeHtml(ticket.id)}">${escapeHtml(ticket.subject)} · ${escapeHtml(ticket.status)}</button>`).join("") || "<p>No support conversations yet. Send your first message above.</p>";
+      $("providerSupportTickets").querySelectorAll("[data-support-ticket]").forEach(button => button.addEventListener("click", () => { supportTicket = supportTickets.find(ticket => ticket.id === button.dataset.supportTicket); void openProviderSupport(); }));
+      $("moreProviderSupport").classList.toggle("hidden", !supportTicketCursor);
+      setMessage("", true, "providerSupportStatus");
+    } catch (error) { if (seq === supportListSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
+  }
+  async function openProviderSupport(older = false) {
+    if (!supportTicket) return;
+    const id = supportTicket.id, seq = ++supportThreadSequence, token = state.token;
+    try {
+      const data = await api(`/support/tickets/${encodeURIComponent(id)}/messages${older && supportMessageCursor ? `?cursor=${encodeURIComponent(supportMessageCursor)}` : ""}`);
+      if (seq !== supportThreadSequence || token !== state.token || supportTicket?.id !== id) return;
+      const existing = loadedSupportID === id ? supportMessages : [];
+      supportMessages = [...new Map([...existing, ...(data.messages || [])].map(message => [message.id, message])).values()].sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)));
+      if (older || loadedSupportID !== id || !supportMessageCursor) supportMessageCursor = data.next_cursor || "";
+      loadedSupportID = id;
+      $("providerSupportSubject").textContent = supportTicket.subject;
+      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
+      $("providerSupportThread").classList.remove("hidden");
+      $("earlierProviderSupport").classList.toggle("hidden", !supportMessageCursor);
+      $("providerSupportReply").classList.toggle("hidden", data.ticket_status === "closed");
+    } catch (error) { if (seq === supportThreadSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
+  }
+  async function sendProviderSupport(event, reply = false) {
+    event.preventDefault();
+    const form = event.currentTarget, button = form.querySelector('button[type="submit"]'), token = state.token;
+    if (button.disabled || (reply && !supportTicket)) return;
+    const id = supportTicket?.id, payload = Object.fromEntries(new FormData(form));
+    button.disabled = true;
+    try {
+      const saved = await api(reply ? `/support/tickets/${encodeURIComponent(id)}/reply` : "/support/tickets", {method:"POST", body:JSON.stringify(payload)});
+      if (token !== state.token) return;
+      form.reset();
+      if (!reply) supportTicket = {id:saved.ticket_id, subject:payload.subject};
+      await loadProviderSupport();
+      if (supportTicket?.id === (reply ? id : saved.ticket_id)) await openProviderSupport();
+      setMessage("Your message was sent to Atlantic Express Support.", true, "providerSupportStatus");
+    } catch (error) { if (token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
+    finally { button.disabled = false; }
+  }
+  $("providerSupportForm").addEventListener("submit", event => void sendProviderSupport(event));
+  $("providerSupportReply").addEventListener("submit", event => void sendProviderSupport(event, true));
+  $("refreshProviderSupport").addEventListener("click", () => void loadProviderSupport());
+  $("moreProviderSupport").addEventListener("click", () => void loadProviderSupport(true));
+  $("earlierProviderSupport").addEventListener("click", () => void openProviderSupport(true));
+
   async function refreshVisibleProviderPage() {
-    if (!state.token || !state.provider || state.booting || document.hidden || visibleProviderRefreshing || document.activeElement?.matches("input,textarea,select")) return;
+    if (!state.token || (!state.provider && state.activeView !== "support") || state.booting || document.hidden || visibleProviderRefreshing || document.activeElement?.matches("input,textarea,select")) return;
     const dialog = document.querySelector("dialog[open]");
     if (dialog && dialog.id !== "conversationDialog") return;
     visibleProviderRefreshing = true;
     try {
-      if (state.activeView === "requests") await loadRequests({reset:true});
+      if (state.activeView === "support") { await loadProviderSupport(); if (supportTicket) await openProviderSupport(); }
+      else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
       else if (state.activeView === "messages") { await loadConversations(); if ($("conversationDialog").open && state.currentConversation) await openConversation(state.currentConversation.id); }
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}

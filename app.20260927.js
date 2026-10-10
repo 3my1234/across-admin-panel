@@ -1322,13 +1322,17 @@ async function request(path, options = {}) {
       if (!response.ok) {
         const error = new Error(data.message || data.error || `Request failed: ${response.status}`);
         error.status = response.status;
+        if (response.status === 401 && options.auth !== false && authToken === state.token) {
+          logout();
+          setText("authError", "Your admin session expired. Sign in again.");
+        }
         throw error;
       }
       return data;
     } catch (error) {
       const transient = error.name === "AbortError" || error instanceof TypeError || [502,503,504].includes(error.status);
       if (readOnly && attempt === 0 && transient && authToken === state.token) continue;
-      if (error.name === "AbortError" || error instanceof TypeError) throw new Error("Unable to connect. Previously loaded conversations are kept. Please retry.");
+      if (error.name === "AbortError" || error instanceof TypeError) throw new Error(readOnly ? "Unable to connect. Previously loaded information is kept. Please retry." : "Could not confirm whether your change was saved. Refresh to check before trying again.");
       throw error;
     } finally { clearTimeout(timeout); }
   }
