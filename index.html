@@ -33,11 +33,11 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css?v=20261008-appearance" />
-    <script src="./app.20260927.js?v=20261007-support-history" defer></script>
+    <script src="./app.20260927.js?v=20261010-admin-auth" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261009-wallet" defer></script>
-    <script src="./provider-admin.js?v=20261006-simple-forms" defer></script>
+    <script src="./provider-admin.js?v=20261010-plan-access" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261008-appearance" />
     <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
 </head>
@@ -365,13 +365,14 @@
                 <button type="submit">Save provider access</button>
               </form>
               <p id="providerAccessStatus" class="muted"></p>
+              <p class="muted">Choose Free access to let approved providers use the platform without paying. Choose Paid subscription to show the active plans and require payment. Leave the start date empty to begin immediately, or choose a future date. Transfer payments are prepaid and do not renew automatically. Each card-renewal tier needs its own matching Flutterwave plan: use Save price on that tier to create or link it, even when the price stays the same.</p>
               <p class="muted">Free access stops new subscription checkout in the app. Existing Flutterwave recurring charges continue until separately cancelled. When paid access starts, providers without an active paid subscription lose public listing visibility and messaging until they subscribe.</p>
               <form id="providerPlanForm" class="form-grid">
                 <label>Code <input name="code" placeholder="starter" required /></label>
                 <label>Name <input name="name" placeholder="Starter" required /></label>
                 <label>Monthly price NGN <input name="amount_ngn" type="number" min="1" step="0.01" required /></label>
                 <label>Listing limit <input name="listing_limit" type="number" min="1" value="20" required /></label>
-                <label>Flutterwave plan ID <input name="flutterwave_plan_id" type="number" min="1" required /></label>
+                <label>Flutterwave recurring plan ID (optional for transfer-only plans) <input name="flutterwave_plan_id" type="number" min="1" /></label>
                 <label>Description <input name="description" /></label>
                 <button type="submit">Save plan</button>
               </form>

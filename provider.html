@@ -20,7 +20,7 @@
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./storage-upload.js?v=20261008-chat" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./provider.js?v=20261010-bank-errors" defer></script>
+  <script src="./provider.js?v=20261010-provider-support" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261008-appearance" />
   <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
 </head>
@@ -53,7 +53,7 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages" data-provider-profile>Messages</button></nav>
+        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages" data-provider-profile>Messages</button><button data-view="support">Support</button></nav>
       </aside>
       <div class="workspace">
         <p id="portalMessage" class="message portal-message" role="alert" aria-live="assertive"></p>
@@ -143,7 +143,7 @@
         </section>
 
         <section data-view-panel="subscription" class="card hidden">
-          <div class="section-heading"><div><span class="eyebrow">Provider access</span><h2>Monthly subscription</h2><p>An active plan is required before you can save products or service listings.</p></div><button id="refreshSubscription" class="secondary">Refresh</button></div>
+          <div class="section-heading"><div><span class="eyebrow">Provider access</span><h2>Monthly subscription</h2><p>Free launch access or an active paid plan lets you create products and service listings.</p></div><button id="refreshSubscription" class="secondary">Refresh</button></div>
           <div id="subscriptionGuidance" class="notice"></div>
           <div id="plans" class="plans"></div>
         </section>
@@ -184,6 +184,23 @@
           <div class="section-heading"><div><span class="eyebrow">Operations</span><h2>Bookings and enquiries</h2></div><button id="refreshRequests" class="secondary">Refresh</button></div>
           <div class="toolbar"><input id="requestSearch" type="search" placeholder="Search buyer, listing, or status" /><select id="requestStatus"><option value="">All statuses</option><option>pending</option><option>accepted</option><option>rejected</option><option>completed</option></select></div><div id="requestRows" class="stack-list"></div>
           <button id="loadMoreRequests" type="button" class="secondary hidden">Load more requests</button>
+        </section>
+        <section data-view-panel="support" class="card hidden">
+          <div class="section-heading"><div><span class="eyebrow">Atlantic Express help</span><h2>Support</h2><p>Ask our team for help with your account, payments or listings. You do not need a paid subscription.</p></div><button id="refreshProviderSupport" type="button" class="secondary">Refresh</button></div>
+          <form id="providerSupportForm" class="form-grid compact">
+            <label>What do you need help with?<input name="subject" required maxlength="200" /></label>
+            <label>Your message<textarea name="message" required maxlength="5000" rows="3"></textarea></label>
+            <button type="submit">Send to Support</button>
+          </form>
+          <p id="providerSupportStatus" class="message" role="status"></p>
+          <div id="providerSupportTickets" class="stack-list"></div>
+          <button id="moreProviderSupport" type="button" class="secondary hidden">Load older conversations</button>
+          <section id="providerSupportThread" class="hidden">
+            <h3 id="providerSupportSubject"></h3>
+            <button id="earlierProviderSupport" type="button" class="secondary hidden">Load earlier messages</button>
+            <div id="providerSupportMessages" class="stack-list" aria-live="polite"></div>
+            <form id="providerSupportReply" class="form-grid compact"><label>Reply<textarea name="message" rows="3" maxlength="5000" required></textarea></label><button type="submit">Send reply</button></form>
+          </section>
         </section>
         <section data-view-panel="messages" class="card hidden">
           <div class="section-heading"><div><span class="eyebrow">Customer conversations</span><h2>Messages</h2><p>Reply to buyers inside Atlantic Express. New conversations and replies require an active subscription.</p></div><button id="refreshConversations" class="secondary">Refresh</button></div>

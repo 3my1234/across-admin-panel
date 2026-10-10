@@ -119,7 +119,7 @@
     const parsedStart = enforced && localStart ? new Date(localStart) : null;
     if (parsedStart && Number.isNaN(parsedStart.getTime())) return setText("providerAccessStatus", "Choose a valid paid start time.");
     const message = enforced
-      ? "Enable paid provider access? Approved providers without an active subscription will lose public listing visibility and messaging until they subscribe. All active plan prices must match Flutterwave."
+      ? "Enable paid provider access? Approved providers without an active subscription will lose public listing visibility and messaging until they subscribe. Transfer-only plans are available without a recurring plan ID; linked card plans must match Flutterwave."
       : "Enable free provider access? This stops new subscription checkout in the app, but existing Flutterwave recurring subscriptions will keep charging until separately cancelled.";
     if (!confirm(message)) return;
     const button = event.currentTarget.querySelector('button[type="submit"]');
