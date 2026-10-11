@@ -9,7 +9,12 @@ async function main(){
  const field={matches:()=>true,getBoundingClientRect:()=>({top:500,bottom:560}),scrollIntoView:options=>{assert.equal(options.block,'center');revealed++;}};
  const browser=vm.createContext({window:{innerHeight:800,visualViewport:{height:400,offsetTop:0,addEventListener:(name,fn)=>{viewportHandlers[name]=fn;}},addEventListener(){}},document:{activeElement:field,documentElement:{style:{setProperty:(_key,value)=>{height=value;}}},addEventListener:(name,fn)=>{handlers[name]=fn;}},setTimeout:fn=>{fn();return 1;},clearTimeout(){}});
  vm.runInContext(browserSource.slice(browserSource.indexOf('// Shared by admin')),browser);
+ assert.equal(viewportHandlers.scroll,undefined,'manual viewport scrolling must not pull users back to the focused input');
  viewportHandlers.resize();assert.equal(height,'400px');assert.equal(revealed,1);handlers.focusin();assert.equal(revealed,2);
- console.log('Existing Flutterwave plan linking and web keyboard viewport regressions passed.');
+ const html=fs.readFileSync('index.html','utf8');
+ assert.equal((html.match(/id="providerPlanForm"/g)||[]).length,1);
+ assert.ok(html.indexOf('id="providerPlansTable"')<html.indexOf('id="providerPlanForm"'),'existing tier controls come before the optional new-tier form');
+ assert.match(html,/<details class="panel">\s*<summary><strong>Create a new subscription tier/);
+ console.log('Existing Flutterwave plan linking, optional new-tier form and web keyboard/scroll regressions passed.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

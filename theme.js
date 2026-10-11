@@ -41,7 +41,8 @@
     revealTimer = setTimeout(revealFocusedField, 80);
   }
   viewport?.addEventListener("resize", updateViewport);
-  viewport?.addEventListener("scroll", updateViewport);
+  // Scrolling must not force focus back into view: that traps users at a form
+  // and can interfere with long-page screenshots. Focus/resize handles keyboards.
   window.addEventListener("resize", updateViewport);
   document.addEventListener("focusin", () => { clearTimeout(revealTimer); revealTimer=setTimeout(revealFocusedField,350); });
   document.addEventListener("DOMContentLoaded", updateViewport);
