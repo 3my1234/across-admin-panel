@@ -2450,8 +2450,9 @@ function renderTicketsTable(tickets) {
   }
   for (const ticket of tickets) {
     const row = document.createElement("tr");
+    row.classList.toggle("chat-unread",!!ticket.unread_count);
     row.innerHTML = `
-      <td>${escapeHtml(ticket.subject)}</td>
+      <td>${escapeHtml(ticket.subject)}${ticket.unread_count ? ` <strong>${ticket.unread_count} unread</strong>` : ""}</td>
       <td>${escapeHtml(ticket.user_email)}</td>
       <td><span class="status-pill ${ticket.status === 'open' ? 'active' : ticket.status === 'responded' ? '' : 'inactive'}">${escapeHtml(ticket.status)}</span></td>
       <td>${format(ticket.created_at)}</td>
@@ -2480,8 +2481,8 @@ function renderTicketCards(tickets) {
     return;
   }
   container.innerHTML = tickets.map(t => `
-    <article class="mobile-card">
-      <h3 class="mobile-card-title">${escapeHtml(t.subject)}</h3>
+    <article class="mobile-card${t.unread_count ? ' chat-unread' : ''}">
+      <h3 class="mobile-card-title">${escapeHtml(t.subject)}${t.unread_count ? ` - ${t.unread_count} unread` : ""}</h3>
       <p class="mobile-card-meta">${escapeHtml(t.user_email)} · <span class="status-pill ${t.status === 'open' ? 'active' : t.status === 'responded' ? '' : 'inactive'}">${escapeHtml(t.status)}</span></p>
       <p class="mobile-card-meta">${format(t.created_at)}</p>
       <div class="mobile-card-actions">
@@ -2523,6 +2524,16 @@ async function openTicketView(ticketId, subject, cursor = "") {
       </div>
     `).join("") : `<p style="color:#66736F;">This ticket has no message content. Reload the ticket list, then try again.</p>`;
     if (ticketCursor) { const earlier = document.createElement("button"); earlier.textContent = "Load earlier messages"; earlier.onclick = () => openTicketView(ticketId,subject,ticketCursor); container.prepend(earlier); }
+    const newest=(data.messages || []).at(-1);
+    if(newest?.id && !document.hidden && state.activeTab === "support") {
+      const read=await request(`/api/v1/admin/support/tickets/${ticketId}/read`,{method:"POST",body:{message_id:newest.id}});
+      if(seq === ticketRequestSequence && authToken === state.token && currentTicketId === ticketId) {
+        state.supportTickets=state.supportTickets.map(item=>item.id===ticketId?{...item,unread_count:read.unread_count || 0}:item);
+        renderTicketsTable(state.supportTickets);
+      }
+    }
+
+
   } catch (error) { if (seq === ticketRequestSequence && authToken === state.token) setText("ticketStatus", error.message); }
 }
 

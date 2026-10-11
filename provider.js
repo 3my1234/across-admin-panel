@@ -967,7 +967,7 @@
   }
   $("loadEarlierConversations").addEventListener("click", () => { if (conversationListCursor) void loadConversations(conversationListCursor); });
   function renderConversations() {
-    $("conversationRows").innerHTML = state.conversations.length ? state.conversations.map((item) => `<article class="list-row"><div><span class="badge">${item.unread_count ? `${item.unread_count} unread` : "Up to date"}</span><h3>${escapeHtml(item.listing_title)}</h3><p><strong>${escapeHtml(item.counterpart_name)}</strong> · ${new Date(item.last_message_at).toLocaleString()}</p><p>${escapeHtml(item.last_message || "No messages yet")}</p>${item.subscription_active ? "" : '<p class="moderation-note">Subscription inactive — replies are paused.</p>'}</div><div class="list-actions"><button type="button" data-conversation="${item.id}">Open</button></div></article>`).join("") : "<p>No buyer conversations yet.</p>";
+    $("conversationRows").innerHTML = state.conversations.length ? state.conversations.map((item) => `<article class="list-row${item.unread_count ? ' chat-unread' : ''}"><div><span class="badge">${item.unread_count ? `${item.unread_count} unread` : "Up to date"}</span><h3>${escapeHtml(item.listing_title)}</h3><p><strong>${escapeHtml(item.counterpart_name)}</strong> · ${new Date(item.last_message_at).toLocaleString()}</p><p>${escapeHtml(item.last_message || "No messages yet")}</p>${item.subscription_active ? "" : '<p class="moderation-note">Subscription inactive — replies are paused.</p>'}</div><div class="list-actions"><button type="button" data-conversation="${item.id}">Open</button></div></article>`).join("") : "<p>No buyer conversations yet.</p>";
     document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation).catch(error => setMessage(error.message, false, "conversationListStatus")));
   }
   let conversationItems = [], conversationCursor = "";
@@ -981,7 +981,7 @@
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
     if (!$("conversationDialog").open) $("conversationDialog").showModal();
-    const data = await api(`/providers/me/conversations/${id}/messages?limit=50${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`);
+    const data = await api(`/providers/me/conversations/${id}/messages?limit=50&mark_read=false${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`);
     if (generation !== conversationGeneration || authToken !== state.token || state.currentConversation?.id !== id) return;
     const thread = $("conversationMessages"), oldHeight = thread.scrollHeight, oldTop = thread.scrollTop;
     const atBottom = !same || oldHeight - oldTop - thread.clientHeight < 100;
@@ -996,8 +996,11 @@
     reply.querySelector("button").disabled = conversationReplyBusy || !conversation.subscription_active;
     if (!conversation.subscription_active) setMessage("Renew your subscription to reply.", false, "conversationMessage");
     if (!$("conversationDialog").open) $("conversationDialog").showModal();
-    conversation.unread_count = 0;
-    renderConversations();
+    const newest=(data.items || []).at(-1);
+    if(newest?.id && !document.hidden && $("conversationDialog").open) {
+      const read=await api(`/providers/me/conversations/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})});
+      if(generation === conversationGeneration && authToken === state.token && state.currentConversation?.id === id) { conversation.unread_count=read.unread_count || 0; renderConversations(); }
+    }
   }
   $("loadEarlierConversation").addEventListener("click", () => { if (state.currentConversation && conversationCursor) void openConversation(state.currentConversation.id, {cursor: conversationCursor}).catch(error => setMessage(error.message, false, "conversationMessage")); });
   let conversationReplyBusy = false, pendingConversationReply = null;
@@ -1096,7 +1099,7 @@
       if (seq !== supportListSequence || token !== state.token) return;
       supportTickets = [...new Map([...supportTickets, ...(data.tickets || [])].map(ticket => [ticket.id, ticket])).values()].sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)));
       if (older || !supportTicketCursor) supportTicketCursor = data.next_cursor || "";
-      $("providerSupportTickets").innerHTML = supportTickets.map(ticket => `<button type="button" class="secondary" data-support-ticket="${escapeHtml(ticket.id)}">${escapeHtml(ticket.subject)} · ${escapeHtml(ticket.status)}</button>`).join("") || "<p>No support conversations yet. Send your first message above.</p>";
+      $("providerSupportTickets").innerHTML = supportTickets.map(ticket => `<button type="button" class="secondary${ticket.unread_count ? ' chat-unread' : ''}" data-support-ticket="${escapeHtml(ticket.id)}">${escapeHtml(ticket.subject)} · ${escapeHtml(ticket.status)}${ticket.unread_count ? ` - ${ticket.unread_count} unread` : ""}</button>`).join("") || "<p>No support conversations yet. Send your first message above.</p>";
       $("providerSupportTickets").querySelectorAll("[data-support-ticket]").forEach(button => button.addEventListener("click", () => { supportTicket = supportTickets.find(ticket => ticket.id === button.dataset.supportTicket); void openProviderSupport(); }));
       $("moreProviderSupport").classList.toggle("hidden", !supportTicketCursor);
       setMessage("", true, "providerSupportStatus");
@@ -1117,6 +1120,16 @@
       $("providerSupportThread").classList.remove("hidden");
       $("earlierProviderSupport").classList.toggle("hidden", !supportMessageCursor);
       $("providerSupportReply").classList.toggle("hidden", data.ticket_status === "closed");
+      const newest=(data.messages || []).at(-1);
+      if(newest?.id && !document.hidden && state.activeView === "support") {
+        const read=await api(`/support/tickets/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})});
+        if(seq === supportThreadSequence && token === state.token && supportTicket?.id === id) {
+          supportTicket.unread_count=read.unread_count || 0;
+          const button=$("providerSupportTickets").querySelector(`[data-support-ticket="${id}"]`);
+          if(button) {button.classList.toggle("chat-unread",!!supportTicket.unread_count);button.textContent=`${supportTicket.subject} - ${supportTicket.status}${supportTicket.unread_count ? ` - ${supportTicket.unread_count} unread` : ""}`;}
+        }
+      }
+
     } catch (error) { if (seq === supportThreadSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
   }
   async function sendProviderSupport(event, reply = false) {
@@ -1193,6 +1206,7 @@
   $("listingPriceMode").addEventListener("change", syncListingPriceMode);
   $("refreshConversations").addEventListener("click", () => void loadConversations());
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
+  $("conversationDialog").addEventListener("close", () => { conversationGeneration++; state.currentConversation=null; });
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);
   $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("payoutForm").addEventListener("submit", configurePayoutAccount); $("loadPayoutBanks").addEventListener("click", loadPayoutBanks); $("payoutCountry").addEventListener("change", () => { state.payoutBanks = []; void loadPayoutBanks(); }); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
   $("toggleListingForm").addEventListener("click", () => {

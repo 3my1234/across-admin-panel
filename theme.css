@@ -18,3 +18,5 @@
 @media(max-width:640px){.header-actions{flex-wrap:wrap;} .appearance-control{font-size:11px;}}
 input,textarea,select {scroll-margin-block:80px;}
 dialog {max-height:calc(var(--visible-viewport-height, 100dvh) - 24px);overflow-y:auto;}
+
+.chat-unread { border-left: 4px solid #ff4747 !important; font-weight: 700; background: color-mix(in srgb, #ff4747 9%, var(--panel, transparent)) !important; }
