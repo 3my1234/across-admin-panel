@@ -56,3 +56,5 @@ tbody td { padding:13px 12px; border-bottom:1px solid var(--dashboard-line); ver
  .form-actions { flex-wrap:wrap; } .form-actions button { flex:1 1 140px; }
 }
 @media(prefers-reduced-motion:no-preference) { button { transition:background-color .15s,border-color .15s; } }
+
+.listing-change-review {margin-top:10px;min-width:220px;} .listing-change-review summary {cursor:pointer;font-weight:700;} .listing-change-list section {border-top:1px solid var(--line,#ddd);padding:10px 0;} .listing-change-values {display:grid;grid-template-columns:1fr 1fr;gap:12px;} .listing-change-values pre {white-space:pre-wrap;overflow-wrap:anywhere;font-family:inherit;font-size:12px;max-height:180px;overflow:auto;} @media(max-width:600px){.listing-change-values {grid-template-columns:1fr;}}

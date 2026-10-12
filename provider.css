@@ -76,6 +76,7 @@ body.session-restoring .workspace {
 .alert-rows { display: grid; gap: .65rem; overflow: auto; max-height: 58vh; }
 .alert-item { border: 1px solid var(--line); border-radius: 12px; padding: .9rem; background: var(--theme-surface, #fff); }
 .alert-item.unread { border-color: var(--theme-border, #ffb0b0); background: var(--theme-red-soft, #fff7f7); }
+.alert-rows .alert-item {width:100%;text-align:left;color:var(--ink);}
 .alert-item p { margin: .3rem 0; color: var(--muted); }
 .moderation-note { color: var(--theme-red, #9d2929) !important; font-weight: 700; }
 
