@@ -22,6 +22,7 @@ jobs:
           node --check provider-updates.js
           node scripts/test-theme.cjs
           node scripts/test-provider-updates.cjs
+          node scripts/test-listing-review.cjs
           node scripts/test-provider-pwa.cjs
           node scripts/test-provider-support.cjs
           node scripts/test-chat-unread.cjs

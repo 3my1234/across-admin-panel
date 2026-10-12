@@ -18,6 +18,9 @@ async function request(url,{method="GET",auth=false,mode="cors"}={}){let respons
  let activation;handlers.message({data:{type:"unrelated"},waitUntil:p=>activation=p});assert.equal(skipped,0);handlers.message({data:{type:"ACTIVATE_PROVIDER_UPDATE"},waitUntil:p=>activation=p});await activation;assert.equal(skipped,1);
  context.fetch=async()=>{throw Error("offline")};assert.equal(await request("https://admin.example/provider.html",{mode:"navigate"}),true);
  let pending;handlers.push({data:{json:()=>({title:"New message",body:"Customer sent a message.",view:"messages",conversation_id:"00000000-0000-0000-0000-000000000001"})},waitUntil:p=>pending=p});await pending;assert.equal(shown.title,"New message");assert.ok(shown.options.data.url.includes("view=messages"));
+ const messageURL=shown.options.data.url;
+ handlers.push({data:{json:()=>({view:"support",ticket_id:"00000000-0000-0000-0000-000000000002",notification_id:"00000000-0000-0000-0000-000000000003"})},waitUntil:p=>pending=p});await pending;assert.ok(shown.options.data.url.includes("ticket="));assert.ok(shown.options.data.url.includes("notification="));
+ shown.options.data.url=messageURL;
  handlers.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>pending=p});await pending;assert.equal(opened,shown.options.data.url);
  self.clients.matchAll=async()=>[{url:"https://admin.example/provider.html",focus:async()=>focused++,postMessage:message=>assert.equal(message.type,"provider-notification")}];opened="";
  handlers.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>pending=p});await pending;assert.equal(focused,1);assert.equal(opened,"");

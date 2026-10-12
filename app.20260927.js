@@ -384,6 +384,10 @@ function renderAdminNotifications() {
     when.textContent = new Date(item.created_at).toLocaleString();
     button.append(title, detail, when);
     button.addEventListener("click", async () => {
+      $("adminNotificationPanel")?.classList.add("hidden");
+      const support=item.event_type==="support_ticket_created";
+      setActiveTab(support?"support":"batches");
+      const navigation=(support?openTicketView(item.id,item.batch_code || "Support conversation"):loadBatches()).catch(error=>{if(error.status===401)logout();});
       try {
         if (!item.is_read) {
           await request(`/api/v1/admin/activity/${encodeURIComponent(item.id)}/read`, { method: "PATCH" });
@@ -392,14 +396,7 @@ function renderAdminNotifications() {
           );
           renderAdminNotifications();
         }
-        $("adminNotificationPanel")?.classList.add("hidden");
-        if (item.event_type === "support_ticket_created") {
-          setActiveTab("support");
-          await loadTickets();
-        } else {
-          setActiveTab("batches");
-          await loadBatches();
-        }
+        await navigation;
       } catch (error) {
         if (error.status === 401) logout();
       }
