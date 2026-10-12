@@ -1,6 +1,8 @@
-const CACHE="atl-provider-shell-20261012-v2";
+const CACHE="atl-provider-shell-20261012-v3";
 const root=new URL("./",self.location.href);
-const shell=new Set(["provider.html","provider.js","provider.css","provider-background.png","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
+const shell=new Set(["provider.html","provider.js","provider.css","provider-background.png","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","provider-updates.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
+// Activate a waiting update only after the person chooses Refresh app.
+self.addEventListener("message",event=>{if(event.data?.type==="ACTIVATE_PROVIDER_UPDATE")event.waitUntil(self.skipWaiting());});
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add(new URL("provider-offline.html",root).href)));});
 self.addEventListener("activate",event=>{event.waitUntil((async()=>{for(const name of await caches.keys())if(name.startsWith("atl-provider-shell-")&&name!==CACHE)await caches.delete(name);await self.clients.claim();})());});
 self.addEventListener("fetch",event=>{
@@ -10,7 +12,7 @@ self.addEventListener("fetch",event=>{
  if(request.method!=="GET"||url.origin!==root.origin||!url.pathname.startsWith(root.pathname)||!(shell.has(relative)||providerHome)||request.headers.has("Authorization"))return;
  event.respondWith((async()=>{
   const cache=await caches.open(CACHE);
-  try{const response=await fetch(request);if(response.ok)await cache.put(request,response.clone());return response;}
+  try{const response=await fetch(request,{cache:"no-cache"});if(response.ok)await cache.put(request,response.clone());return response;}
   catch(error){if(request.mode==="navigate")return await cache.match(new URL("provider-offline.html",root).href);const stored=await cache.match(request);if(stored)return stored;throw error;}
  })());
 });

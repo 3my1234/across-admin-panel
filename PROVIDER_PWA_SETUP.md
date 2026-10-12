@@ -60,3 +60,20 @@ is at-least-once: a process stopping after delivery but before saving status may
 retry; stable notification tags reduce duplicate visible alerts.
 
 Sources: https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/
+
+## Updating the installed app
+
+The existing Home Screen app uses this website; users do not download a new APK
+or reinstall it after a portal deployment. App assets revalidate against the
+server. When a new service worker is waiting, the app offers Refresh app so the
+person can finish any message/form before accepting a page refresh. Update
+checks run on opening, visible reconnect/resume and every five visible minutes.
+If another tab applies an update, this tab prompts instead of discarding work.
+Keep the provider Coolify resource's automatic deployment enabled independently
+of the admin resource: sharing a repository does not share deployment settings.
+
+For an installation made before this update flow existed, first close the
+installed app and any provider browser tabs, then reopen while online. If it
+still retains an older page, refresh its provider page once; do not clear account
+storage or notification permissions. The new Refresh app control becomes
+available once this release's page has loaded.

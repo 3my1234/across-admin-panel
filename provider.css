@@ -22,7 +22,7 @@ body {
 body.auth-mode {
   min-height: 100vh;
   background-color: var(--theme-background, #f7f1e9);
-  background-image: linear-gradient(90deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.42) 44%, rgba(255,255,255,.04) 76%), url("./provider-background.png");
+  background-image: linear-gradient(90deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.42) 44%, rgba(255,255,255,.04) 76%), url("./provider-background.png?v=20261012-artwork");
   background-position: center;
   background-size: cover;
   background-attachment: fixed;
@@ -427,7 +427,7 @@ small { font-weight: 400; color: var(--muted); }
   .metrics { grid-template-columns: 1fr 1fr; }
   body.auth-mode {
     background-position: 63% center;
-    background-image: linear-gradient(rgba(255,255,255,.66), rgba(255,255,255,.76)), url("./provider-background.png");
+    background-image: linear-gradient(rgba(255,255,255,.66), rgba(255,255,255,.76)), url("./provider-background.png?v=20261012-artwork");
   }
   body.auth-mode main { padding-inline: 1rem; }
   body.auth-mode .auth-card { margin: 2vh auto; }
@@ -470,6 +470,9 @@ dialog.chat-photo-viewer { width:100vw; height:100dvh; max-width:none!important;
 .photo-status { position:absolute; top:45%; left:16px; right:16px; text-align:center; color:white; }
 .provider-mobile-nav { display:none; }
 .provider-offline-bar { background:#fff0d6; color:#402d00; padding:12px; margin:0; text-align:center; }
+.provider-update-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background:var(--theme-surface,#fff); color:var(--ink); border-bottom:1px solid var(--line); font-size:14px; }
+.provider-update-bar[hidden] { display:none; }
+.provider-update-bar button { flex-shrink:0; min-height:44px; }
 .provider-more-menu { width:min(420px,calc(100vw - 24px)); }
 .provider-more-menu button { display:block; min-height:48px; width:100%; margin:8px 0; }
 @media(max-width:850px) {

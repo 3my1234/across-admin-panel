@@ -1,3 +1,5 @@
+/* Restore the saved choice before showing a parsed select's default option. */
+[data-theme-preference]:not([data-theme-ready]) { visibility:hidden; }
 /* Semantic surfaces: the light theme keeps each original fallback. */
 :root[data-theme="dark"] {
   --bg:#111815; --panel:#1c2522; --white:#1c2522; --ink:#f1f4f3;
@@ -12,7 +14,7 @@
 .appearance-control select {min-height:40px;max-width:120px;margin:0;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel,var(--white));color:var(--ink);font:inherit;}
 :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select {color:var(--ink);background-color:var(--panel,var(--white));border-color:var(--line);}
 :root[data-theme="dark"] input::placeholder, :root[data-theme="dark"] textarea::placeholder {color:var(--muted);opacity:1;}
-:root[data-theme="dark"] body.auth-mode {background-image:linear-gradient(rgba(17,24,21,.84),rgba(17,24,21,.92)),url("./provider-background.png");}
+:root[data-theme="dark"] body.auth-mode {background-image:linear-gradient(rgba(17,24,21,.84),rgba(17,24,21,.92)),url("./provider-background.png?v=20261012-artwork");}
 :root[data-theme="dark"].admin-session-restoring body::before {background:#111815;color:#b5c0bc;}
 :root[data-theme="dark"] a {color:#ff9299;}
 @media(max-width:640px){.header-actions{flex-wrap:wrap;} .appearance-control{font-size:11px;}}
