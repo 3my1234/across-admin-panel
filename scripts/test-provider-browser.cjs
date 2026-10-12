@@ -9,11 +9,15 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
  const evaluate=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
  try{
   await send('Page.enable');
-  await send('Page.addScriptToEvaluateOnNewDocument',{source:`window.__errors=[];addEventListener('error',event=>window.__errors.push(event.message));`});
+  await send('Page.addScriptToEvaluateOnNewDocument',{source:`localStorage.setItem('atl.appearance.v1','light');window.__errors=[];window.__badThemeFrames=0;addEventListener('error',event=>window.__errors.push(event.message));function inspectTheme(){const select=document.querySelector('[data-theme-preference]');if(select&&getComputedStyle(select).visibility!=='hidden'&&select.value!=='light')window.__badThemeFrames++;requestAnimationFrame(inspectTheme);}requestAnimationFrame(inspectTheme);`});
+  await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:'dark'}]});
   for(const width of [320,390,768,1440]){
    await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:width<768});
    await send('Page.navigate',{url:'http://127.0.0.1:5175/provider.html'});await delay(800);
    assert.equal(await evaluate('window.__errors.length'),0);
+   assert.equal(await evaluate('window.__badThemeFrames'),0,'saved Light choice never paints System, even with a dark system theme');
+   assert.equal(await evaluate(`document.documentElement.dataset.theme`),'light');
+   assert.equal(await evaluate(`fetch(new URL('provider-background.png?v=20261012-artwork',location.href)).then(response=>response.ok)`),true);
    await evaluate(`document.body.classList.remove('auth-mode');document.getElementById('authPanel').classList.add('hidden');document.getElementById('portal').classList.remove('hidden');`);
    const layout=await evaluate(`({width:innerWidth,scroll:document.documentElement.scrollWidth,nav:getComputedStyle(document.querySelector('.provider-mobile-nav')).display})`);
    assert.ok(layout.scroll<=layout.width+1,JSON.stringify(layout));assert.equal(layout.nav,width<=850?'flex':'none');

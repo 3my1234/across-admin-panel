@@ -19,6 +19,9 @@ jobs:
           node --check provider.js
           node --check provider-pwa.js
           node --check provider-sw.js
+          node --check provider-updates.js
+          node scripts/test-theme.cjs
+          node scripts/test-provider-updates.cjs
           node scripts/test-provider-pwa.cjs
           node scripts/test-provider-support.cjs
           node scripts/test-chat-unread.cjs
@@ -32,6 +35,8 @@ jobs:
           sleep 2
           curl --fail http://127.0.0.1:8080/provider.html
           curl --fail http://127.0.0.1:8080/provider.webmanifest
+          curl --fail http://127.0.0.1:8080/provider-updates.js --output /tmp/provider-updates.js
+          curl --fail --head http://127.0.0.1:8080/provider.html | grep -i 'cache-control: no-cache'
           curl --fail http://127.0.0.1:8080/provider-background.png --output /tmp/provider-background.png
           test -s /tmp/provider-background.png
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/app.20260927.js)" = '404'

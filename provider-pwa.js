@@ -2,6 +2,7 @@
  const install=document.getElementById("installProviderApp");let prompt=null;
  const registration="serviceWorker" in navigator?navigator.serviceWorker.register("./provider-sw.js",{updateViaCache:"none"}):Promise.resolve(null);
  registration.catch(()=>{});
+ window.ProviderAppUpdates?.watch(registration);
  const notify=document.getElementById("enableProviderNotifications"),notice=document.getElementById("providerPushStatus");
  const token=()=>localStorage.getItem("atlantic.provider.token") || "";let key="",owner="",syncing=false;
  const API="https://api.atlxpres.com/api/v1";

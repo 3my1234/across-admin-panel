@@ -3,7 +3,8 @@ const handlers={},cacheItems=new Map(),cachedRequests=[];
 let shown,opened,focused=0;
 const self={location:{href:"https://admin.example/provider-sw.js"},registration:{showNotification:async(title,options)=>shown={title,options}},clients:{claim:async()=>{},matchAll:async()=>[{url:"https://admin.example/index.html",focus:async()=>{throw Error("admin should not receive provider deep link")}}],openWindow:async url=>opened=url},addEventListener:(name,handler)=>handlers[name]=handler};
 const caches={open:async()=>({put:async(request)=>cachedRequests.push(request.url),match:async()=>({offline:true}),add:async()=>{}}),keys:async()=>[],delete:async()=>{}};
-const context={self,caches,URL,fetch:async()=>({ok:true,clone:()=>({})}),Set};vm.createContext(context);vm.runInContext(fs.readFileSync("provider-sw.js","utf8"),context);
+let fetchOptions,skipped=0;self.skipWaiting=async()=>skipped++;
+const context={self,caches,URL,fetch:async(request,options)=>{fetchOptions=options;return {ok:true,clone:()=>({})};},Set};vm.createContext(context);vm.runInContext(fs.readFileSync("provider-sw.js","utf8"),context);
 async function request(url,{method="GET",auth=false,mode="cors"}={}){let response=null;handlers.fetch({request:{url,method,mode,headers:{has:()=>auth}},respondWith:value=>response=value});if(response)await response;return !!response;}
 (async()=>{
  assert.equal(await request("https://api.example/api/v1/support/tickets"),false);
@@ -12,6 +13,9 @@ async function request(url,{method="GET",auth=false,mode="cors"}={}){let respons
  assert.equal(await request("https://admin.example/provider.js",{auth:true}),false);
  assert.equal(await request("https://admin.example/provider.html",{method:"POST"}),false);
  assert.equal(await request("https://admin.example/provider.js?v=current"),true);assert.equal(cachedRequests.length,1);
+ assert.equal(fetchOptions.cache,"no-cache","public app requests revalidate browser HTTP cache");
+ assert.equal(await request("https://admin.example/provider-background.png?v=release"),true);
+ let activation;handlers.message({data:{type:"unrelated"},waitUntil:p=>activation=p});assert.equal(skipped,0);handlers.message({data:{type:"ACTIVATE_PROVIDER_UPDATE"},waitUntil:p=>activation=p});await activation;assert.equal(skipped,1);
  context.fetch=async()=>{throw Error("offline")};assert.equal(await request("https://admin.example/provider.html",{mode:"navigate"}),true);
  let pending;handlers.push({data:{json:()=>({title:"New message",body:"Customer sent a message.",view:"messages",conversation_id:"00000000-0000-0000-0000-000000000001"})},waitUntil:p=>pending=p});await pending;assert.equal(shown.title,"New message");assert.ok(shown.options.data.url.includes("view=messages"));
  handlers.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>pending=p});await pending;assert.equal(opened,shown.options.data.url);
