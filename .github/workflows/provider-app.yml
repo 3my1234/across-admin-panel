@@ -1,0 +1,35 @@
+name: Provider app checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  provider-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check provider regressions
+        run: |
+          node --check provider.js
+          node --check provider-pwa.js
+          node --check provider-sw.js
+          node scripts/test-provider-pwa.cjs
+          node scripts/test-provider-support.cjs
+          node scripts/test-chat-unread.cjs
+          node scripts/test-product-chat.cjs
+          node scripts/test-page-refresh.cjs
+      - name: Build and check separate provider image
+        run: |
+          docker build -f Dockerfile.provider -t provider-app:ci .
+          docker run --rm provider-app:ci nginx -t
+          docker run -d --name provider-app-ci -p 8080:8080 provider-app:ci
+          sleep 2
+          curl --fail http://127.0.0.1:8080/provider.html
+          curl --fail http://127.0.0.1:8080/provider.webmanifest
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/app.20260927.js)" = '404'

@@ -3,7 +3,7 @@ const source=fs.readFileSync(path.join(__dirname,'../app.20260927.js'),'utf8');
 async function main(){
  const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{value:'all',disabled:false,textContent:'',classList:{toggle(){},add(){},remove(){}},addEventListener(){}});return elements.get(id);};
  const state={token:'admin',supportTickets:[]};let pending=[],rendered=[];
- const ctx=vm.createContext({state,$,setText:(id,text)=>{$(id).textContent=text;},renderTicketsTable:rows=>{rendered=rows;},sendTicketReply(){},request:url=>new Promise((resolve,reject)=>pending.push({url,resolve,reject}))});
+ const ctx=vm.createContext({PortalChatHistory:{create:()=>({get:()=>null,put:()=>{},clear:()=>{}})},state,$,setText:(id,text)=>{$(id).textContent=text;},renderTicketsTable:rows=>{rendered=rows;},sendTicketReply(){},request:url=>new Promise((resolve,reject)=>pending.push({url,resolve,reject}))});
  vm.runInContext(source.slice(source.indexOf('let currentTicketId = null;'),source.indexOf('function renderTicketsTable(')),ctx);
  let request=ctx.loadTickets();const coalesced=ctx.loadTickets();await coalesced;assert.equal(pending.length,1);
  pending.shift().resolve({tickets:[{id:'latest',updated_at:'2026-10-07',status:'open'}],next_cursor:'page2'});await request;

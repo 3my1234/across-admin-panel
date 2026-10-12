@@ -2,6 +2,9 @@
 
 Static admin dashboard for managing Atlantic Express products, admins, orders, and transaction visibility.
 
+The provider portal shares this repository but has a separate login and can
+deploy independently using `Dockerfile.provider`. See [provider PWA setup](PROVIDER_PWA_SETUP.md).
+
 ## Coolify
 
 - Repository: `https://github.com/3my1234/across-admin-panel`

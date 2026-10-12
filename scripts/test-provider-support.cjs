@@ -8,7 +8,7 @@ async function main() {
     return elements.get(id);
   };
   const state={token:'provider'};
-  const ctx = vm.createContext({document:{hidden:true},state,$,Map,Date,String,encodeURIComponent,escapeHtml:s=>String(s).replaceAll('<','&lt;'),
+  const ctx = vm.createContext({chatCache:{get:()=>null,put:()=>{}},document:{hidden:true},state,$,Map,Date,String,encodeURIComponent,escapeHtml:s=>String(s).replaceAll('<','&lt;'),
     setMessage:(message,_ok,id)=>{$(id).textContent=message;},
     FormData:class { constructor(form){this.fields=form.fields;} *[Symbol.iterator](){yield* this.fields;} },
     api:(url,options)=>new Promise((resolve,reject)=>pending.push({url,options,resolve,reject}))});
