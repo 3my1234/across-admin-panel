@@ -32,4 +32,6 @@ jobs:
           sleep 2
           curl --fail http://127.0.0.1:8080/provider.html
           curl --fail http://127.0.0.1:8080/provider.webmanifest
+          curl --fail http://127.0.0.1:8080/provider-background.png --output /tmp/provider-background.png
+          test -s /tmp/provider-background.png
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/app.20260927.js)" = '404'
