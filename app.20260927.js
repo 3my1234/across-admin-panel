@@ -1287,7 +1287,7 @@ async function restoreSession() {
 function logout() {
   stopAdminActivityPolling();
   ticketListSequence++; ticketRequestSequence++; ticketListBusy = false;
-  state.supportTickets = []; ticketHistory = []; ticketCursor = ""; ticketListCursor = ""; currentTicketId = null;
+  ticketCache.clear();state.supportTickets = []; ticketHistory = []; ticketCursor = ""; ticketListCursor = ""; currentTicketId = null;
   $("ticketMessages").classList.add("hidden"); $("ticketMessagesList").textContent = "";
   $("ticketsTable").innerHTML = ""; $("ticketsCards").innerHTML = "";
   $("earlierTicketsButton").classList.add("hidden"); setText("ticketListStatus", "");
@@ -2397,6 +2397,7 @@ function escapeHtml(value) {
 let currentTicketId = null;
 let ticketRequestSequence = 0;
 let ticketListSequence = 0;
+const ticketCache=PortalChatHistory.create();
 let ticketHistory = [];
 let ticketCursor = "";
 let ticketListCursor = "";
@@ -2499,20 +2500,7 @@ function renderTicketCards(tickets) {
   });
 }
 
-async function openTicketView(ticketId, subject, cursor = "") {
-  const seq = ++ticketRequestSequence; const authToken = state.token;
-  if (currentTicketId !== ticketId) {ticketHistory = []; ticketCursor = ""; $("ticketMessagesList").textContent = "Loading conversation…";}
-  currentTicketId = ticketId;
-  setText("ticketSubject", subject);
-  $("ticketMessages").classList.remove("hidden");
-  setText("ticketStatus", "");
-  try {
-    const data = await request(`/api/v1/admin/support/tickets/${ticketId}/messages?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
-    if (seq !== ticketRequestSequence || currentTicketId !== ticketId || authToken !== state.token) return;
-    const hadHistory = ticketHistory.length > 0;
-    const merged = new Map(); [...ticketHistory, ...(data.messages || [])].forEach(message => merged.set(message.id || `${message.created_at}:${message.message}`,message));
-    ticketHistory = [...merged.values()].sort((a,b) => a.created_at.localeCompare(b.created_at) || String(a.id).localeCompare(String(b.id)));
-    if (cursor || !hadHistory) ticketCursor = data.next_cursor || "";
+function renderTicketHistory(ticketId,subject) {
     const ticket = state.supportTickets.find(item => item.id === ticketId);
     const messages = ticketHistory.length ? ticketHistory : (ticket?.message ? [{ sender_type: "user", message: ticket.message, created_at: ticket.created_at }] : []);
     const container = $("ticketMessagesList");
@@ -2524,6 +2512,24 @@ async function openTicketView(ticketId, subject, cursor = "") {
       </div>
     `).join("") : `<p style="color:#66736F;">This ticket has no message content. Reload the ticket list, then try again.</p>`;
     if (ticketCursor) { const earlier = document.createElement("button"); earlier.textContent = "Load earlier messages"; earlier.onclick = () => openTicketView(ticketId,subject,ticketCursor); container.prepend(earlier); }
+}
+
+async function openTicketView(ticketId, subject, cursor = "") {
+  const seq = ++ticketRequestSequence; const authToken = state.token;
+  if (currentTicketId !== ticketId) {const cached=ticketCache.get(authToken,ticketId);ticketHistory=cached?.messages || [];ticketCursor=cached?.cursor || "";$("ticketMessagesList").textContent="Loading conversation...";if(cached)renderTicketHistory(ticketId,subject);}
+  currentTicketId = ticketId;
+  setText("ticketSubject", subject);
+  $("ticketMessages").classList.remove("hidden");
+  setText("ticketStatus", "");
+  try {
+    const data = await request(`/api/v1/admin/support/tickets/${ticketId}/messages?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+    if (seq !== ticketRequestSequence || currentTicketId !== ticketId || authToken !== state.token) return;
+    const hadHistory = ticketHistory.length > 0;
+    const merged = new Map(); [...ticketHistory, ...(data.messages || [])].forEach(message => merged.set(message.id || `${message.created_at}:${message.message}`,message));
+    ticketHistory = [...merged.values()].sort((a,b) => a.created_at.localeCompare(b.created_at) || String(a.id).localeCompare(String(b.id)));
+    if (cursor || !hadHistory) ticketCursor = data.next_cursor || "";
+    renderTicketHistory(ticketId,subject);
+    ticketCache.put(authToken,ticketId,ticketHistory,ticketCursor);
     const newest=(data.messages || []).at(-1);
     if(newest?.id && !document.hidden && state.activeTab === "support") {
       const read=await request(`/api/v1/admin/support/tickets/${ticketId}/read`,{method:"POST",body:{message_id:newest.id}});

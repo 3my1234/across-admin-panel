@@ -6,6 +6,8 @@
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
   const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
   const $ = (id) => document.getElementById(id);
+  const chatCache=PortalChatHistory.create();
+  const chatETags=new Map();
   const state = {
     token: localStorage.getItem("atlantic.provider.token") || "",
     account: null,
@@ -80,6 +82,7 @@
     let data = null;
     if (raw) { try { data = JSON.parse(raw); } catch (_) { data = null; } }
     if (authToken !== state.token) throw new Error("Session changed; previous response ignored.");
+    if(response.status===304)return {unchanged:true};
     if (!response.ok) {
       const safeText = raw && !raw.trim().startsWith("<") ? raw.trim().slice(0, 300) : "";
       const fallback = response.status === 402 ? "An active monthly provider subscription is required." : `Request failed (${response.status})`;
@@ -88,6 +91,7 @@
       if (response.status === 401 && state.token) signOut();
       throw error;
     }
+    if(data && typeof data==="object")data._etag=response.headers?.get("ETag");
     return data;
   }
 
@@ -141,8 +145,10 @@
   }
 
   function signOut() {
+    window.ProviderPWA?.disconnect(state.token);
     resetProviderSupport();
     state.booting = false;
+    chatCache.clear();chatETags.clear();
     conversationsGeneration++; conversationGeneration++; conversationListFlight = null; conversationListCursor = "";
     conversationItems = []; conversationCursor = ""; pendingConversationReply = null;
     $("conversationReplyForm")?.reset();
@@ -192,6 +198,7 @@
     renderOverview();
     state.booting = false;
     startProviderNotificationPolling();
+    if(new URLSearchParams(location.search).has("conversation"))void openProviderLink(location.href).catch(error=>setMessage(error.message));
     void handleSubscriptionReturn();
     const loads = [loadPlans(), loadBuyerMarkets()];
     if (state.provider) loads.push(loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications(), loadConversations());
@@ -970,25 +977,33 @@
     $("conversationRows").innerHTML = state.conversations.length ? state.conversations.map((item) => `<article class="list-row${item.unread_count ? ' chat-unread' : ''}"><div><span class="badge">${item.unread_count ? `${item.unread_count} unread` : "Up to date"}</span><h3>${escapeHtml(item.listing_title)}</h3><p><strong>${escapeHtml(item.counterpart_name)}</strong> · ${new Date(item.last_message_at).toLocaleString()}</p><p>${escapeHtml(item.last_message || "No messages yet")}</p>${item.subscription_active ? "" : '<p class="moderation-note">Subscription inactive — replies are paused.</p>'}</div><div class="list-actions"><button type="button" data-conversation="${item.id}">Open</button></div></article>`).join("") : "<p>No buyer conversations yet.</p>";
     document.querySelectorAll("[data-conversation]").forEach((button) => button.onclick = () => openConversation(button.dataset.conversation).catch(error => setMessage(error.message, false, "conversationListStatus")));
   }
+  function renderConversationMessages(conversation) {
+    $("conversationMessages").innerHTML = conversationItems.map((item) => `<article class="chat-bubble ${item.sender_type === "provider" ? "chat-mine" : "chat-theirs"}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p>${(item.media_urls || []).map(url=>`<button type="button" class="chat-photo-button" data-chat-photo="${escapeHtml(url)}" aria-label="View chat photo"><img loading="lazy" decoding="async" class="chat-photo" src="${escapeHtml(url)}" alt="Chat attachment" /></button>`).join("")}<small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
+  }
   let conversationItems = [], conversationCursor = "";
   async function openConversation(id, { cursor = "" } = {}) {
     const generation = ++conversationGeneration; const authToken = state.token;
     const conversation = state.conversations.find((item) => item.id === id);
     if (!conversation) return;
     const same = state.currentConversation?.id === id;
-    if (!same) { conversationItems = []; conversationCursor = ""; pendingConversationReply = null; $("conversationReplyForm")?.reset(); $("conversationMessages").textContent = "Loading conversation..."; }
+    if (!same) { const cached=chatCache.get(authToken,id);conversationItems = cached?.messages || []; conversationCursor = cached?.cursor || ""; pendingConversationReply = null; $("conversationReplyForm")?.reset(); $("conversationMessages").textContent = "Loading conversation..."; if(cached?.messages.length) renderConversationMessages(conversation); }
     state.currentConversation = conversation;
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
     if (!$("conversationDialog").open) $("conversationDialog").showModal();
-    const data = await api(`/providers/me/conversations/${id}/messages?limit=50&mark_read=false${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`);
+    if(!same && history.state?.providerChat!==id)history.pushState({providerView:state.activeView,providerChat:id},"",location.pathname+"?view=messages&conversation="+encodeURIComponent(id));
+    const data = await api(`/providers/me/conversations/${id}/messages?limit=50&mark_read=false${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`,{headers:same && !cursor && chatETags.has(id)?{"If-None-Match":chatETags.get(id)}:{}});
+    if(data.unchanged)return;
     if (generation !== conversationGeneration || authToken !== state.token || state.currentConversation?.id !== id) return;
+    if(data._etag && !cursor)chatETags.set(id,data._etag);
     const thread = $("conversationMessages"), oldHeight = thread.scrollHeight, oldTop = thread.scrollTop;
     const atBottom = !same || oldHeight - oldTop - thread.clientHeight < 100;
-    conversationItems = Array.from(new Map([...(cursor ? data.items || [] : conversationItems), ...(cursor ? conversationItems : data.items || [])].map(item => [item.id, item])).values()).sort((a,b) => Date.parse(a.created_at)-Date.parse(b.created_at) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    if (cursor || !same) conversationCursor = data.next_cursor || "";
+    const hadHistory=conversationItems.length>0;
+    conversationItems = PortalChatHistory.merge(conversationItems,data.items || []);
+    if (cursor || !hadHistory) conversationCursor = data.next_cursor || "";
     $("loadEarlierConversation").classList.toggle("hidden", !conversationCursor);
-    $("conversationMessages").innerHTML = conversationItems.map((item) => `<article class="chat-bubble ${item.sender_type === "provider" ? "chat-mine" : "chat-theirs"}"><strong>${item.sender_type === "provider" ? "You" : escapeHtml(conversation.counterpart_name)}</strong><p>${escapeHtml(item.body)}</p>${(item.media_urls || []).map(url=>`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img class="chat-photo" src="${escapeHtml(url)}" alt="Chat attachment" /></a>`).join("")}<small>${new Date(item.created_at).toLocaleString()}</small></article>`).join("") || "<p>No messages yet.</p>";
+    renderConversationMessages(conversation);
+    chatCache.put(authToken,id,conversationItems,conversationCursor);
     thread.scrollTop = cursor ? oldTop + thread.scrollHeight - oldHeight : atBottom ? thread.scrollHeight : oldTop;
     const reply = $("conversationReplyForm");
     reply.querySelector("textarea").disabled = conversationReplyBusy || !conversation.subscription_active;
@@ -998,8 +1013,8 @@
     if (!$("conversationDialog").open) $("conversationDialog").showModal();
     const newest=(data.items || []).at(-1);
     if(newest?.id && !document.hidden && $("conversationDialog").open) {
-      const read=await api(`/providers/me/conversations/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})});
-      if(generation === conversationGeneration && authToken === state.token && state.currentConversation?.id === id) { conversation.unread_count=read.unread_count || 0; renderConversations(); }
+      const read=await api(`/providers/me/conversations/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})}).catch(()=>{chatETags.delete(id);return null;});
+      if(read && generation === conversationGeneration && authToken === state.token && state.currentConversation?.id === id) { conversation.unread_count=read.unread_count || 0; renderConversations(); }
     }
   }
   $("loadEarlierConversation").addEventListener("click", () => { if (state.currentConversation && conversationCursor) void openConversation(state.currentConversation.id, {cursor: conversationCursor}).catch(error => setMessage(error.message, false, "conversationMessage")); });
@@ -1105,18 +1120,25 @@
       setMessage("", true, "providerSupportStatus");
     } catch (error) { if (seq === supportListSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
   }
+  function renderProviderSupportMessages() {
+      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
+    $("providerSupportSubject").textContent=supportTicket.subject;$("providerSupportThread").classList.remove("hidden");
+  }
   async function openProviderSupport(older = false) {
     if (!supportTicket) return;
     const id = supportTicket.id, seq = ++supportThreadSequence, token = state.token;
+    if(loadedSupportID!==id){const cached=chatCache.get(token,`support:${id}`);supportMessages=cached?.messages || [];supportMessageCursor=cached?.cursor || "";loadedSupportID=id;if(cached)renderProviderSupportMessages();}
+    const hadHistory=supportMessages.length>0;
     try {
       const data = await api(`/support/tickets/${encodeURIComponent(id)}/messages${older && supportMessageCursor ? `?cursor=${encodeURIComponent(supportMessageCursor)}` : ""}`);
       if (seq !== supportThreadSequence || token !== state.token || supportTicket?.id !== id) return;
       const existing = loadedSupportID === id ? supportMessages : [];
       supportMessages = [...new Map([...existing, ...(data.messages || [])].map(message => [message.id, message])).values()].sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)));
-      if (older || loadedSupportID !== id || !supportMessageCursor) supportMessageCursor = data.next_cursor || "";
+      if (older || !hadHistory) supportMessageCursor = data.next_cursor || "";
       loadedSupportID = id;
       $("providerSupportSubject").textContent = supportTicket.subject;
-      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
+      renderProviderSupportMessages();
+      chatCache.put(token,`support:${id}`,supportMessages,supportMessageCursor);
       $("providerSupportThread").classList.remove("hidden");
       $("earlierProviderSupport").classList.toggle("hidden", !supportMessageCursor);
       $("providerSupportReply").classList.toggle("hidden", data.ticket_status === "closed");
@@ -1164,7 +1186,7 @@
       if (state.activeView === "support") { await loadProviderSupport(); if (supportTicket) await openProviderSupport(); }
       else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
-      else if (state.activeView === "messages") { await loadConversations(); if ($("conversationDialog").open && state.currentConversation) await openConversation(state.currentConversation.id); }
+      else if (state.activeView === "messages") { await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
       else if (state.activeView === "products" && $("productForm").classList.contains("hidden")) await loadProducts({reset:true});
       else if (state.activeView === "listings" && $("listingForm").classList.contains("hidden")) await loadListings({reset:true});
@@ -1177,11 +1199,19 @@
   function switchView(view, { persist = true } = {}) {
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
-    if (persist) localStorage.setItem(ACTIVE_VIEW_KEY, nextView);
+    if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",location.pathname+"?view="+encodeURIComponent(nextView));}
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
     document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== nextView));
     void refreshVisibleProviderPage();
   }
+  async function openProviderLink(raw) {
+    const url=new URL(raw,location.href),view=url.searchParams.get("view");if(url.origin!==location.origin || !PROVIDER_VIEWS.has(view))return;
+    switchView(view,{persist:false});
+    const id=url.searchParams.get("conversation");if(view==="messages"&&id&&state.token){await loadConversations();if(!state.conversations.some(item=>item.id===id)){const result=await api(`/providers/me/conversations?conversation_id=${encodeURIComponent(id)}`);for(const item of result.items || [])if(!state.conversations.some(existing=>existing.id===item.id))state.conversations.push(item);}if(state.conversations.some(item=>item.id===id))await openConversation(id);}
+  }
+  window.addEventListener("popstate",event=>{if(document.querySelector(".chat-photo-viewer[open],.provider-more-menu[open]"))return;if($("conversationDialog").open){$("conversationDialog").close();return;}switchView(event.state?.providerView || "overview",{persist:false});});
+  navigator.serviceWorker?.addEventListener("message",event=>{if(event.data?.type==="provider-notification")void openProviderLink(event.data.url).catch(error=>setMessage(error.message));});
+  const requestedView=new URLSearchParams(location.search).get("view");if(PROVIDER_VIEWS.has(requestedView))state.activeView=requestedView;
   function resetAuthForms() {
     ["loginForm", "signupForm"].forEach((id) => {
       const form = $(id);
@@ -1206,7 +1236,7 @@
   $("listingPriceMode").addEventListener("change", syncListingPriceMode);
   $("refreshConversations").addEventListener("click", () => void loadConversations());
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
-  $("conversationDialog").addEventListener("close", () => { conversationGeneration++; state.currentConversation=null; });
+  $("conversationDialog").addEventListener("close", () => { conversationGeneration++; state.currentConversation=null;if(history.state?.providerChat)history.back(); });
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);
   $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("payoutForm").addEventListener("submit", configurePayoutAccount); $("loadPayoutBanks").addEventListener("click", loadPayoutBanks); $("payoutCountry").addEventListener("change", () => { state.payoutBanks = []; void loadPayoutBanks(); }); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
   $("toggleListingForm").addEventListener("click", () => {

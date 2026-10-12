@@ -1,0 +1,23 @@
+const assert=require("node:assert/strict"),fs=require("node:fs"),vm=require("node:vm");
+const handlers={},cacheItems=new Map(),cachedRequests=[];
+let shown,opened,focused=0;
+const self={location:{href:"https://admin.example/provider-sw.js"},registration:{showNotification:async(title,options)=>shown={title,options}},clients:{claim:async()=>{},matchAll:async()=>[{url:"https://admin.example/index.html",focus:async()=>{throw Error("admin should not receive provider deep link")}}],openWindow:async url=>opened=url},addEventListener:(name,handler)=>handlers[name]=handler};
+const caches={open:async()=>({put:async(request)=>cachedRequests.push(request.url),match:async()=>({offline:true}),add:async()=>{}}),keys:async()=>[],delete:async()=>{}};
+const context={self,caches,URL,fetch:async()=>({ok:true,clone:()=>({})}),Set};vm.createContext(context);vm.runInContext(fs.readFileSync("provider-sw.js","utf8"),context);
+async function request(url,{method="GET",auth=false,mode="cors"}={}){let response=null;handlers.fetch({request:{url,method,mode,headers:{has:()=>auth}},respondWith:value=>response=value});if(response)await response;return !!response;}
+(async()=>{
+ assert.equal(await request("https://api.example/api/v1/support/tickets"),false);
+ assert.equal(await request("https://admin.example/api/v1/support/tickets"),false);
+ assert.equal(await request("https://bucket.example/photo?X-Amz-Signature=secret"),false);
+ assert.equal(await request("https://admin.example/provider.js",{auth:true}),false);
+ assert.equal(await request("https://admin.example/provider.html",{method:"POST"}),false);
+ assert.equal(await request("https://admin.example/provider.js?v=current"),true);assert.equal(cachedRequests.length,1);
+ context.fetch=async()=>{throw Error("offline")};assert.equal(await request("https://admin.example/provider.html",{mode:"navigate"}),true);
+ let pending;handlers.push({data:{json:()=>({title:"New message",body:"Customer sent a message.",view:"messages",conversation_id:"00000000-0000-0000-0000-000000000001"})},waitUntil:p=>pending=p});await pending;assert.equal(shown.title,"New message");assert.ok(shown.options.data.url.includes("view=messages"));
+ handlers.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>pending=p});await pending;assert.equal(opened,shown.options.data.url);
+ self.clients.matchAll=async()=>[{url:"https://admin.example/provider.html",focus:async()=>focused++,postMessage:message=>assert.equal(message.type,"provider-notification")}];opened="";
+ handlers.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>pending=p});await pending;assert.equal(focused,1);assert.equal(opened,"");
+ const manifest=JSON.parse(fs.readFileSync("provider.webmanifest","utf8"));assert.equal(manifest.display,"standalone");assert.equal(manifest.start_url,"./provider.html");assert.deepEqual(manifest.icons.map(icon=>icon.sizes),["192x192","512x512"]);
+ const memory={window:{}};vm.createContext(memory);vm.runInContext(fs.readFileSync("chat-history.js","utf8"),memory);const cache=memory.window.PortalChatHistory.create();cache.get("one","chat");cache.put("one","chat",[{id:"private"}],"cursor");assert.equal(cache.get("one","chat").messages[0].id,"private");cache.get("two","chat");assert.equal(cache.get("two","chat"),null);cache.put("one","chat",[{id:"late"}],"");assert.equal(cache.get("two","chat"),null);
+ console.log("Provider PWA passed: standalone manifest, shell-only caching, offline fallback, push display/deep links and private account isolation.");
+})().catch(error=>{console.error(error);process.exitCode=1;});

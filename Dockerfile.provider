@@ -1,0 +1,6 @@
+FROM nginx:stable-alpine
+COPY provider-nginx.conf /etc/nginx/conf.d/default.conf
+COPY provider.html /usr/share/nginx/html/index.html
+COPY provider.html provider.js provider.css provider.webmanifest provider-sw.js provider-pwa.js provider-offline.html provider-icon-192.png provider-icon-512.png favicon.png theme.js theme.css dashboard.css chat-history.js chat-photo-viewer.js storage-upload.js delivery-areas.js catalog-live.js /usr/share/nginx/html/
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -q -O /dev/null http://127.0.0.1:8080/provider.html || exit 1

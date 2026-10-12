@@ -1,0 +1,19 @@
+const CACHE="atl-provider-shell-20261011-v1";
+const root=new URL("./",self.location.href);
+const shell=new Set(["provider.html","provider.js","provider.css","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
+self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add(new URL("provider-offline.html",root).href)));});
+self.addEventListener("activate",event=>{event.waitUntil((async()=>{for(const name of await caches.keys())if(name.startsWith("atl-provider-shell-")&&name!==CACHE)await caches.delete(name);await self.clients.claim();})());});
+self.addEventListener("fetch",event=>{
+ const request=event.request,url=new URL(request.url),relative=url.pathname.slice(root.pathname.length);
+ // Never intercept or cache API responses, authenticated requests, photos or third parties.
+ const providerHome=root.hostname==="provider.atlxpres.com"&&(relative===""||relative==="index.html");
+ if(request.method!=="GET"||url.origin!==root.origin||!url.pathname.startsWith(root.pathname)||!(shell.has(relative)||providerHome)||request.headers.has("Authorization"))return;
+ event.respondWith((async()=>{
+  const cache=await caches.open(CACHE);
+  try{const response=await fetch(request);if(response.ok)await cache.put(request,response.clone());return response;}
+  catch(error){if(request.mode==="navigate")return await cache.match(new URL("provider-offline.html",root).href);const stored=await cache.match(request);if(stored)return stored;throw error;}
+ })());
+});
+
+self.addEventListener("push",event=>{event.waitUntil((async()=>{let payload={};try{payload=event.data?.json() || {};}catch{}const view=["messages","requests","support","overview"].includes(payload.view)?payload.view:"overview";const url=new URL("provider.html",root);url.searchParams.set("view",view);if(/^[a-f0-9-]{36}$/i.test(payload.conversation_id || ""))url.searchParams.set("conversation",payload.conversation_id);await self.registration.showNotification(payload.title || "Atlantic Express",{body:payload.body || "You have a new business update.",icon:new URL("provider-icon-192.png",root).href,badge:new URL("provider-icon-192.png",root).href,tag:payload.tag,renotify:false,data:{url:url.href}});})());});
+self.addEventListener("notificationclick",event=>{event.notification.close();event.waitUntil((async()=>{const target=new URL(event.notification.data?.url || "provider.html",root);if(target.origin!==root.origin)return;const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});for(const client of windows){const current=new URL(client.url);if(current.origin!==root.origin||!(current.pathname.endsWith("/provider.html")||(current.hostname==="provider.atlxpres.com"&&["/","/index.html"].includes(current.pathname))))continue;await client.focus();client.postMessage({type:"provider-notification",url:target.href});return;}await self.clients.openWindow(target.href);})());});
