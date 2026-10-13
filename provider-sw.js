@@ -1,6 +1,6 @@
-const CACHE="atl-provider-shell-20261012-v4";
+const CACHE="atl-provider-shell-20261012-v5";
 const root=new URL("./",self.location.href);
-const shell=new Set(["provider.html","provider.js","provider.css","provider-background.png","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","provider-updates.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
+const shell=new Set(["provider.html","provider.js","provider.css","provider-identity.js","provider-identity.css","provider-background.png","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","provider-updates.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
 // Activate a waiting update only after the person chooses Refresh app.
 self.addEventListener("message",event=>{if(event.data?.type==="ACTIVATE_PROVIDER_UPDATE")event.waitUntil(self.skipWaiting());});
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add(new URL("provider-offline.html",root).href)));});
