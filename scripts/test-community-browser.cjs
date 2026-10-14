@@ -18,7 +18,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
         for (const width of [320, 390, 768, 1440]) {
             await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width < 768 });
             await send('Page.navigate', { url: (process.env.COMMUNITY_TEST_ORIGIN || 'http://127.0.0.1:5175')+'/provider.html' });
-            await evaluate(`new Promise((resolve,reject)=>{let tries=0;const poll=()=>{if(window.CommunityPortal&&window.CommunityUpdates&&window.CommunityTownHall)return resolve();if(++tries>100)return reject(Error('Community modules did not load'));setTimeout(poll,50)};poll()})`);
+            await evaluate(`new Promise((resolve,reject)=>{let tries=0;const poll=()=>{if(document.readyState==='complete'&&window.CommunityPortal&&window.CommunityUpdates&&window.CommunityTownHall)return resolve();if(++tries>100)return reject(Error('Community modules did not load'));setTimeout(poll,50)};poll()})`);
             await evaluate(`(async()=>{
  window.__errors=[];addEventListener('error',event=>__errors.push(event.message));window.__actor='first-account';window.__calls=[];window.__failSend=false;
  const host=document.createElement('section');host.id='communityBrowserRoot';host.style.cssText='position:fixed;inset:8px;overflow:auto;z-index:999;background:var(--dashboard-surface,#fff)';document.body.append(host);
@@ -42,9 +42,9 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').scrollWidth<=document.getElementById('communityBrowserRoot').clientWidth+1`), true, `layout at ${width}`);
             await evaluate(`__community.activate({mode:'friends'})`);
             assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot .community-profile')`), true);
-            await evaluate(`document.documentElement.dataset.theme='dark'`);
+            await evaluate(`(()=>{const choice=document.querySelector('[data-theme-preference]');choice.value='dark';choice.dispatchEvent(new Event('change'))})()`);
             assert.notEqual(await evaluate(`getComputedStyle(document.querySelector('#communityBrowserRoot .community-card')).backgroundColor`), 'rgb(255, 255, 255)', 'dark theme must not leave a white card');
-            await evaluate(`document.documentElement.dataset.theme='light'`);
+            await evaluate(`(()=>{const choice=document.querySelector('[data-theme-preference]');choice.value='light';choice.dispatchEvent(new Event('change'))})()`);
             await evaluate(`__community.activate({mode:'updates'})`);
             await delay(80);
             assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot .community-status-form')`), true);
