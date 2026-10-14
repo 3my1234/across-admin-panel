@@ -106,7 +106,7 @@
                 element.querySelector('.community-body').textContent = 'Loading conversations...';
             }
             try {
-                if (!profile) {
+                if (!profile && ['friends','updates'].includes(mode)) {
                     const data = await request('/chat/profile');
                     if (!live(captured, sequence))
                         return;
@@ -130,8 +130,11 @@
                 renderList();
             }
             catch (e) {
-                if (live(captured, sequence))
+                if (live(captured, sequence)) {
                     error(e.message);
+                    const body=element.querySelector('.community-body');
+                    if(body?.textContent==='Loading conversations...')body.textContent='Conversations could not load. Tap Refresh to retry.';
+                }
             }
         }
         function renderThread() {
@@ -267,7 +270,7 @@
             reset();
             actor = getActor();
         } if (options.mode)
-            mode = options.mode; if (options.hallRoomId) {
+            { mode = options.mode; selected=null; delete element.dataset.communityMode; } if (options.hallRoomId) {
             hallRoomId = options.hallRoomId;
             mode = 'town-hall';
             selected = null;

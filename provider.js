@@ -18,6 +18,21 @@
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token});
+  const hallShortcut=document.createElement('button');
+  hallShortcut.type='button';hallShortcut.className='provider-hall-shortcut hidden';
+  hallShortcut.setAttribute('aria-label','Open Town Hall');
+  hallShortcut.innerHTML='<span aria-hidden="true">◉</span><span>Town Hall</span><small hidden></small>';
+  document.body.append(hallShortcut);
+  hallShortcut.onclick=()=>{switchView('messages');void community?.activate({mode:'town-hall'});};
+  let hallPointer=null,hallMoved=false;
+  hallShortcut.addEventListener('pointerdown',event=>{hallPointer={x:event.clientX,y:event.clientY,left:hallShortcut.getBoundingClientRect().left,top:hallShortcut.getBoundingClientRect().top};hallMoved=false;hallShortcut.setPointerCapture(event.pointerId);});
+  hallShortcut.addEventListener('pointermove',event=>{if(!hallPointer)return;const dx=event.clientX-hallPointer.x,dy=event.clientY-hallPointer.y;if(Math.abs(dx)+Math.abs(dy)>8)hallMoved=true;if(!hallMoved)return;hallShortcut.style.left=Math.max(8,Math.min(innerWidth-hallShortcut.offsetWidth-8,hallPointer.left+dx))+'px';hallShortcut.style.top=Math.max(8,Math.min(innerHeight-hallShortcut.offsetHeight-90,hallPointer.top+dy))+'px';hallShortcut.style.right='auto';hallShortcut.style.bottom='auto';});
+  hallShortcut.addEventListener('pointerup',()=>{hallPointer=null;});
+  hallShortcut.addEventListener('click',event=>{if(hallMoved){event.preventDefault();event.stopImmediatePropagation();hallMoved=false;}},true);
+  async function refreshHallShortcut(){hallShortcut.classList.toggle('hidden',!state.token||state.activeView!=='overview'||document.activeElement?.matches('input,textarea,select'));if(hallShortcut.classList.contains('hidden')||document.hidden)return;const actor=state.token;try{const data=await api('/chat/town-hall/activity');if(actor!==state.token)return;const badge=hallShortcut.querySelector('small');badge.hidden=!data.count;badge.textContent=Number(data.count)>99?'99+':String(data.count||'');}catch(_){/* Keep the entry point available when activity cannot refresh. */}}
+  setInterval(()=>void refreshHallShortcut(),60000);
+  const hideHallForKeyboard=()=>hallShortcut.classList.toggle('hidden',!state.token||state.activeView!=='overview'||document.activeElement?.matches('input,textarea,select'));
+  document.addEventListener('focusin',hideHallForKeyboard);document.addEventListener('focusout',()=>setTimeout(hideHallForKeyboard,0));
   if(community)document.querySelector('[data-view="messages"]')?.removeAttribute("data-provider-profile");
   const money = (value, currency = "NGN") => {
     try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "NGN", maximumFractionDigits: 2 }).format(Number(value || 0)); }
@@ -1126,9 +1141,11 @@
   let visibleProviderRefreshing = false;
   let supportTickets = [], supportTicketCursor = "", supportMessages = [], supportMessageCursor = "", supportTicket = null, loadedSupportID = "";
   let supportListSequence = 0, supportThreadSequence = 0;
+  const supportReadAcknowledged=new Map();
   function resetProviderSupport() {
     supportListSequence++; supportThreadSequence++;
     supportTickets = []; supportTicketCursor = ""; supportMessages = []; supportMessageCursor = ""; supportTicket = null; loadedSupportID = "";
+    supportReadAcknowledged.clear();
     ["providerSupportTickets", "providerSupportMessages", "providerSupportStatus"].forEach(id => { $(id).textContent = ""; });
     $("providerSupportThread").classList.add("hidden");
     $("providerSupportForm").reset(); $("providerSupportReply").reset();
@@ -1154,7 +1171,7 @@
   async function openProviderSupport(older = false) {
     if (!supportTicket) return;
     const id = supportTicket.id, seq = ++supportThreadSequence, token = state.token;
-    if(loadedSupportID!==id){const cached=chatCache.get(token,`support:${id}`);supportMessages=cached?.messages || [];supportMessageCursor=cached?.cursor || "";loadedSupportID=id;if(cached)renderProviderSupportMessages();}
+    if(loadedSupportID!==id){const cached=chatCache.get(token,`support:${id}`);supportMessages=cached?.messages || [];supportMessageCursor=cached?.cursor || "";loadedSupportID=id;renderProviderSupportMessages();if(!cached)$("providerSupportMessages").textContent='Loading recent messages…';}
     const hadHistory=supportMessages.length>0;
     try {
       const data = await api(`/support/tickets/${encodeURIComponent(id)}/messages${older && supportMessageCursor ? `?cursor=${encodeURIComponent(supportMessageCursor)}` : ""}`);
@@ -1170,9 +1187,10 @@
       $("earlierProviderSupport").classList.toggle("hidden", !supportMessageCursor);
       $("providerSupportReply").classList.toggle("hidden", data.ticket_status === "closed");
       const newest=(data.messages || []).at(-1);
-      if(newest?.id && !document.hidden && state.activeView === "support") {
+      if(newest?.id && supportReadAcknowledged.get(id)!==newest.id && !document.hidden && state.activeView === "support") {
         const read=await api(`/support/tickets/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})});
         if(seq === supportThreadSequence && token === state.token && supportTicket?.id === id) {
+          supportReadAcknowledged.set(id,newest.id);
           supportTicket.unread_count=read.unread_count || 0;
           const button=$("providerSupportTickets").querySelector(`[data-support-ticket="${id}"]`);
           if(button) {button.classList.toggle("chat-unread",!!supportTicket.unread_count);button.textContent=`${supportTicket.subject} - ${supportTicket.status}${supportTicket.unread_count ? ` - ${supportTicket.unread_count} unread` : ""}`;}
@@ -1192,15 +1210,14 @@
       if (token !== state.token) return;
       form.reset();
       if (!reply) supportTicket = {id:saved.ticket_id, subject:payload.subject};
-      await loadProviderSupport();
-      if (supportTicket?.id === (reply ? id : saved.ticket_id)) await openProviderSupport();
+      await Promise.all([loadProviderSupport(),supportTicket?.id === (reply ? id : saved.ticket_id) ? openProviderSupport() : Promise.resolve()]);
       setMessage("Your message was sent to Atlantic Express Support.", true, "providerSupportStatus");
     } catch (error) { if (token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
     finally { button.disabled = false; }
   }
   $("providerSupportForm").addEventListener("submit", event => void sendProviderSupport(event));
   $("providerSupportReply").addEventListener("submit", event => void sendProviderSupport(event, true));
-  $("refreshProviderSupport").addEventListener("click", () => void loadProviderSupport());
+  $("refreshProviderSupport").addEventListener("click", () => void Promise.all([loadProviderSupport(),supportTicket ? openProviderSupport() : Promise.resolve()]));
   $("moreProviderSupport").addEventListener("click", () => void loadProviderSupport(true));
   $("earlierProviderSupport").addEventListener("click", () => void openProviderSupport(true));
 
@@ -1210,7 +1227,7 @@
     if (dialog && dialog.id !== "conversationDialog") return;
     visibleProviderRefreshing = true;
     try {
-      if (state.activeView === "support") { await loadProviderSupport(); if (supportTicket) await openProviderSupport(); }
+      if (state.activeView === "support") { await Promise.all([loadProviderSupport(),supportTicket ? openProviderSupport() : Promise.resolve()]); }
       else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
       else if (state.activeView === "messages") { if(community)await community.refresh();else await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
@@ -1226,6 +1243,7 @@
   function switchView(view, { persist = true } = {}) {
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
+    void refreshHallShortcut();
     if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",location.pathname+"?view="+encodeURIComponent(nextView));}
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
     document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== nextView));
