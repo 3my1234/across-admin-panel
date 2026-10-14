@@ -13,9 +13,12 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
   await send('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:'dark'}]});
   for(const width of [320,390,768,1440]){
    await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:width<768});
-   await send('Page.navigate',{url:'http://127.0.0.1:5175/provider.html'});
+   await send('Page.navigate',{url:(process.env.COMMUNITY_TEST_ORIGIN||'http://127.0.0.1:5175')+'/provider.html'});
    await evaluate(`new Promise((resolve,reject)=>{let tries=0;const poll=()=>{if(document.querySelector('.provider-mobile-nav'))return resolve();if(++tries>100)return reject(Error('Provider portal did not initialize'));setTimeout(poll,50);};poll();})`);
    assert.equal(await evaluate('window.__errors.length'),0);
+   assert.ok((await evaluate(`document.querySelectorAll('#atl-service-categories option').length`))<=50,'service suggestions stay bounded');
+   await evaluate(`(()=>{const field=document.querySelector('#listingForm [name=category]');field.value='Hotel event';field.dispatchEvent(new Event('input'));})()`);
+   assert.equal(await evaluate(`Array.from(document.querySelectorAll('#atl-service-categories option')).some(option=>option.value==='Hotel event staffing')`),true,'hotel events are discoverable');
    assert.equal(await evaluate('window.__badThemeFrames'),0,'saved Light choice never paints System, even with a dark system theme');
    assert.equal(await evaluate(`document.documentElement.dataset.theme`),'light');
    assert.equal(await evaluate(`fetch(new URL('provider-background.png?v=20261012-artwork',location.href)).then(response=>response.ok)`),true);

@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const groups=require('../service-categories-data');const defaults=require('../provider-form-defaults');
+assert.equal(groups.length,37);assert.ok(groups.reduce((sum,g)=>sum+g.services.length,0)>800);
+assert.ok(groups.find(g=>g.name==='Event Planning and Hospitality').services.includes('Hotel event staffing'));
+assert.ok(groups.every(g=>g.services.every(s=>s.length&&s.length<=100)));
+const field=value=>({value}),form={elements:{contact_phone:field(''),contact_email:field(''),business_name:field(''),contact_name:field('')}};
+defaults.apply(form,{phone:'08000000001',email:'owner@example.test',full_name:'Owner'},{contact_phone:'08000000002'});
+assert.equal(form.elements.contact_phone.value,'08000000002');assert.equal(form.elements.contact_name.value,'Owner');
+form.elements.contact_phone.value='08000000003';defaults.apply(form,{phone:'08000000004'});assert.equal(form.elements.contact_phone.value,'08000000003','never overwrite an edited contact');
+console.log('Launch forms passed: 37 service groups, event categories, saved contact defaults and edited-value preservation.');

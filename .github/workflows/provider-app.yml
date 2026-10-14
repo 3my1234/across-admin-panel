@@ -22,7 +22,10 @@ jobs:
           node --check provider-updates.js
           node --check provider-identity.js
           node --check community-portal.js
-          node --check community-updates.js
+          node --check provider-native.js
+          node --check service-categories.js
+          node scripts/test-launch-forms.cjs
+          node scripts/test-provider-native.cjs
           node --check community-town-hall.js
           node --check community-admin.js
           node scripts/test-provider-badges.cjs
@@ -45,7 +48,9 @@ jobs:
           curl --fail http://127.0.0.1:8080/provider.webmanifest
           curl --fail http://127.0.0.1:8080/provider-updates.js --output /tmp/provider-updates.js
           curl --fail http://127.0.0.1:8080/community-portal.js --output /tmp/community-portal.js
-          curl --fail http://127.0.0.1:8080/community-updates.js --output /tmp/community-updates.js
+          curl --fail http://127.0.0.1:8080/provider-native.js --output /tmp/provider-native.js
+          curl --fail http://127.0.0.1:8080/service-categories-data.js --output /tmp/service-categories-data.js
+          curl --fail http://127.0.0.1:8080/hall-icon.js --output /tmp/hall-icon.js
           curl --fail http://127.0.0.1:8080/community-town-hall.js --output /tmp/community-town-hall.js
           curl --fail http://127.0.0.1:8080/provider-identity.js --output /tmp/provider-identity.js
           curl --fail http://127.0.0.1:8080/provider-identity.css --output /tmp/provider-identity.css

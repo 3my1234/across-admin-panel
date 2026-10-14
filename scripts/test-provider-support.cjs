@@ -21,13 +21,13 @@ async function main() {
   task=ctx.openProviderSupport();pending.shift().resolve({messages:[{id:'recent',sender_type:'admin',message:'<unsafe>',created_at:'2026-10-10'}],next_cursor:'earlier'});await task;
   assert.match($('providerSupportMessages').innerHTML,/Atlantic Express Support/);assert.match($('providerSupportMessages').innerHTML,/&lt;unsafe>/);
   task=ctx.openProviderSupport(true);assert.match(pending[0].url,/cursor=earlier/);pending.shift().resolve({messages:[{id:'old-message',sender_type:'user',message:'Earlier question',created_at:'2026-10-01'}]});await task;
-  task=ctx.openProviderSupport();pending.shift().resolve({messages:[{id:'recent',sender_type:'admin',message:'Answer',created_at:'2026-10-10'}]});await task;
+  task=ctx.openProviderSupport();const sameFlight=ctx.openProviderSupport();assert.equal(pending.length,1,'overlapping refreshes share one history request');pending.shift().resolve({messages:[{id:'recent',sender_type:'admin',message:'Answer',created_at:'2026-10-10'}]});await Promise.all([task,sameFlight]);
   assert.match($('providerSupportMessages').innerHTML,/Earlier question/);
   const button={disabled:false}, form={fields:[['message','Thank you']],querySelector:()=>button,reset(){}};
   task=ctx.sendProviderSupport({preventDefault(){},currentTarget:form},true);
   await ctx.sendProviderSupport({preventDefault(){},currentTarget:form},true);
   assert.equal(pending.length,1,'double submission sends only one reply');assert.match(pending[0].url,/one\/reply$/);
-  pending.shift().resolve({});await new Promise(r=>setImmediate(r));pending.shift().resolve({tickets:[]});await new Promise(r=>setImmediate(r));pending.shift().resolve({messages:[]});await task;
+  pending.shift().resolve({});await new Promise(r=>setImmediate(r));assert.equal(button.disabled,false,'saved reply releases composer before history completes');pending.shift().resolve({tickets:[]});await new Promise(r=>setImmediate(r));pending.shift().resolve({messages:[]});await task;
   assert.equal(button.disabled,false);
   task=ctx.loadProviderSupport();state.token='another-provider';ctx.resetProviderSupport();pending.shift().resolve({tickets:[{id:'private',subject:'Private old session'}]});await task;
   assert.equal($('providerSupportTickets').innerHTML.includes('Private old session'),false);

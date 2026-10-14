@@ -20,8 +20,12 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./storage-upload.js?v=20261008-chat" defer></script>
+  <script src="./service-categories-data.js?v=20261014" defer></script>
+  <script src="./service-categories.js?v=20261014" defer></script>
+  <script src="./provider-form-defaults.js?v=20261014" defer></script>
+  <script src="./hall-icon.js?v=20261014" defer></script>
+  <script src="./provider-native.js?v=20261014" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./community-updates.js?v=20261014-community" defer></script>
   <script src="./community-town-hall.js?v=20261014-community" defer></script>
   <script src="./community-portal.js?v=20261014-community" defer></script>
   <link rel="stylesheet" href="./community-portal.css?v=20261014-community" />
@@ -67,7 +71,7 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="requests" data-service-tool>Bookings & enquiries</button><button data-view="messages" data-provider-profile>Messages</button><button data-view="support">Support</button></nav>
+        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="messages" data-provider-profile>Chats</button><button data-view="support">Support</button></nav>
       </aside>
       <div class="workspace">
         <p id="providerPushStatus" class="provider-push-status" role="status"></p>
@@ -167,8 +171,8 @@
           <div class="section-heading"><div><span class="eyebrow">Inventory</span><h2>Service listings</h2><p>Create a private draft, check it, then submit it for Atlantic Express review.</p></div><button id="toggleListingForm" type="button" aria-expanded="false">Create service</button></div>
           <div id="listingSubscriptionGate" class="subscription-gate hidden"></div>
           <form id="listingForm" class="form-grid hidden">
-            <label>Type<select name="listing_type" required><option value="hotel">Hotel</option><option value="short_let">Short let</option><option value="car_rental">Car rental</option><option value="car_wash">Car wash</option><option value="mechanic">Mechanic</option><option value="plumber">Plumber</option><option value="carpenter">Carpenter</option><option value="fuel_station">Fuel / gas station</option><option value="food_vendor">Food vendor</option><option value="artisan">Other artisan</option><option value="shop_rental">Shop rental</option><option value="property">Property enquiry</option><option value="land">Land enquiry</option></select></label>
-            <label>Title<input name="title" required /></label><label>Category<input name="category" /></label><label>City<input name="city" required /></label>
+            <label>Type<select name="listing_type" required><option value="hotel">Hotel</option><option value="short_let">Short let</option><option value="car_rental">Car rental</option><option value="car_wash">Car wash</option><option value="mechanic">Mechanic</option><option value="plumber">Plumber</option><option value="carpenter">Carpenter</option><option value="fuel_station">Fuel / gas station</option><option value="food_vendor">Food vendor</option><option value="artisan">Professional service</option><option value="shop_rental">Shop rental</option><option value="property">Property enquiry</option><option value="land">Land enquiry</option></select></label>
+            <label>Title<input name="title" required /></label><label>Service category<input name="category" maxlength="100" placeholder="Search your service" required /><small>Search a service or enter your own if it is not listed.</small></label><label>City<input name="city" required /></label>
             <label>State / region<input name="state" required /></label><label>Street / area<input name="address_line" /></label>
             <label>Country code<input name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" autocapitalize="characters" required /><small>Two-letter ISO code, for example NG, GB, US, or CA.</small></label>
             <label>Currency code<input name="currency_code" maxlength="3" pattern="[A-Za-z]{3}" value="NGN" autocapitalize="characters" required /><small>Three-letter ISO code, for example NGN, GBP, USD, or CAD.</small></label>
@@ -218,7 +222,7 @@
           </section>
         </section>
         <section data-view-panel="messages" class="card hidden">
-          <div class="section-heading"><div><span class="eyebrow">People and business</span><h2>Messages</h2><p>Friends, private messages and existing buyer conversations in one inbox.</p></div><button id="refreshConversations" class="secondary">Refresh</button></div>
+          <div class="section-heading"><div><span class="eyebrow">People and business</span><h2>Chats</h2><p>Customer messages about your products and services, all in one place.</p></div><button id="refreshConversations" class="secondary">Refresh</button></div>
           <div id="communityRoot"></div>
           <div class="hidden" aria-hidden="true">
           <p id="conversationListStatus" class="message" role="status"></p>

@@ -6,6 +6,7 @@
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
   const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
   const $ = (id) => document.getElementById(id);
+  function providerViewURL(view,params={}) {const url=new URL(location.href);for(const key of ['conversation','shared','hall','ticket','event','notification','community','friend'])url.searchParams.delete(key);url.searchParams.set('view',view);for(const [key,value]of Object.entries(params))url.searchParams.set(key,value);return url.pathname+url.search;}
   const chatCache=PortalChatHistory.create();
   const chatETags=new Map();
   const state = {
@@ -21,7 +22,7 @@
   const hallShortcut=document.createElement('button');
   hallShortcut.type='button';hallShortcut.className='provider-hall-shortcut hidden';
   hallShortcut.setAttribute('aria-label','Open Town Hall');
-  hallShortcut.innerHTML='<span aria-hidden="true">◉</span><span>Town Hall</span><small hidden></small>';
+  hallShortcut.innerHTML=(window.AtlHallIcon||'')+'<span>Hall</span><small hidden></small>';
   document.body.append(hallShortcut);
   hallShortcut.onclick=()=>{switchView('messages');void community?.activate({mode:'town-hall'});};
   let hallPointer=null,hallMoved=false;
@@ -162,6 +163,7 @@
   }
 
   function signOut() {
+    window.ProviderNativeBridge?.signedOut();
     community?.reset();
     window.ProviderPWA?.disconnect(state.token);
     resetProviderSupport();
@@ -216,10 +218,13 @@
     renderOverview();
     state.booting = false;
     startProviderNotificationPolling();
-    if(["conversation","shared","friend","hall"].some(key=>new URLSearchParams(location.search).has(key)))void openProviderLink(location.href).catch(error=>setMessage(error.message));
+    if(["conversation","shared","hall","ticket","event","notification"].some(key=>new URLSearchParams(location.search).has(key)))void openProviderLink(location.href).catch(error=>setMessage(error.message));
     void handleSubscriptionReturn();
-    const loads = [loadPlans(), loadBuyerMarkets()];
-    if (state.provider) loads.push(loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications(), loadConversations());
+    window.ProviderFormDefaults?.apply($("onboardingForm"),state.account||{},state.provider||{});
+    void refreshVisibleProviderPage();
+    const loads = [loadBuyerMarkets()];
+
+    if(state.provider&&state.activeView==='overview')loads.push(loadListings({reset:true}),loadProducts({reset:true}),loadVerificationDocuments());
     void Promise.allSettled(loads).then(results => {
       if (results.some(result => result.status === "rejected")) setMessage("Some provider data could not be loaded. Use Refresh to try again.");
       renderOverview();
@@ -253,7 +258,7 @@
       if(meta.chat_room_id)url.searchParams.set('shared',meta.chat_room_id);
       if(meta.town_hall_room_id)url.searchParams.set('hall',meta.town_hall_room_id);
       if(meta.ticket_id)url.searchParams.set('ticket',meta.ticket_id);
-      if(kind==='friend_request')url.searchParams.set('community','friends');
+      if(kind==='friend_request')url.searchParams.set('community','chats');
     }
     const navigation=openProviderLink(url.href).catch(error=>{if(actor===state.token)setMessage(error.message);});
     try{await api(item.source==='community'?`/notifications/${encodeURIComponent(id)}/read`:`/providers/me/notifications/${encodeURIComponent(id)}/read`,{method:"PATCH"});if(actor===state.token){if(!item.read_at)state.unreadNotifications=Math.max(0,state.unreadNotifications-1);item.read_at=new Date().toISOString();renderProviderNotifications();}}
@@ -433,6 +438,7 @@
     return true;
   }
   async function subscribe(planId, paymentMethod = "card", durationMonths = 1) {
+    if(window.ProviderNativeBridge?.embedded())return;
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
     document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
     const pending = hasPendingSubscription();
@@ -456,13 +462,19 @@
     finally { document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = false; }); }
   }
   function renderPlans() {
+    if(window.ProviderNativeBridge?.embedded()){
+      const subscription=state.provider?.subscription;
+      $("subscriptionGuidance").textContent=hasActiveSubscription()?`Your paid plan is active${subscription?.current_period_end?' until '+new Date(subscription.current_period_end).toLocaleDateString():''}.`:'Free plan: one listing total after document approval.';
+      $("plans").innerHTML='<p class="notice">Your current provider access applies here. Subscription purchasing is unavailable in the mobile workspace.</p>';
+      renderSubscriptionGates();return;
+    }
     const active = hasActiveSubscription();
     const freeLaunch = state.provider?.subscription?.launch_access_active === true;
     const approved = state.provider?.verification_status === "approved";
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
     $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free plan available.</strong> One listing total after document approval." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid by transfer. Pay again when your paid period expires." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Free plan.</strong> You can create one listing total across all categories. Choose a paid plan for more listings and a coloured badge after payment confirmation." : "Your business must be approved before you can purchase a provider plan.";
-    $("plans").innerHTML = `<article class="plan"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One listing total across products, services and every other provider category. Documents must be approved before publication. A neutral verification badge appears after approval.</p></article>` + (state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><p>${escapeHtml(plan.badge_label || "")} - Colour indicates subscription tier</p><strong>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${plan.listing_limit} product listings + ${plan.listing_limit} service/property listings<br>Buyer chat and bookings; previous paid orders and tracking remain available</p><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" data-method="card" ${plan.card_available === false || !state.provider || active || !approved ? "disabled" : ""}>${plan.card_available === false ? "Card payments coming soon" : active ? "Subscription already active" : pending ? "Check payment status" : "Pay by card (auto-renews)"}</button><label>How long do you want to pay for by transfer?<select data-transfer-months="${plan.id}" ${pending || active ? "disabled" : ""}>${(state.transferMonths || [1]).map(months=>`<option value="${months}">${months} month${months===1 ? "" : "s"} - ${money(Number(plan.amount_ngn)*months)} total</option>`).join("")}</select></label><button data-subscribe="${plan.id}" data-method="banktransfer" ${!state.provider || active || !approved ? "disabled" : ""}>${pending ? "Check payment status" : "Pay by transfer"}</button><p>${active ? "You already have an active subscription. Contact support@atlxpres.com to arrange a plan change; do not pay for a second subscription. " : ""}Card payments renew automatically. Bank transfer pays for the period you choose and does not renew automatically. The total is the monthly price multiplied by your chosen months, before any Flutterwave fee. Transfer only the exact amount to the account shown by Flutterwave. Your plan activates after payment is verified.</p></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>');
+    $("plans").innerHTML = `<article class="plan"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One listing total across products, services and every other provider category. Documents must be approved before publication. A neutral verification badge appears after approval.</p></article>` + (state.plans.length ? state.plans.map((plan) => `<article class="plan"><span class="eyebrow">Monthly plan</span><h3>${escapeHtml(plan.name)}</h3><p>${escapeHtml(plan.badge_label || "")} - Colour indicates subscription tier</p><strong>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${plan.listing_limit} product listings + ${plan.listing_limit} service/property listings<br>Customer chat; previous paid orders and tracking remain available</p><p>${escapeHtml(plan.description || `${plan.listing_limit} active listings`)}</p><button data-subscribe="${plan.id}" data-method="card" ${plan.card_available === false || !state.provider || active || !approved ? "disabled" : ""}>${plan.card_available === false ? "Card payments coming soon" : active ? "Subscription already active" : pending ? "Check payment status" : "Pay by card (auto-renews)"}</button><label>How long do you want to pay for by transfer?<select data-transfer-months="${plan.id}" ${pending || active ? "disabled" : ""}>${(state.transferMonths || [1]).map(months=>`<option value="${months}">${months} month${months===1 ? "" : "s"} - ${money(Number(plan.amount_ngn)*months)} total</option>`).join("")}</select></label><button data-subscribe="${plan.id}" data-method="banktransfer" ${!state.provider || active || !approved ? "disabled" : ""}>${pending ? "Check payment status" : "Pay by transfer"}</button><p>${active ? "You already have an active subscription. Contact support@atlxpres.com to arrange a plan change; do not pay for a second subscription. " : ""}Card payments renew automatically. Bank transfer pays for the period you choose and does not renew automatically. The total is the monthly price multiplied by your chosen months, before any Flutterwave fee. Transfer only the exact amount to the account shown by Flutterwave. Your plan activates after payment is verified.</p></article>`).join("") : '<p class="notice"><strong>No active plan is available.</strong> Atlantic Express must configure a monthly provider plan before checkout can begin.</p>');
     document.querySelectorAll("[data-subscribe]").forEach((button) => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method,button.dataset.method==="banktransfer" ? Number(document.querySelector(`[data-transfer-months="${button.dataset.subscribe}"]`)?.value || 1) : 1));
     renderSubscriptionGates();
   }
@@ -548,6 +560,7 @@
     form.classList.toggle("hidden", !open); toggle.textContent = open ? "Close form" : "Create service"; toggle.setAttribute("aria-expanded", String(open));
     syncListingPriceMode();
     if (open) {
+      if(!state.editingListingID)window.ProviderFormDefaults?.apply(form,state.account||{},state.provider||{});
       ensureListingMap();
       setTimeout(() => state.listingMap?.invalidateSize(), 0);
       requestAnimationFrame(() => form.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -935,7 +948,7 @@
   function renderListings() {
     $("listingRows").innerHTML = state.listings.length ? state.listings.map((item) => {
       const image = item.media_urls?.[0]; const canSubmit = ["draft", "rejected"].includes(item.status); const direct = ["hotel", "short_let", "car_rental", "car_wash", "mechanic", "plumber", "carpenter", "fuel_station", "food_vendor", "artisan"].includes(item.listing_type);
-      return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3>${window.ProviderIdentity?.render(item.provider_identity) || ""}<p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : (item.attributes?.price_mode === "from" ? "From " : "") + money(item.price, item.currency_code)}</p>${item.moderation_notes ? `<p class="moderation-note">Moderator note: ${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}${direct ? `<button class="secondary" data-availability="${item.id}" data-title="${escapeHtml(item.title)}">Add availability</button>` : ""}</div></article>`;
+      return `<article class="list-row listing-row">${image ? `<img class="listing-thumb" src="${escapeHtml(image)}" alt="">` : ""}<div><span class="badge">${escapeHtml(human(item.status))}</span><h3>${escapeHtml(item.title)}</h3>${window.ProviderIdentity?.render(item.provider_identity) || ""}<p>${escapeHtml(human(item.listing_type))} · ${escapeHtml(item.city)}, ${escapeHtml(item.state)} · ${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : (item.attributes?.price_mode === "from" ? "From " : "") + money(item.price, item.currency_code)}</p>${item.moderation_notes ? `<p class="moderation-note">Moderator note: ${escapeHtml(item.moderation_notes)}</p>` : ""}</div><div class="list-actions">${canSubmit ? `<button data-submit-listing="${item.id}">Submit for review</button>` : ""}</div></article>`;
     }).join("") : "<p>No matching listings.</p>";
     [...$("listingRows").children].forEach((row, index) => {
       const actions = row.querySelector(".list-actions"); const item = state.listings[index];
@@ -1033,7 +1046,7 @@
     $("conversationTitle").textContent = conversation.listing_title + " · " + conversation.counterpart_name;
     setMessage("", false, "conversationMessage");
     if (!$("conversationDialog").open) $("conversationDialog").showModal();
-    if(!same && history.state?.providerChat!==id)history.pushState({providerView:state.activeView,providerChat:id},"",location.pathname+"?view=messages&conversation="+encodeURIComponent(id));
+    if(!same && history.state?.providerChat!==id)history.pushState({providerView:state.activeView,providerChat:id},"",providerViewURL('messages',{conversation:id}));
     const data = await api(`/providers/me/conversations/${id}/messages?limit=50&mark_read=false${cursor ? "&cursor=" + encodeURIComponent(cursor) : ""}`,{headers:same && !cursor && chatETags.has(id)?{"If-None-Match":chatETags.get(id)}:{}});
     if(data.unchanged)return;
     if (generation !== conversationGeneration || authToken !== state.token || state.currentConversation?.id !== id) return;
@@ -1141,11 +1154,13 @@
   let visibleProviderRefreshing = false;
   let supportTickets = [], supportTicketCursor = "", supportMessages = [], supportMessageCursor = "", supportTicket = null, loadedSupportID = "";
   let supportListSequence = 0, supportThreadSequence = 0;
+  const supportFlights=new Map(),supportReadPending=new Set();
   const supportReadAcknowledged=new Map();
   function resetProviderSupport() {
     supportListSequence++; supportThreadSequence++;
     supportTickets = []; supportTicketCursor = ""; supportMessages = []; supportMessageCursor = ""; supportTicket = null; loadedSupportID = "";
     supportReadAcknowledged.clear();
+    supportFlights.clear();supportReadPending.clear();
     ["providerSupportTickets", "providerSupportMessages", "providerSupportStatus"].forEach(id => { $(id).textContent = ""; });
     $("providerSupportThread").classList.add("hidden");
     $("providerSupportForm").reset(); $("providerSupportReply").reset();
@@ -1168,7 +1183,15 @@
       $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
     $("providerSupportSubject").textContent=supportTicket.subject;$("providerSupportThread").classList.remove("hidden");
   }
-  async function openProviderSupport(older = false) {
+  function openProviderSupport(older = false) {
+    if(!supportTicket)return Promise.resolve();
+    const key=JSON.stringify([state.token,supportTicket.id,older?supportMessageCursor:'']);
+    if(supportFlights.has(key))return supportFlights.get(key);
+    const flight=fetchProviderSupport(older);supportFlights.set(key,flight);
+    void flight.finally(()=>{if(supportFlights.get(key)===flight)supportFlights.delete(key);}).catch(()=>{});
+    return flight;
+  }
+  async function fetchProviderSupport(older = false) {
     if (!supportTicket) return;
     const id = supportTicket.id, seq = ++supportThreadSequence, token = state.token;
     if(loadedSupportID!==id){const cached=chatCache.get(token,`support:${id}`);supportMessages=cached?.messages || [];supportMessageCursor=cached?.cursor || "";loadedSupportID=id;renderProviderSupportMessages();if(!cached)$("providerSupportMessages").textContent='Loading recent messages…';}
@@ -1187,14 +1210,15 @@
       $("earlierProviderSupport").classList.toggle("hidden", !supportMessageCursor);
       $("providerSupportReply").classList.toggle("hidden", data.ticket_status === "closed");
       const newest=(data.messages || []).at(-1);
-      if(newest?.id && supportReadAcknowledged.get(id)!==newest.id && !document.hidden && state.activeView === "support") {
-        const read=await api(`/support/tickets/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})});
+      if(newest?.id && supportReadAcknowledged.get(id)!==newest.id && !supportReadPending.has(id) && !document.hidden && state.activeView === "support") {
+        supportReadPending.add(id);
+        void api(`/support/tickets/${id}/read`,{method:"POST",body:JSON.stringify({message_id:newest.id})}).then(read=>{
         if(seq === supportThreadSequence && token === state.token && supportTicket?.id === id) {
           supportReadAcknowledged.set(id,newest.id);
           supportTicket.unread_count=read.unread_count || 0;
           const button=$("providerSupportTickets").querySelector(`[data-support-ticket="${id}"]`);
           if(button) {button.classList.toggle("chat-unread",!!supportTicket.unread_count);button.textContent=`${supportTicket.subject} - ${supportTicket.status}${supportTicket.unread_count ? ` - ${supportTicket.unread_count} unread` : ""}`;}
-        }
+        }}).catch(()=>{}).finally(()=>supportReadPending.delete(id));
       }
 
     } catch (error) { if (seq === supportThreadSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
@@ -1210,7 +1234,7 @@
       if (token !== state.token) return;
       form.reset();
       if (!reply) supportTicket = {id:saved.ticket_id, subject:payload.subject};
-      await Promise.all([loadProviderSupport(),supportTicket?.id === (reply ? id : saved.ticket_id) ? openProviderSupport() : Promise.resolve()]);
+      void Promise.all([loadProviderSupport(),supportTicket?.id === (reply ? id : saved.ticket_id) ? openProviderSupport() : Promise.resolve()]);
       setMessage("Your message was sent to Atlantic Express Support.", true, "providerSupportStatus");
     } catch (error) { if (token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
     finally { button.disabled = false; }
@@ -1231,6 +1255,7 @@
       else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
       else if (state.activeView === "messages") { if(community)await community.refresh();else await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
+      else if (state.activeView === "subscription") {state.provider=await api("/providers/me");if(!state.plans.length)await loadPlans();renderOverview();}
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
       else if (state.activeView === "products" && $("productForm").classList.contains("hidden")) await loadProducts({reset:true});
       else if (state.activeView === "listings" && $("listingForm").classList.contains("hidden")) await loadListings({reset:true});
@@ -1241,10 +1266,11 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshVisibleProviderPage(); });
   window.addEventListener("focus", () => { void refreshVisibleProviderPage(); });
   function switchView(view, { persist = true } = {}) {
+    if(view==='requests')view='messages';
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
     void refreshHallShortcut();
-    if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",location.pathname+"?view="+encodeURIComponent(nextView));}
+    if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",providerViewURL(nextView));}
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
     document.querySelectorAll("[data-view-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.viewPanel !== nextView));
     void refreshVisibleProviderPage();
@@ -1332,7 +1358,8 @@
   $("retrySessionRestore").addEventListener("click", () => void boot());
   $("cancelSessionRestore").addEventListener("click", signOut);
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view))); document.querySelectorAll("[data-auth-view]").forEach((button) => button.addEventListener("click", () => switchAuth(button.dataset.authView)));
-  boot().catch((error) => setMessage(error.message));
+  window.ServiceCategoryPicker?.mount($("listingForm"));
+  if(!window.ProviderNativeBridge?.attach({start:async token=>{state.token=token;await boot();},error:error=>setMessage(error.message),resume:async()=>{if(state.activeView==='subscription')await refreshSubscriptionStatus();else await refreshVisibleProviderPage();}}))boot().catch((error) => setMessage(error.message));
   window.watchCatalogChanges({
     url: `${API}/catalog/version`,
     enabled: () => Boolean(state.token && state.provider && !state.booting),
