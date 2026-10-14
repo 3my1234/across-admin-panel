@@ -218,7 +218,7 @@
     renderOverview();
     state.booting = false;
     startProviderNotificationPolling();
-    if(["conversation","shared","friend","hall"].some(key=>new URLSearchParams(location.search).has(key)))void openProviderLink(location.href).catch(error=>setMessage(error.message));
+    if(["conversation","shared","hall","ticket","event","notification"].some(key=>new URLSearchParams(location.search).has(key)))void openProviderLink(location.href).catch(error=>setMessage(error.message));
     void handleSubscriptionReturn();
     window.ProviderFormDefaults?.apply($("onboardingForm"),state.account||{},state.provider||{});
     void refreshVisibleProviderPage();
