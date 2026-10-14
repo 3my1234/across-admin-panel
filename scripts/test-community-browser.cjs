@@ -33,7 +33,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
  if(path.includes('/messages')){if(options.method==='POST'){if(__failSend)throw Error('Temporary send failure');return {id:'44444444-4444-4444-8444-444444444444',body:JSON.parse(options.body).message,created_at:new Date().toISOString(),is_mine:true}}if(window.__notModified&&options.headers?.['If-None-Match'])return {unchanged:true};return {_etag:'steady',items:[{id:friend,body:'Hello',created_at:new Date().toISOString(),is_mine:false}],can_send:true};}
  if(path.startsWith('/chat/statuses'))return {items:[]};
  if(path.startsWith('/chat/promotions'))return {items:[],pending:false};
- const preview={id:hall,title:'50 bags of rice',description:'Rice for an occasion',location:'Abuja',quantity:50,unit:'bag',target_unit_price:48500,state:'open',is_owner:true,admitted:true,seats:0,offers:[],applications:[]};
+ const preview={id:hall,title:'50 bags of rice',buyer_name:'Amina',created_at:new Date().toISOString(),message_only:true,description:'I need 50 bags of rice for an occasion in Abuja. My budget is ₦48,500 per bag. Who can help?',location:'',quantity:null,unit:'',target_unit_price:null,state:'open',is_owner:true,admitted:true,seats:0,offers:[],applications:[]};
  if(path.startsWith('/chat/town-hall?'))return {items:[preview]};
  if(path==='/chat/town-hall/'+hall)return preview;
  return {};};
