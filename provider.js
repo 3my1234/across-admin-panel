@@ -17,6 +17,8 @@
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token});
+  if(community)document.querySelector('[data-view="messages"]')?.removeAttribute("data-provider-profile");
   const money = (value, currency = "NGN") => {
     try { return new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "NGN", maximumFractionDigits: 2 }).format(Number(value || 0)); }
     catch (_) { return ((currency || "") + " " + Number(value || 0).toLocaleString()).trim(); }
@@ -145,6 +147,7 @@
   }
 
   function signOut() {
+    community?.reset();
     window.ProviderPWA?.disconnect(state.token);
     resetProviderSupport();
     state.booting = false;
@@ -198,7 +201,7 @@
     renderOverview();
     state.booting = false;
     startProviderNotificationPolling();
-    if(new URLSearchParams(location.search).has("conversation"))void openProviderLink(location.href).catch(error=>setMessage(error.message));
+    if(["conversation","shared","friend","hall"].some(key=>new URLSearchParams(location.search).has(key)))void openProviderLink(location.href).catch(error=>setMessage(error.message));
     void handleSubscriptionReturn();
     const loads = [loadPlans(), loadBuyerMarkets()];
     if (state.provider) loads.push(loadListings({ reset: true }), loadRequests({ reset: true }), loadVerificationDocuments(), loadProducts({ reset: true }), loadMerchantOrders({ reset: true }), loadManifests({ reset: true }), loadProviderNotifications(), loadConversations());
@@ -209,6 +212,7 @@
   }
 
   function notificationCopy(item) {
+    if(item.source==='community')return {title:item.title,body:item.body};
     const meta = item.metadata || {};
     const title = meta.listing_title || meta.title || human(item.event_type);
     const body = meta.notes || meta.message || ({ request_created: "A buyer sent a new booking or enquiry.", listing_approved: "Your service listing is now visible to buyers.", listing_rejected: "Your service listing needs changes.", provider_approved: "Your provider account was approved.", provider_rejected: "Your provider verification was rejected." }[item.event_type] || "Your provider account has new activity.");
@@ -229,16 +233,27 @@
     const url=new URL("provider.html",location.href);
     const view=kind==="conversation_message"?"messages":kind==="request_created"?"requests":kind.startsWith("listing_")?"listings":kind.startsWith("product_")?"products":kind.includes("order")?"merchant-orders":kind.includes("subscription")?"subscription":"overview";
     url.searchParams.set("view",view);if(meta.conversation_id)url.searchParams.set("conversation",meta.conversation_id);
+    if(item.source==='community'){
+      url.searchParams.set('view',kind==='ticket_reply'?'support':'messages');
+      if(meta.chat_room_id)url.searchParams.set('shared',meta.chat_room_id);
+      if(meta.town_hall_room_id)url.searchParams.set('hall',meta.town_hall_room_id);
+      if(meta.ticket_id)url.searchParams.set('ticket',meta.ticket_id);
+      if(kind==='friend_request')url.searchParams.set('community','friends');
+    }
     const navigation=openProviderLink(url.href).catch(error=>{if(actor===state.token)setMessage(error.message);});
-    try{await api(`/providers/me/notifications/${encodeURIComponent(id)}/read`,{method:"PATCH"});if(actor===state.token){if(!item.read_at)state.unreadNotifications=Math.max(0,state.unreadNotifications-1);item.read_at=new Date().toISOString();renderProviderNotifications();}}
+    try{await api(item.source==='community'?`/notifications/${encodeURIComponent(id)}/read`:`/providers/me/notifications/${encodeURIComponent(id)}/read`,{method:"PATCH"});if(actor===state.token){if(!item.read_at)state.unreadNotifications=Math.max(0,state.unreadNotifications-1);item.read_at=new Date().toISOString();renderProviderNotifications();}}
     catch(error){if(actor===state.token)setMessage(error.message);}
     await navigation;
   }
   async function loadProviderNotifications({ silent = false } = {}) {
-    if (!state.provider) return;
+    if (!state.token) return;
     try {
       const previous = state.unreadNotifications; const known = new Set(state.notifications.map(item => item.id));
-      const data = await api("/providers/me/notifications?limit=50"); state.notifications = data.items || []; state.unreadNotifications = Number(data.unread_count || 0); renderProviderNotifications();
+      const actor=state.token;
+      const [data,userData]=await Promise.all([state.provider?api("/providers/me/notifications?limit=50"):Promise.resolve({items:[],unread_count:0}),api('/notifications')]);
+      if(actor!==state.token)return;
+      const social=(userData.notifications || []).filter(item=>['friend_request','social_message','ticket_reply'].includes(item.type)||item.type.startsWith('town_hall_')).map(item=>({...item,event_type:item.type,metadata:item.data,source:'community',read_at:item.is_read?item.created_at:null}));
+      state.notifications=[...(data.items || []),...social].sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)); state.unreadNotifications=Number(data.unread_count || 0)+social.filter(item=>!item.read_at).length;renderProviderNotifications();
       const listingChanged = state.notifications.some(item => !known.has(item.id) && ["listing_approved", "listing_rejected", "listing_suspended"].includes(item.event_type));
       if (silent && state.unreadNotifications > previous) playProviderAlert();
       if (silent && listingChanged) await loadListings({ reset: true });
@@ -248,9 +263,9 @@
   }
   function startProviderNotificationPolling() {
     if (state.notificationTimer) clearInterval(state.notificationTimer);
-    state.notificationTimer = setInterval(() => { if (!document.hidden && state.token && state.provider) void loadProviderNotifications({ silent: true }); }, 30000);
+    state.notificationTimer = setInterval(() => { if (!document.hidden && state.token) void loadProviderNotifications({ silent: true }); }, 30000);
   }
-  async function markProviderNotificationsRead() { await api("/providers/me/notifications/read-all", { method: "PATCH" }); await loadProviderNotifications(); }
+  async function markProviderNotificationsRead() { await Promise.all([state.provider?api("/providers/me/notifications/read-all",{method:"PATCH"}):Promise.resolve(),api('/notifications/read-all',{method:'PATCH'})]);await loadProviderNotifications(); }
 
   async function onboard(event) {
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
@@ -1198,7 +1213,7 @@
       if (state.activeView === "support") { await loadProviderSupport(); if (supportTicket) await openProviderSupport(); }
       else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
-      else if (state.activeView === "messages") { await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
+      else if (state.activeView === "messages") { if(community)await community.refresh();else await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
       else if (state.activeView === "products" && $("productForm").classList.contains("hidden")) await loadProducts({reset:true});
       else if (state.activeView === "listings" && $("listingForm").classList.contains("hidden")) await loadListings({reset:true});
@@ -1219,13 +1234,14 @@
   async function openProviderLink(raw) {
     const url=new URL(raw,location.href),view=url.searchParams.get("view");if(url.origin!==location.origin || !PROVIDER_VIEWS.has(view))return;
     switchView(view,{persist:false});
-    const id=url.searchParams.get("conversation");if(view==="messages"&&id&&state.token){await loadConversations();if(!state.conversations.some(item=>item.id===id)){const result=await api(`/providers/me/conversations?conversation_id=${encodeURIComponent(id)}`);for(const item of result.items || [])if(!state.conversations.some(existing=>existing.id===item.id))state.conversations.push(item);}if(state.conversations.some(item=>item.id===id))await openConversation(id);}
+    if(view==="messages"&&community&&state.token)await community.activate({conversationId:url.searchParams.get("shared") || url.searchParams.get("conversation"),hallRoomId:url.searchParams.get('hall'),mode:url.searchParams.get("community") || undefined,invite:url.searchParams.get("friend") || undefined});
+    const id=url.searchParams.get("conversation");if(!community&&view==="messages"&&id&&state.token){await loadConversations();if(!state.conversations.some(item=>item.id===id)){const result=await api(`/providers/me/conversations?conversation_id=${encodeURIComponent(id)}`);for(const item of result.items || [])if(!state.conversations.some(existing=>existing.id===item.id))state.conversations.push(item);}if(state.conversations.some(item=>item.id===id))await openConversation(id);}
     const ticket=url.searchParams.get("ticket");if(view==="support"&&ticket&&state.token){supportThreadSequence++;await loadProviderSupport();supportTicket=supportTickets.find(item=>item.id===ticket) || {id:ticket,subject:"Atlantic Express Support"};await openProviderSupport();}
     const event=url.searchParams.get("event"),notification=url.searchParams.get("notification");
     if(state.token && event)await api(`/providers/me/notifications/${encodeURIComponent(event)}/read`,{method:"PATCH"});
     if(state.token && notification)await api(`/notifications/${encodeURIComponent(notification)}/read`,{method:"PATCH"});
   }
-  window.addEventListener("popstate",event=>{if(document.querySelector(".chat-photo-viewer[open],.provider-more-menu[open]"))return;if($("conversationDialog").open){$("conversationDialog").close();return;}switchView(event.state?.providerView || "overview",{persist:false});});
+  window.addEventListener("popstate",event=>{if(document.querySelector(".chat-photo-viewer[open],.provider-more-menu[open]"))return;if($("conversationDialog").open){$("conversationDialog").close();return;}if(community?.isOpen()){if(event.state?.communityChat)void community.openID(event.state.communityChat);else community.close();}switchView(event.state?.providerView || "overview",{persist:false});});
   navigator.serviceWorker?.addEventListener("message",event=>{if(event.data?.type==="provider-notification")void openProviderLink(event.data.url).catch(error=>setMessage(error.message));});
   const requestedView=new URLSearchParams(location.search).get("view");if(PROVIDER_VIEWS.has(requestedView))state.activeView=requestedView;
   function resetAuthForms() {
@@ -1250,7 +1266,7 @@
     $("providerTypeOtherField").querySelector("input").required = isOther;
   }));
   $("listingPriceMode").addEventListener("change", syncListingPriceMode);
-  $("refreshConversations").addEventListener("click", () => void loadConversations());
+  $("refreshConversations").addEventListener("click", () => void (community?community.refresh():loadConversations()));
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
   $("conversationDialog").addEventListener("close", () => { conversationGeneration++; state.currentConversation=null;if(history.state?.providerChat)history.back(); });
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);
