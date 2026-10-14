@@ -9,7 +9,7 @@
         const button = (text, attributes = '', secondary = true) => `<button type="button" class="${secondary ? 'secondary' : ''}" ${attributes}>${escape(text)}</button>`;
         function error(message) { const target = element.querySelector('.community-error'); if (target)
             target.textContent = message || ''; }
-        function reset() { generation++; threadGeneration++; disposeUpdates?.(); disposeUpdates = null; actor = ''; profile = null; inbox = []; friends = []; selected = null; messages = []; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; etags.clear(); cache.clear(); element.replaceChildren(); delete element.dataset.communityMode; }
+        function reset() { generation++; threadGeneration++; disposeUpdates?.(); disposeUpdates = null; actor = '';mode='chats';hallRoomId=''; profile = null; inbox = []; friends = []; selected = null; messages = []; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; etags.clear();readAcknowledged.clear(); cache.clear(); element.replaceChildren(); delete element.dataset.communityMode; }
         function shell() { element.innerHTML = `<div class="community-tabs">${[['chats', 'Chats'], ['friends', 'Friends'], ['updates', 'Updates'], ['town-hall', 'Town Hall']].map(([key, label]) => button(label, `data-community-mode="${key}" class="${mode === key ? 'is-active' : ''}"`)).join('')}</div><p class="community-error" role="status"></p><div class="community-body"></div>`; for (const b of element.querySelectorAll('[data-community-mode]')) {
             b.classList.toggle('is-active', b.dataset.communityMode === mode);
             b.onclick = () => { threadGeneration++; selected = null; mode = b.dataset.communityMode; cursor = ''; void refresh(); };
@@ -138,7 +138,7 @@
             shell();
             const body = element.querySelector('.community-body');
             body.innerHTML = `<div class="community-row">${button('Back to chats', 'data-community-back')}<h3>${escape(selected.title)}</h3>${selected.source === 'shared' && selected.kind === 'direct' ? button('Block', 'data-community-block') + button('Report', 'data-community-report') : ''}</div><p class="community-note">${escape(selected.context?.title || '')}</p><div class="community-thread"><div class="community-history" role="log" aria-label="Chat messages"></div><div class="community-photos"></div><p class="community-note community-readonly"></p><form class="community-compose"><label aria-label="Attach photos"><input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="Attach photos"/></label><textarea name="message" maxlength="2000" rows="2" aria-label="Message" placeholder="Write a message"></textarea><button type="submit">Send</button></form></div>`;
-            body.querySelector('[data-community-back]').onclick = () => { threadGeneration++; selected = null; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; void refresh(); };
+            body.querySelector('[data-community-back]').onclick = () => { threadGeneration++;if(selected.kind==='town_hall'){hallRoomId=selected.id;mode='town-hall';delete element.dataset.communityMode;} selected = null; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; void refresh(); };
             const block = body.querySelector('[data-community-block]');
             if (block)
                 block.onclick = () => { if (confirm('Block this person from sending you direct messages?'))
@@ -250,7 +250,7 @@
             }
         }
         async function open(item) { if (!item)
-            return; generation++; selected = item; mode = 'chats'; const cached = cache.get(actor, item.id); messages = cached?.messages || []; messageCursor = cached?.cursor || ''; canSend = item.state === 'open'; photos = []; retry = null; renderThread(); if (history.state?.communityChat !== item.id)
+            return; generation++; selected = item; mode = 'chats'; const cached = cache.get(actor, item.id);if(!cached)etags.delete(item.id); messages = cached?.messages || []; messageCursor = cached?.cursor || ''; canSend = item.state === 'open'; photos = []; retry = null; renderThread(); if (history.state?.communityChat !== item.id)
             history.pushState({ providerView: 'messages', communityChat: item.id }, '', location.pathname + '?view=messages&shared=' + encodeURIComponent(item.id)); try {
             await readThread();
         }

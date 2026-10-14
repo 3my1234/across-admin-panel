@@ -1,6 +1,8 @@
 const CACHE="atl-provider-shell-20261014-v6";
 const root=new URL("./",self.location.href);
 function communityDestination(url,payload){for(const [field,param] of [['chat_room_id','shared'],['town_hall_room_id','hall']])if(/^[a-f0-9-]{36}$/i.test(payload[field]||''))url.searchParams.set(param,payload[field]);if(['chats','friends','updates','town-hall'].includes(payload.community))url.searchParams.set('community',payload.community);return url;}
+// Refresh an already-open chat on arrival without navigating or exposing its body.
+self.addEventListener('push',event=>event.waitUntil((async()=>{let payload;try{payload=event.data?.json()}catch{return}if(!payload)return;const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of clients){if(new URL(client.url).origin===root.origin)client.postMessage({type:'provider-community-activity'});}})()));
 const shell=new Set(["provider.html","provider.js","provider.css","community-portal.js","community-portal.css","provider-identity.js","provider-identity.css","provider-background.png","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","provider-updates.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
 // Activate a waiting update only after the person chooses Refresh app.
 shell.add('community-updates.js');shell.add('community-town-hall.js');

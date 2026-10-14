@@ -30,7 +30,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
  if(path.startsWith('/chat/inbox'))return {items:[{id:room,source:'shared',kind:'direct',title:'Friend',state:'open',unread_count:1,context:{},peer_user_id:friend}]};
  if(path==='/chat/conversations')return {id:room};
  if(path.includes('/read'))return {};
- if(path.includes('/messages')){if(options.method==='POST'){if(__failSend)throw Error('Temporary send failure');return {id:'44444444-4444-4444-8444-444444444444',body:JSON.parse(options.body).message,created_at:new Date().toISOString(),is_mine:true}}return {items:[{id:friend,body:'Hello',created_at:new Date().toISOString(),is_mine:false}],can_send:true};}
+ if(path.includes('/messages')){if(options.method==='POST'){if(__failSend)throw Error('Temporary send failure');return {id:'44444444-4444-4444-8444-444444444444',body:JSON.parse(options.body).message,created_at:new Date().toISOString(),is_mine:true}}if(window.__notModified&&options.headers?.['If-None-Match'])return {unchanged:true};return {_etag:'steady',items:[{id:friend,body:'Hello',created_at:new Date().toISOString(),is_mine:false}],can_send:true};}
  if(path.startsWith('/chat/statuses'))return {items:[]};
  if(path.startsWith('/chat/promotions'))return {items:[],pending:false};
  const preview={id:hall,title:'50 bags of rice',description:'Rice for an occasion',location:'Abuja',quantity:50,unit:'bag',target_unit_price:48500,state:'open',is_owner:true,admitted:true,seats:0,offers:[],applications:[]};
@@ -64,6 +64,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             await delay(80);
             assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-compose textarea').value`), '');
             assert.equal(await evaluate(`(()=>{const sends=__calls.filter(([path,method])=>path.includes('/messages')&&method==='POST');return JSON.parse(sends[0][2]).client_message_id===JSON.parse(sends[1][2]).client_message_id})()`), true, 'same retry reference');
+            await evaluate(`window.__realNow=Date.now;Date.now=()=>__realNow()+360001;window.__notModified=true;__community.openID('11111111-1111-4111-8111-111111111111')`);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-history').textContent.includes('Hello')`),true,'expired private cache must fetch history instead of accepting an empty 304');await evaluate(`Date.now=__realNow;window.__notModified=false`);
             await send('Emulation.setDeviceMetricsOverride', { width, height: 450, deviceScaleFactor: 1, mobile: width < 768 });
             await evaluate(`document.documentElement.style.setProperty('--visible-viewport-height','450px');document.querySelector('#communityBrowserRoot textarea').focus();document.querySelector('#communityBrowserRoot .community-compose').scrollIntoView({block:'end'})`);
             assert.ok((await evaluate(`document.querySelector('#communityBrowserRoot .community-compose').getBoundingClientRect().bottom`)) <= 450, 'community composer stays reachable with reduced keyboard viewport');

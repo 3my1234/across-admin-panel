@@ -3,7 +3,7 @@
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     async function mount({ element, request, getActor, openChat, roomId = '' }) {
         const actor = getActor();
-        let room = null, mine = false, busy = false, cursor = '', items = [], createReference = null;
+        let room = null, mine = false, busy = false, cursor = '', items = [], createReference = null,offerReference=null;
         const live = () => actor === getActor() && element.isConnected;
         const originalRequest = request;
         request = (path, options = {}) => { if (path === '/chat/town-hall' && options.method === 'POST') {
@@ -11,7 +11,7 @@
             if (createReference?.fingerprint !== fingerprint)
                 createReference = { fingerprint, id: crypto.randomUUID() };
             options = { ...options, body: JSON.stringify({ ...payload, client_request_id: createReference.id }) };
-        } return originalRequest(path, options); };
+        }if(path.endsWith('/offers')&&options.method==='POST'){const payload=JSON.parse(options.body),fingerprint=JSON.stringify(payload);if(offerReference?.fingerprint!==fingerprint)offerReference={fingerprint,id:crypto.randomUUID()};options={...options,body:JSON.stringify({...payload,client_message_id:offerReference.id})}} return originalRequest(path, options); };
         const button = (label, attr) => `<button type="button" ${attr}>${esc(label)}</button>`;
         async function act(fn) { if (busy)
             return; busy = true; element.querySelectorAll('button').forEach(b => b.disabled = true); try {
