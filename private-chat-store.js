@@ -1,0 +1,15 @@
+// Encrypted, bounded device snapshots. API responses never enter the service-worker cache.
+(function(root){
+ 'use strict';const ttl=7*86400000,encoder=new TextEncoder(),decoder=new TextDecoder();let database;
+ const sessions=new Map();
+ function db(){return database||(database=new Promise((resolve,reject)=>{const open=indexedDB.open('atl-private-chats-v1',1);open.onupgradeneeded=()=>open.result.createObjectStore('sessions');open.onsuccess=()=>resolve(open.result);open.onerror=()=>reject(open.error);}));}
+ async function transact(mode,run){const database=await db();return new Promise((resolve,reject)=>{const tx=database.transaction('sessions',mode),req=run(tx.objectStore('sessions'));tx.oncomplete=()=>resolve(req.result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}
+ async function session(actor){if(!actor||!root.crypto?.subtle||!root.indexedDB)return null;if(!sessions.has(actor))sessions.set(actor,{closed:false,chain:Promise.resolve(),loaded:null});const state=sessions.get(actor);if(!state.loaded)state.loaded=(async()=>{const hash=await crypto.subtle.digest('SHA-256',encoder.encode(actor));state.id=Array.from(new Uint8Array(hash),x=>x.toString(16).padStart(2,'0')).join('');const saved=await transact('readonly',s=>s.get(state.id));if(state.closed)return state;
+   state.key=saved?.key||await crypto.subtle.generateKey({name:'AES-GCM',length:256},false,['encrypt','decrypt']);state.entries={};
+   if(saved?.data)try{state.entries=JSON.parse(decoder.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:saved.iv},state.key,saved.data)));}catch{/* Discard corrupt snapshots; server history is authoritative. */}return state;})();return state.loaded;}
+ root.PrivateChatStore={
+  async get(actor,id){if(root.ProviderNativeBridge?.embedded())return root.ProviderNativeBridge.cacheGet?.(id)||null;try{const s=await session(actor);const item=!s?.closed&&s?.entries?.[id];return item&&Date.now()-item.saved<ttl?item.value:null;}catch{return null;}},
+  put(actor,id,value){if(root.ProviderNativeBridge?.embedded()){root.ProviderNativeBridge.cachePut?.(id,value);return;}void session(actor).then(s=>{if(!s||s.closed)return;s.chain=s.chain.then(async()=>{if(s.closed)return;s.entries[id]={saved:Date.now(),value};let keys=Object.keys(s.entries).sort((a,b)=>s.entries[a].saved-s.entries[b].saved);while(keys.length>12||JSON.stringify(s.entries).length>256000){delete s.entries[keys.shift()];}const iv=crypto.getRandomValues(new Uint8Array(12)),data=await crypto.subtle.encrypt({name:'AES-GCM',iv},s.key,encoder.encode(JSON.stringify(s.entries)));if(!s.closed)await transact('readwrite',store=>store.put({key:s.key,iv,data},s.id));}).catch(()=>{});}).catch(()=>{});},
+  async clear(actor){if(root.ProviderNativeBridge?.embedded())return;const state=sessions.get(actor);if(state)state.closed=true;try{const s=state?await state.loaded:await session(actor);if(!s)return;s.closed=true;await s.chain;await transact('readwrite',store=>store.delete(s.id));s.entries={};s.key=null;}catch{/* Cache failure must never prevent logout. */}}
+ };
+})(globalThis);

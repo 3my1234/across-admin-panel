@@ -3,14 +3,14 @@
     const escape = value => String(value ?? "").replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const validID = id => /^[a-f0-9-]{36}$/i.test(id || '');
     function create({ element, request, getActor }) {
-        let actor = '', mode = 'chats', inbox = [], selected = null, messages = [], cursor = '', messageCursor = '', canSend = true, generation = 0, threadGeneration = 0, busy = false, photos = [], retry = null, hallRoomId = '';
+        let actor = '', mode = 'chats', inbox = [], selected = null, messages = [], cursor = '', messageCursor = '', canSend = true, generation = 0, threadGeneration = 0, busy = false, photos = [], retry = null, hallRoomId = '', searchQuery = '', inboxConfirmed=false;
         const etags = new Map(), readAcknowledged = new Map(), readPending = new Map(), readFlights = new Map(), cache = root.PortalChatHistory.create();
         function showRoom(open) { element.classList.toggle('community-room-open',open);if(!open)element.classList.remove('community-town-room');document.body.classList.toggle('community-chat-open',open); }
         const live = (captured, sequence) => captured === getActor() && captured === actor && sequence === generation;
         const button = (text, attributes = '', secondary = true) => `<button type="button" class="${secondary ? 'secondary' : ''}" ${attributes}>${escape(text)}</button>`;
         function error(message) { const target = element.querySelector('.community-error'); if (target)
             target.textContent = message || ''; }
-        function reset() { generation++; threadGeneration++; showRoom(false); actor = '';mode='chats';hallRoomId=''; inbox = []; selected = null; messages = []; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; etags.clear();readAcknowledged.clear();readPending.clear();readFlights.clear(); cache.clear(); element.replaceChildren(); delete element.dataset.communityMode; }
+        function reset() { generation++; threadGeneration++; showRoom(false); if(actor)void root.PrivateChatStore?.clear(actor); actor = '';mode='chats';searchQuery='';hallRoomId=''; inbox = []; selected = null; messages = []; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; etags.clear();readAcknowledged.clear();readPending.clear();readFlights.clear(); cache.clear(); inboxConfirmed=false; element.replaceChildren(); delete element.dataset.communityMode; }
         function shell() { element.innerHTML = `<div class="community-tabs">${[['chats', 'Chats'], ['town-hall', 'Town Hall']].map(([key, label]) => button(label, `data-community-mode="${key}" class="${mode === key ? 'is-active' : ''}"`)).join('')}</div><p class="community-error" role="status"></p><div class="community-body"></div>`; for (const b of element.querySelectorAll('[data-community-mode]')) {
             b.classList.toggle('is-active', b.dataset.communityMode === mode);
             b.onclick = () => { threadGeneration++; selected = null; mode = b.dataset.communityMode; cursor = ''; void refresh(); };
@@ -21,8 +21,9 @@
             element.dataset.communityMode = mode;
             const body = element.querySelector('.community-body');
             if (mode === 'chats') {
-                body.innerHTML = inbox.length ? inbox.map(item => `<article class="community-card ${item.unread_count ? 'community-unread' : ''}"><div class="community-row"><div style="flex:1">${root.ProviderIdentity?.render(item.provider_identity) || `<h3>${escape(item.title)}</h3>`}<p>${escape(item.kind === 'business' ? item.context?.title || 'Product or service enquiry' : item.kind === 'town_hall' ? 'Town Hall bargaining' : 'Private chat')}</p></div>${item.unread_count ? `<span class="community-count">${Number(item.unread_count)}</span>` : ''}${button('Open', `data-community-chat="${item.id}"`)}</div></article>`).join('') : '<p>Your conversations appear here. Customer messages about your products and services appear here.</p>';
-                element.querySelectorAll('[data-community-chat]').forEach(b => b.onclick = () => void open(inbox.find(item => item.id === b.dataset.communityChat)));
+                body.innerHTML='<label class="chat-search"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search recent chats" aria-label="Search recent chats" value="'+escape(searchQuery)+'"/></label><div class="chat-inbox"></div>';
+                const draw=()=>{const items=inbox.filter(item=>(item.title+' '+(item.last_message||'')+' '+(item.context?.title||'')).toLowerCase().includes(searchQuery.toLowerCase()));body.querySelector('.chat-inbox').innerHTML=items.map(item=>{const name=item.title||'Chat',identity=item.actor_role==='provider'?null:item.provider_identity,avatar=identity?.avatar_url||item.avatar_url;return '<article class="chat-inbox-row '+(item.unread_count?'community-unread':'')+'"><span class="chat-avatar">'+(/^https:\/\//.test(avatar||'')?'<img src="'+escape(avatar)+'" alt="" loading="lazy"/>':escape(name.slice(0,1).toUpperCase()))+'</span><div class="chat-inbox-copy">'+(root.ProviderIdentity?.render(identity)||'<strong>'+escape(name)+'</strong>')+'<p>'+escape(item.last_message||item.context?.title||(item.kind==='town_hall'?'Town Hall conversation':'Start a conversation'))+'</p></div><div class="chat-inbox-meta"><time>'+escape(item.last_message_at?new Date(item.last_message_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'')+'</time>'+(item.unread_count?'<span class="community-count">'+Number(item.unread_count)+'</span>':'')+'<button type="button" data-community-chat="'+item.id+'" aria-label="Open chat with '+escape(name)+'">›</button></div></article>';}).join('')||'<p class="community-note">'+(inbox.length?'No matching recent chats.':'Your product and service conversations appear here.')+'</p>';body.querySelectorAll('[data-community-chat]').forEach(button=>{const row=button.closest('.chat-inbox-row');row.onclick=event=>{if(event.target.closest('[data-provider-badge]'))return;void open(inbox.find(item=>item.id===button.dataset.communityChat));};});};
+                body.querySelector('input[type=search]').oninput=event=>{searchQuery=event.target.value;draw();};draw();
             }
             else if (mode === 'town-hall')
                 void root.CommunityTownHall.mount({element:body,request,getActor,openChat:openID,roomId:hallRoomId});
@@ -55,6 +56,7 @@
             if (element.contains(document.activeElement) && document.activeElement.matches('input,textarea,select'))
                 return;
             const captured = actor, sequence = ++generation;
+            if(!inbox.length)void root.PrivateChatStore?.get(captured,'inbox').then(saved=>{if(saved&&live(captured,sequence)&&!inbox.length&&!selected&&!inboxConfirmed){inbox=saved;renderList();}});
             if (!element.children.length) {
                 shell();
                 element.querySelector('.community-body').textContent = 'Loading conversations...';
@@ -70,7 +72,7 @@
                     return;
                 const previous = inbox;
                 const next = older ? [...previous, ...(data.items || []).filter(item => !previous.some(old => old.id === item.id))] : data.items || [];
-                inbox = next;
+                inboxConfirmed=true;inbox = next;root.PrivateChatStore?.put(actor,'inbox',inbox.slice(0,25));
                 cursor = data.next_cursor || '';
                 renderList();
             }
@@ -87,7 +89,7 @@
             element.classList.toggle('community-town-room',selected.kind==='town_hall');
             shell();
             const body = element.querySelector('.community-body');
-            body.innerHTML = `<div class="community-row">${button('Back to chats', 'data-community-back')}<h3>${escape(selected.title)}</h3>${selected.source === 'shared' && selected.kind === 'direct' ? button('Block', 'data-community-block') + button('Report', 'data-community-report') : ''}</div><p class="community-note">${escape(selected.context?.title || '')}</p><div class="community-thread"><div class="community-history" role="log" aria-label="Chat messages"></div><div class="community-photos"></div><p class="community-note community-readonly"></p><form class="community-compose"><label aria-label="Attach photos"><input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="Attach photos"/></label><textarea name="message" maxlength="2000" rows="2" aria-label="Message" placeholder="Write a message"></textarea><button type="submit">Send</button></form></div>`;
+            body.innerHTML = `<div class="community-row">${button('←', 'data-community-back aria-label="Back to chats"')}<span class="chat-header-avatar">${escape(selected.title.slice(0,1).toUpperCase())}</span><h3>${escape(selected.title)}</h3>${selected.source === 'shared' && selected.kind === 'direct' ? '<details class="chat-safety"><summary aria-label="Conversation options">⋮</summary>'+button('Block', 'data-community-block') + button('Report', 'data-community-report')+'</details>' : ''}</div><p class="community-note">${escape(selected.context?.title || '')}</p><div class="community-thread"><div class="community-history" role="log" aria-label="Chat messages"></div><div class="community-photos"></div><p class="community-note community-readonly"></p><form class="community-compose"><label aria-label="Attach photos"><input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="Attach photos"/></label><textarea name="message" maxlength="2000" rows="1" aria-label="Message" placeholder="Write a message"></textarea><button type="submit">Send</button></form></div>`;
             body.querySelector('[data-community-back]').onclick = () => { threadGeneration++;if(selected.kind==='town_hall'){hallRoomId=selected.id;mode='town-hall';delete element.dataset.communityMode;} selected = null; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; renderList();void refresh(); };
             const block = body.querySelector('[data-community-block]');
             if (block)
@@ -159,7 +161,7 @@
                 return;
             const bottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100, height = target.scrollHeight, top = target.scrollTop;
             const room=selected.kind==='town_hall';
-            target.innerHTML = (messageCursor ? button('Earlier messages', 'data-community-earlier') : room?`<div class="room-welcome">Welcome to the room<br><strong>Topic: ${escape(selected.title)}</strong></div>`:'') + messages.map(item => {const name=item.sender_name||(item.is_mine?'You':'Provider');const colour=Array.from(name).reduce((sum,c)=>sum+c.charCodeAt(0),0)%5;return `<article class="chat-bubble ${item.is_mine ? 'chat-mine' : 'chat-theirs'} ${room?'room-line':''}">${room?`<span class="room-name room-name-${colour}">${escape(name)}</span> `:item.sender_name&&!item.is_mine?`<strong>${escape(item.sender_name)}</strong>`:''}<${room?'span':'p'}>${escape(item.body)}</${room?'span':'p'}>${(item.media_urls || []).filter(url => /^https:\/\//.test(url)).map(url => `<button type="button" data-chat-photo="${escape(url)}" aria-label="View photo"><img src="${escape(url)}" loading="lazy" alt="Chat attachment"/></button>`).join('')}<small>${escape(room?new Date(item.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):new Date(item.created_at).toLocaleString())}</small></article>`;}).join('');
+            target.innerHTML = (messageCursor ? button('Earlier messages', 'data-community-earlier') : room?`<div class="room-welcome">Welcome to the room<br><strong>Topic: ${escape(selected.title)}</strong></div>`:'') + messages.map(item => {const name=item.sender_name||(item.is_mine?'You':'Provider');const colour=Array.from(name).reduce((sum,c)=>sum+c.charCodeAt(0),0)%5;return `<article class="chat-bubble ${item.is_mine ? 'chat-mine' : 'chat-theirs'} ${room?'room-line':''}">${room?`<span class="room-name room-name-${colour}">${escape(name)}</span> `:item.sender_name&&!item.is_mine?`<strong>${escape(item.sender_name)}</strong>`:''}<${room?'span':'p'}>${escape(item.body)}</${room?'span':'p'}>${(item.media_urls || []).filter(url => /^https:\/\//.test(url)).map(url => `<button type="button" data-chat-photo="${escape(url)}" aria-label="View photo"><img src="${escape(url)}" loading="lazy" alt="Chat attachment"/></button>`).join('')}<small>${escape(new Date(item.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))}</small></article>`;}).join('');
             if (bottom)
                 target.scrollTop = target.scrollHeight;
             else
@@ -207,14 +209,14 @@
             messages=next;
             messageCursor = nextCursor;
             canSend = data.can_send !== false && selected.state === 'open';
-            cache.put(actor, room, messages, messageCursor);
+            cache.put(actor, room, messages, messageCursor);if(!older&&selected.kind!=='town_hall')root.PrivateChatStore?.put(actor,room,{messages:incoming,cursor:data.next_cursor||''});
             if(changed)renderMessages();
             if (!older && messages.length && !document.hidden) {
                 acknowledge(room,messages.at(-1).id,captured);
             }
         }
         async function open(item) { if (!item)
-            return; generation++; threadGeneration++;selected = item; mode = 'chats'; const cached = cache.get(actor, item.id);if(!cached)etags.delete(item.id); messages = cached?.messages || []; messageCursor = cached?.cursor || ''; canSend = item.state === 'open'; photos = []; retry = null; renderThread(); if (history.state?.communityChat !== item.id)
+            return; generation++; threadGeneration++;selected = item; mode = 'chats'; const cached = cache.get(actor, item.id);if(!cached)etags.delete(item.id); messages = cached?.messages || []; messageCursor = cached?.cursor || ''; canSend = item.state === 'open'; photos = []; retry = null; renderThread(); if(!cached&&item.kind!=='town_hall'){const captured=actor,version=threadGeneration;void root.PrivateChatStore?.get(captured,item.id).then(saved=>{if(saved&&captured===getActor()&&version===threadGeneration&&!messages.length){messages=saved.messages;messageCursor=saved.cursor||'';renderMessages();}});} if (history.state?.communityChat !== item.id)
             {const url=new URL(location.href);url.searchParams.set('view','messages');url.searchParams.set('shared',item.id);for(const key of ['conversation','hall','ticket'])url.searchParams.delete(key);history.pushState({ providerView: 'messages', communityChat: item.id }, '', url.pathname+url.search);} try {
             await readThread();
         }
@@ -222,7 +224,7 @@
             error(e.message);
         } }
         async function openID(id) { if (!validID(id))
-            return; const captured = actor, data = await request('/chat/inbox?conversation_id=' + encodeURIComponent(id)); if (captured !== getActor())
+            return; const known=inbox.find(item=>item.id===id);if(known)return open(known); const captured = actor, data = await request('/chat/inbox?conversation_id=' + encodeURIComponent(id)); if (captured !== getActor())
             return; if (data.items?.[0])
             await open(data.items[0]);
         else

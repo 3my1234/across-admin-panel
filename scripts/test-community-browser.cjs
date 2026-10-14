@@ -20,7 +20,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             await send('Page.navigate', { url: (process.env.COMMUNITY_TEST_ORIGIN || 'http://127.0.0.1:5175')+'/provider.html' });
             await evaluate(`new Promise((resolve,reject)=>{let tries=0;const poll=()=>{if(document.readyState==='complete'&&window.CommunityPortal&&window.CommunityTownHall)return resolve();if(++tries>100)return reject(Error('Community modules did not load'));setTimeout(poll,50)};poll()})`);
             await evaluate(`(async()=>{
- window.__errors=[];addEventListener('error',event=>__errors.push(event.message));window.__actor='first-account';window.__calls=[];window.__failSend=false;window.__historyAt=new Date().toISOString();window.__legacy=false;window.__holdRead=false;window.__holdHistory=false;
+ window.__errors=[];addEventListener('error',event=>__errors.push(event.message));window.__actor='first-account';window.__calls=[];window.__failSend=false;window.__historyAt=new Date().toISOString();window.__legacy=false;window.PrivateChatStore=undefined;window.__holdRead=false;window.__holdHistory=false;
  const host=document.createElement('section');host.id='communityBrowserRoot';host.style.cssText='position:fixed;inset:8px;overflow:auto;z-index:999;background:var(--dashboard-surface,#fff)';document.body.append(host);
  const room='11111111-1111-4111-8111-111111111111',friend='22222222-2222-4222-8222-222222222222',hall='33333333-3333-4333-8333-333333333333';
  const request=async(path,options={})=>{__calls.push([path,options.method||'GET',options.body]);
@@ -53,13 +53,13 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             await delay(80);
             assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-body').textContent.includes('Offers on the table')`), true);
             await evaluate(`__community.openID('11111111-1111-4111-8111-111111111111')`);
-            await evaluate(`window.__roomKind='town_hall';__community.openID('11111111-1111-4111-8111-111111111111')`);
+            await evaluate(`(async()=>{window.__roomKind='town_hall';__community.reset();await __community.activate();await __community.openID('11111111-1111-4111-8111-111111111111');})()`);
             assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot .room-name')&&!!document.querySelector('#communityBrowserRoot .room-welcome')`),true,'Town Hall renders compact named room lines');
             if(width===390&&process.env.COMMUNITY_SCREENSHOT){
                 await evaluate(`document.querySelector('[data-theme-preference]').value='dark';document.querySelector('[data-theme-preference]').dispatchEvent(new Event('change'))`);
                 const capture=await send('Page.captureScreenshot',{format:'png'});require('node:fs').writeFileSync(process.env.COMMUNITY_SCREENSHOT,Buffer.from(capture.data,'base64'));
             }
-            await evaluate(`window.__roomKind='';__community.openID('11111111-1111-4111-8111-111111111111')`);
+            await evaluate(`(async()=>{window.__roomKind='';__community.reset();await __community.activate();await __community.openID('11111111-1111-4111-8111-111111111111');})()`);
             await evaluate(`document.getElementById('communityBrowserRoot').style.cssText='margin:320px 8px 0;background:var(--dashboard-surface,#fff)';window.scrollTo(0,0)`);
             assert.ok((await evaluate(`document.querySelector('#communityBrowserRoot .community-compose').getBoundingClientRect().bottom`))<=844,'reply composer must be visible without scrolling past provider header');
             await evaluate(`document.querySelector('#communityBrowserRoot .community-compose textarea').value='Retry me';__failSend=true;document.querySelector('#communityBrowserRoot .community-compose').requestSubmit()`);

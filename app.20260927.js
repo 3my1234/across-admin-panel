@@ -2502,7 +2502,7 @@ function renderTicketHistory(ticketId,subject) {
     const messages = ticketHistory.length ? ticketHistory : (ticket?.message ? [{ sender_type: "user", message: ticket.message, created_at: ticket.created_at }] : []);
     const container = $("ticketMessagesList");
     container.innerHTML = messages.length ? messages.map(m => `
-      <div style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
+      <div class="support-chat-bubble ${m.sender_type==='admin'?'support-outgoing':'support-incoming'}" style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
         <p style="font-weight:700;font-size:12px;color:#66736F;margin-bottom:4px;">${m.sender_type === 'admin' ? 'Admin' : 'User'}</p>
         <p style="color:#191919;font-size:14px;">${escapeHtml(m.message)}</p>
         <p style="font-size:11px;color:#8C8C8C;margin-top:4px;">${format(m.created_at)}</p>

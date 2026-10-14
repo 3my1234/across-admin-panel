@@ -370,7 +370,7 @@
   $("merchantFulfillmentSearch")?.addEventListener("input", debounce(() => loadMerchantFulfillments({ reset: true }), 300));
   $("merchantFulfillmentRoute")?.addEventListener("change", () => loadMerchantFulfillments({ reset: true }));
   $("merchantFulfillmentStatusFilter")?.addEventListener("input", debounce(() => loadMerchantFulfillments({ reset: true }), 300));
-  setNavVisibility();
+  configureRoleUi();
   window.watchCatalogChanges({
     url: `${state.apiUrl}/api/v1/catalog/version`,
     enabled: () => Boolean(state.token && state.activeTab === "providers" && ["super_admin", "catalog_admin"].includes(state.role)),

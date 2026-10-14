@@ -27,7 +27,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
    assert.ok(layout.scroll<=layout.width+1,JSON.stringify(layout));assert.equal(layout.nav,width<=850?'flex':'none');
   }
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
-  await evaluate(`document.getElementById('conversationDialog').showModal();document.getElementById('conversationMessages').innerHTML='<button data-chat-photo="http://127.0.0.1:5175/provider-icon-512.png">Photo</button>';document.querySelector('[data-chat-photo]').click();`);
+  await evaluate(`document.getElementById('conversationDialog').showModal();document.getElementById('conversationMessages').innerHTML='<button data-chat-photo="${process.env.COMMUNITY_TEST_ORIGIN || "http://127.0.0.1:5175"}/provider-icon-512.png">Photo</button>';document.querySelector('[data-chat-photo]').click();`);
   await delay(100);
   const photo=await evaluate(`({open:document.querySelector('.chat-photo-viewer').open,src:document.querySelector('.photo-canvas img').src,width:document.querySelector('.chat-photo-viewer').getBoundingClientRect().width})`);
   assert.ok(photo.open&&photo.width===390);assert.ok(photo.src.endsWith('provider-icon-512.png'));

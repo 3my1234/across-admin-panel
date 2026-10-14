@@ -196,9 +196,10 @@
     $("retrySessionRestore").disabled = true;
     $("providerStatus").textContent = "Restoring provider session..."; setMessage("");
     try {
+      const providerRequest=api("/providers/me").then(value=>({value}),error=>({error}));
       const profileData = await api("/profile");
       state.account = profileData.profile || profileData.user || profileData;
-      try { state.provider = await api("/providers/me"); $("onboardingCard").classList.add("hidden"); }
+      try {const result=await providerRequest;if(result.error)throw result.error;state.provider=result.value;$("onboardingCard").classList.add("hidden"); }
       catch (error) { if (error.status === 404) { state.provider = null; $("onboardingCard").classList.remove("hidden"); } else throw error; }
     } catch (error) {
       if (error.status === 401) return signOut();
@@ -550,6 +551,7 @@
     $("listingPriceHelp").textContent = mode === "from" ? "The lowest price. Tell customers below what may cost extra." : "What the customer pays for the service described.";
   }
   function setListingFormOpen(open, { reset = false } = {}) {
+    if(open&&!window.L)void window.ProviderMapLoader?.load().then(()=>{if(!$("listingForm").classList.contains('hidden')){const form=$("listingForm");renderListingLocationPreview(Number(form.elements.latitude.value)||9.082,Number(form.elements.longitude.value)||8.6753);}}).catch(error=>setListingLocationStatus(error.message,'error'));
     const form = $("listingForm"); const toggle = $("toggleListingForm");
     if (reset) {
       form.reset(); state.editingListingID = ""; state.listingRetainedMediaUrls = []; state.listingLocationAccuracy = null; state.listingLocationSource = ""; renderExistingListingImages();
@@ -1180,7 +1182,7 @@
     } catch (error) { if (seq === supportListSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
   }
   function renderProviderSupportMessages() {
-      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
+      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice support-chat-bubble ${message.sender_type==="admin"?"support-incoming":"support-outgoing"}"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
     $("providerSupportSubject").textContent=supportTicket.subject;$("providerSupportThread").classList.remove("hidden");
   }
   function openProviderSupport(older = false) {
