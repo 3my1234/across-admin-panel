@@ -1,6 +1,7 @@
 (() => {
  const install=document.getElementById("installProviderApp");let prompt=null;
- const registration="serviceWorker" in navigator?navigator.serviceWorker.register("./provider-sw.js",{updateViaCache:"none"}):Promise.resolve(null);
+ const embedded=window.ProviderNativeBridge?.embedded()===true;
+ const registration=!embedded&&"serviceWorker" in navigator?navigator.serviceWorker.register("./provider-sw.js",{updateViaCache:"none"}):Promise.resolve(null);
  registration.catch(()=>{});
  window.ProviderAppUpdates?.watch(registration);
  const notify=document.getElementById("enableProviderNotifications"),notice=document.getElementById("providerPushStatus");
@@ -20,6 +21,7 @@
   notify.textContent="Phone notifications on";notice.textContent="New messages can appear on your phone even when this app is closed.";
  }
  async function setup() {
+  if(embedded){notice.textContent='You are using the provider workspace inside Atl.';return;}
   const actor=token();if(!actor||actor===owner||syncing)return;if(!("PushManager" in window)||!("Notification" in window)){notice.textContent="For phone notifications on iPhone, install this app from the Share menu first.";return;}
   syncing=true;owner=actor;
   try {const cfg=await pushAPI("/key",{},actor);if(actor!==token())return;if(!cfg.enabled){notice.textContent="Phone notifications are not available yet.";return;}key=cfg.public_key;notify.classList.remove("hidden");if(Notification.permission==="granted")await subscribe(actor);}
@@ -37,14 +39,13 @@
  const more=document.createElement("dialog");more.className="provider-more-menu";more.setAttribute("aria-label","Business tools");
  const heading=document.createElement("h2");heading.textContent="Your business";more.append(heading);
  const close=document.createElement("button");close.type="button";close.textContent="Close";close.onclick=()=>more.close();more.append(close);
- for(const [view,label] of [["overview","Home"],["merchant-orders","Orders"],["messages","Messages"],["support","Support"],["more","More"]]) {
+ for(const [view,label] of [["overview","Home"],["listings","Listings"],["messages","Chats"],["support","Support"],["more","More"]]) {
   const button=document.createElement("button");button.type="button";button.dataset.mobileView=view;button.textContent=label;
   button.onclick=()=>{if(view==="more"){more.showModal();history.pushState({...history.state,providerMore:true},"",location.href);}else source.querySelector(`[data-view="${button.dataset.mobileView}"]`)?.click();};nav.append(button);
  }
  function sync(){
   for(const button of nav.querySelectorAll("button")) {
-   if(button.textContent==="Orders"){button.dataset.mobileView=source.querySelector('[data-view="merchant-orders"]').classList.contains("hidden")?"requests":"merchant-orders";button.textContent=button.dataset.mobileView==="requests"?"Bookings":"Orders";}
-   if(button.textContent==="Bookings"&&!source.querySelector('[data-view="merchant-orders"]').classList.contains("hidden")){button.dataset.mobileView="merchant-orders";button.textContent="Orders";}
+   if(button.textContent==='Listings'){button.dataset.mobileView=source.querySelector('[data-view="listings"]').classList.contains('hidden')?'products':'listings';}
    const active=source.querySelector(`[data-view="${button.dataset.mobileView}"]`)?.classList.contains("active");button.classList.toggle("active",!!active);button.setAttribute("aria-current",active?"page":"false");
   }
   more.querySelectorAll("[data-tool]").forEach(button=>button.remove());
