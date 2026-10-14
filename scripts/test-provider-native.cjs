@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 async function main(){
  const messages=[],store=new Map();let starts=0,resumes=0;
- const context={URL,URLSearchParams,location:{href:'https://provider.atlxpres.com/?embedded=1&release=test',search:'?embedded=1'},ReactNativeWebView:{postMessage:value=>messages.push(JSON.parse(value))},localStorage:{setItem:(key,value)=>store.set(key,value)},StorageEvent:class{},dispatchEvent(){},document:{querySelector:()=>null}};
+ const context={URL,URLSearchParams,setTimeout,clearTimeout,location:{href:'https://provider.atlxpres.com/?embedded=1&release=test',search:'?embedded=1'},ReactNativeWebView:{postMessage:value=>messages.push(JSON.parse(value))},localStorage:{setItem:(key,value)=>store.set(key,value)},StorageEvent:class{},dispatchEvent(){},document:{querySelector:()=>null}};
  vm.createContext(context);vm.runInContext(fs.readFileSync('provider-native.js','utf8'),context);
  assert.equal(context.ProviderNativeBridge.attach({start:async token=>{assert.equal(token,'test-session');starts++;},resume:async()=>resumes++}),true);
  assert.deepEqual(messages,[{type:'provider-ready'}]);
@@ -9,6 +9,7 @@ async function main(){
  await context.ATLProviderNativeStart(config);await context.ATLProviderNativeStart(config);
  assert.equal(starts,1);assert.equal(store.get('atl.appearance.v1'),'dark');
  context.ATLProviderNativeResume();assert.equal(resumes,1);
+ const cached=context.ProviderNativeBridge.cacheGet('inbox'),request=messages.at(-1);assert.equal(request.type,'provider-cache-get');context.ATLProviderCacheReply({nonce:'test-nonce',requestId:request.requestId,value:[{id:'cached'}]});assert.equal((await cached)[0].id,'cached');
  context.ProviderNativeBridge.signedOut();assert.equal(messages.at(-1).nonce,'test-nonce');
  assert.ok(messages.every(message=>!JSON.stringify(message).includes('test-session')),'session never returned in a bridge message');
  context.location.search='?view=messages';assert.equal(context.ProviderNativeBridge.embedded(),true,'native identity survives local navigation');
