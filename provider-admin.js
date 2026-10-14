@@ -94,13 +94,7 @@
   }
 
   function renderProviderAccess() {
-    const access = state.providerAccess;
-    if (!access) return;
-    $("providerAccessMode").value = access.enforced ? "paid" : "free";
-    $("providerPaidStartAt").value = access.enforced ? localDateTimeValue(access.start_at) : "";
-    $("providerPaidStartAt").disabled = !access.enforced;
-    const schedule = access.enforced && access.start_at ? ` Paid billing starts ${new Date(access.start_at).toLocaleString()}.` : "";
-    setText("providerAccessStatus", `${access.required ? "Paid access is active." : "Provider access is free now."}${schedule} Setting source: ${access.source}.`);
+    setText("providerAccessStatus", "Free: one listing total across all categories after document approval. Paid subscriptions unlock more listings and coloured badges. The temporary free-launch period has been retired.");
   }
 
   async function loadProviderAccess() {
@@ -109,30 +103,6 @@
       renderProviderAccess();
     } catch (error) {
       setText("providerAccessStatus", error.message);
-    }
-  }
-
-  async function saveProviderAccess(event) {
-    event.preventDefault();
-    const button = event.currentTarget.querySelector('button[type="submit"]');
-    if (button.disabled) return;
-    const enforced = $("providerAccessMode").value === "paid";
-    const localStart = $("providerPaidStartAt").value;
-    const parsedStart = enforced && localStart ? new Date(localStart) : null;
-    if (parsedStart && Number.isNaN(parsedStart.getTime())) return setText("providerAccessStatus", "Choose a valid paid start time.");
-    const message = enforced
-      ? "Enable paid provider access? Approved providers without an active subscription will lose public listing visibility and messaging until they subscribe. This setting takes effect without redeploying. Payment methods are checked separately at checkout."
-      : "Enable free provider access? This stops new subscription checkout in the app, but existing Flutterwave recurring subscriptions will keep charging until separately cancelled.";
-    if (!confirm(message)) return;
-    button.disabled = true;
-    setText("providerAccessStatus", "Saving provider access...");
-    try {
-      state.providerAccess = await request("/api/v1/admin/provider-subscription-access", { method: "PUT", body: { enforced, start_at: parsedStart ? parsedStart.toISOString() : null } });
-      renderProviderAccess();
-    } catch (error) {
-      setText("providerAccessStatus", error.message);
-    } finally {
-      button.disabled = false;
     }
   }
 
@@ -184,7 +154,7 @@
 
   function renderProviders() {
     $("providersTable").innerHTML = `<thead><tr><th>Business</th><th>Contact</th><th>Location</th><th>Verification</th><th>Subscription</th><th>Action</th></tr></thead><tbody>${state.providers.map((item) => `<tr>
-      <td><strong>${escapeHtml(item.business_name)}</strong><br><span class="muted">${escapeHtml((item.provider_type || "mixed").replaceAll("_", " "))}${item.provider_type_other ? ` — ${escapeHtml(item.provider_type_other)}` : ""}</span><br><span class="muted">${format(item.created_at)}</span></td>
+      <td>${window.ProviderIdentity?.render(item.provider_identity) || `<strong>${escapeHtml(item.business_name)}</strong>`}<br><span class="muted">${escapeHtml((item.provider_type || "mixed").replaceAll("_", " "))}${item.provider_type_other ? ` — ${escapeHtml(item.provider_type_other)}` : ""}</span><br><span class="muted">${format(item.created_at)}</span></td>
       <td>${escapeHtml(item.contact_email)}<br>${escapeHtml(item.contact_phone)}</td><td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td>
       <td><span class="status-pill ${item.verification_status === "approved" ? "active" : item.verification_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.verification_status)}</span></td>
       <td>${escapeHtml(item.subscription_status || "none")}${item.subscription_ends_at ? `<br><span class="muted">to ${format(item.subscription_ends_at)}</span>` : ""}</td>
@@ -218,7 +188,7 @@
   function renderProviderListings() {
     $("providerListingsTable").innerHTML = `<thead><tr><th>Images</th><th>Listing</th><th>Provider</th><th>Service</th><th>Location</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerListings.map((item) => `<tr>
       <td><div class="moderation-media">${(item.media_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td>
-      <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span>${window.ListingReview?.render(item) || ""}</td><td>${escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
+      <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span>${window.ListingReview?.render(item) || ""}</td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
       <td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td><td>${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : `${item.attributes?.price_mode === "from" ? "From " : ""}${escapeHtml(item.currency_code)} ${format(item.price)} / ${escapeHtml(item.pricing_unit || "unit")}`}</td>
       <td><span class="status-pill ${item.status === "approved" ? "active" : item.status === "rejected" ? "inactive" : ""}">${escapeHtml(item.status)}</span></td><td class="table-actions"><button data-listing-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-listing-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-listing-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
     </tr>`).join("") || `<tr><td colspan="8">No matching listings.</td></tr>`}</tbody>`;
@@ -251,7 +221,7 @@
     }).join("");
   }
   function renderMerchantProducts() {
-    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.currency_code)} ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}${merchantBuyerPriceSummary(item)}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
+    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.currency_code)} ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}${merchantBuyerPriceSummary(item)}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
     $("loadMoreMerchantProductsButton")?.classList.toggle("hidden", !state.merchantProductHasMore);
     $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProductVerified(button));
   }
@@ -388,7 +358,6 @@
   $("providerListingSearch")?.addEventListener("input", debounce(() => loadProviderListings({ reset: true }), 300));
   $("providerListingModerationStatus")?.addEventListener("change", () => loadProviderListings({ reset: true }));
   $("providerPlanForm")?.addEventListener("submit", saveProviderPlan);
-  $("providerAccessForm")?.addEventListener("submit", saveProviderAccess);
   $("providerAccessMode")?.addEventListener("change", () => { $("providerPaidStartAt").disabled = $("providerAccessMode").value !== "paid"; });
   $("reloadProviderPlansButton")?.addEventListener("click", () => loadProviderPlans(true));
   $("reloadGatewaySubscriptionsButton")?.addEventListener("click", () => loadGatewaySubscriptions(true));

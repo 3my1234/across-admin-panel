@@ -31,6 +31,8 @@
   <meta name="theme-color" content="#12221C" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<link rel="stylesheet" href="provider-identity.css?v=1" />
+<script src="provider-identity.js?v=1" defer></script>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -90,7 +92,7 @@
           <div class="section-heading"><div><span class="eyebrow">Merchant catalogue</span><h2>Physical products</h2><p>Create a private draft, check it, then submit it for Atlantic Express review.</p></div><button id="toggleProductForm" type="button" aria-expanded="false">Create product</button></div>
           <div id="productSubscriptionGate" class="subscription-gate hidden"></div>
           <form id="productForm" class="form-grid hidden">
-            <label class="wide">How can customers buy this product?<select name="payment_mode"><option value="flutterwave">Pay through Flutterwave only</option><option value="contact">Message me to arrange payment</option><option value="both">Let customers choose either option</option></select><small>Message me opens a private chat in Atlantic Express. Agree payment and delivery with the customer there.</small></label>
+            <label class="wide">Customers contact you directly<select name="payment_mode"><option value="contact">Message me to arrange payment</option></select><small>Message me opens a private chat in Atlantic Express. Agree payment and delivery with the customer there.</small></label>
             <p class="wide form-note">Flutterwave confirms the customer's payment first, then sends your share to your registered bank account. Local payments usually settle the next business day; international payments usually take five business days. Weekends, holidays, verification checks or other delays may make this longer. Check Seller funds on your orders before relying on a payout. This is not money held until delivery.</p>
             <label>Product name<input name="title" required /></label><label>Stock code (optional)<input name="sku" placeholder="Leave empty if you do not use stock codes" /><small>We create a code for you if you leave this empty.</small></label>
             <label>Primary selling price<input name="local_selling_price" type="number" min="0.01" step="0.01" required /></label><label>Primary price currency<input name="currency_code" maxlength="3" value="NGN" required /><small>Three-letter code, such as NGN, USD, GBP, or EUR.</small></label><label>Crossed-out primary price<input name="compare_at_price" type="number" min="0" step="0.01" /></label>
@@ -123,7 +125,7 @@
         </section>
 
         <section data-view-panel="overview" class="card">
-          <div class="section-heading"><div><span class="eyebrow">Account</span><h2>Provider overview</h2></div><button id="refreshPortal" class="secondary">Refresh</button></div>
+          <div class="section-heading"><div><span class="eyebrow">Account</span><h2>Provider overview</h2><div id="providerIdentity"></div></div><button id="refreshPortal" class="secondary">Refresh</button></div>
           <div class="metrics"><article><span>Verification</span><strong id="metricVerification">—</strong></article><article><span>Subscription</span><strong id="metricSubscription">—</strong></article><article><span>Listings</span><strong id="metricListings">0</strong></article><article><span>Open requests</span><strong id="metricRequests">0</strong></article></div>
           <div id="accountGuidance" class="notice"></div>
           <section id="sellerSettlement" class="verification-box hidden">

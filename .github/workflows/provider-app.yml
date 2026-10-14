@@ -20,6 +20,9 @@ jobs:
           node --check provider-pwa.js
           node --check provider-sw.js
           node --check provider-updates.js
+          node --check provider-identity.js
+          node scripts/test-provider-badges.cjs
+          node scripts/test-provider-access.cjs
           node scripts/test-theme.cjs
           node scripts/test-provider-updates.cjs
           node scripts/test-listing-review.cjs
@@ -37,6 +40,8 @@ jobs:
           curl --fail http://127.0.0.1:8080/provider.html
           curl --fail http://127.0.0.1:8080/provider.webmanifest
           curl --fail http://127.0.0.1:8080/provider-updates.js --output /tmp/provider-updates.js
+          curl --fail http://127.0.0.1:8080/provider-identity.js --output /tmp/provider-identity.js
+          curl --fail http://127.0.0.1:8080/provider-identity.css --output /tmp/provider-identity.css
           curl --fail --head http://127.0.0.1:8080/provider.html | grep -i 'cache-control: no-cache'
           curl --fail http://127.0.0.1:8080/provider-background.png --output /tmp/provider-background.png
           test -s /tmp/provider-background.png
