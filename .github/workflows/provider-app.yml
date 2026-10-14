@@ -41,6 +41,19 @@ jobs:
           node scripts/test-chat-unread.cjs
           node scripts/test-product-chat.cjs
           node scripts/test-page-refresh.cjs
+      - name: Check Settings, encrypted cache and responsive chat in Chrome
+        env:
+          COMMUNITY_TEST_ORIGIN: http://127.0.0.1:5176
+        run: |
+          python3 -m http.server 5176 --bind 127.0.0.1 > /tmp/atl-web.log 2>&1 &
+          google-chrome --headless=new --no-sandbox --disable-dev-shm-usage --remote-debugging-port=9224 --user-data-dir=/tmp/atl-chat-chrome about:blank > /tmp/atl-chrome.log 2>&1 &
+          for attempt in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:9224/json > /dev/null && curl --silent --fail http://127.0.0.1:5176/provider.html > /dev/null; then break; fi
+            sleep 0.25
+          done
+          node scripts/test-private-chat-browser.cjs
+          node scripts/test-provider-browser.cjs
+          node scripts/test-community-browser.cjs
       - name: Build and check separate provider image
         run: |
           docker build -f Dockerfile.provider -t provider-app:ci .
