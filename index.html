@@ -40,6 +40,7 @@
     <script src="./xp-withdrawals.js?v=20261009-wallet" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
     <script src="./provider-admin.js?v=20261012-review" defer></script>
+    <script src="./community-admin.js?v=20261014" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
 <link rel="stylesheet" href="provider-identity.css?v=1" />
@@ -89,6 +90,7 @@
             <button class="nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
             <button class="nav-item" data-tab="admins">Admins</button>
             <button class="nav-item" data-tab="support">Support</button>
+            <button class="nav-item" data-tab="community">Chat reports</button>
             <button class="nav-item" data-tab="analytics">Analytics</button>
             <button class="nav-item" data-tab="complaints">Complaints</button>
           </nav>
@@ -473,6 +475,7 @@
             </section>
           </section>
 
+          <section class="tab-panel hidden" data-panel="community"><div class="panel"><h2>Chat reports</h2><p class="muted">Review reported conversations. Personal chats are accessible here only after a report.</p><button id="communityAdminRefresh">Refresh reports</button><p id="communityAdminStatus" role="status"></p><div id="communityAdminRows"></div></div></section>
           <section class="tab-panel hidden" data-panel="support">
             <section class="panel">
               <div class="section-head">

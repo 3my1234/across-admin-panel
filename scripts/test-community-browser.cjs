@@ -1,0 +1,81 @@
+const assert = require('node:assert/strict');
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+(async () => {
+    const pages = await (await fetch('http://127.0.0.1:9224/json')).json(), socket = new WebSocket(pages.find(p => p.type === 'page').webSocketDebuggerUrl);
+    await new Promise(resolve => socket.addEventListener('open', resolve, { once: true }));
+    let id = 0;
+    const pending = new Map();
+    socket.addEventListener('message', event => { const item = JSON.parse(event.data); if (item.id) {
+        const task = pending.get(item.id);
+        pending.delete(item.id);
+        item.error ? task.reject(item.error) : task.resolve(item.result);
+    } });
+    const send = (method, params = {}) => new Promise((resolve, reject) => { const key = ++id; pending.set(key, { resolve, reject }); socket.send(JSON.stringify({ id: key, method, params })); });
+    const evaluate = async (expression) => { const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (result.exceptionDetails)
+        throw Error(JSON.stringify(result.exceptionDetails)); return result.result.value; };
+    try {
+        await send('Page.enable');
+        for (const width of [320, 390, 768, 1440]) {
+            await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width < 768 });
+            await send('Page.navigate', { url: 'http://127.0.0.1:5175/provider.html' });
+            await evaluate(`new Promise((resolve,reject)=>{let tries=0;const poll=()=>{if(window.CommunityPortal&&window.CommunityUpdates&&window.CommunityTownHall)return resolve();if(++tries>100)return reject(Error('Community modules did not load'));setTimeout(poll,50)};poll()})`);
+            await evaluate(`(async()=>{
+ window.__errors=[];addEventListener('error',event=>__errors.push(event.message));window.__actor='first-account';window.__calls=[];window.__failSend=false;
+ const host=document.createElement('section');host.id='communityBrowserRoot';host.style.cssText='position:fixed;inset:8px;overflow:auto;z-index:999;background:var(--dashboard-surface,#fff)';document.body.append(host);
+ const room='11111111-1111-4111-8111-111111111111',friend='22222222-2222-4222-8222-222222222222',hall='33333333-3333-4333-8333-333333333333';
+ const request=async(path,options={})=>{__calls.push([path,options.method||'GET',options.body]);
+ if(path==='/chat/profile')return {handle:'emma',discoverable:true,connection_promotions:false};
+ if(path.startsWith('/chat/friends'))return {items:[{id:friend,user_id:friend,name:'Friend',handle:'friend',state:'accepted'}]};
+ if(path==='/chat/blocks')return {items:[]};
+ if(path.startsWith('/chat/inbox'))return {items:[{id:room,source:'shared',kind:'direct',title:'Friend',state:'open',unread_count:1,context:{},peer_user_id:friend}]};
+ if(path==='/chat/conversations')return {id:room};
+ if(path.includes('/read'))return {};
+ if(path.includes('/messages')){if(options.method==='POST'){if(__failSend)throw Error('Temporary send failure');return {id:'44444444-4444-4444-8444-444444444444',body:JSON.parse(options.body).message,created_at:new Date().toISOString(),is_mine:true}}if(window.__notModified&&options.headers?.['If-None-Match'])return {unchanged:true};return {_etag:'steady',items:[{id:friend,body:'Hello',created_at:new Date().toISOString(),is_mine:false}],can_send:true};}
+ if(path.startsWith('/chat/statuses'))return {items:[]};
+ if(path.startsWith('/chat/promotions'))return {items:[],pending:false};
+ const preview={id:hall,title:'50 bags of rice',description:'Rice for an occasion',location:'Abuja',quantity:50,unit:'bag',target_unit_price:48500,state:'open',is_owner:true,admitted:true,seats:0,offers:[],applications:[]};
+ if(path.startsWith('/chat/town-hall?'))return {items:[preview]};
+ if(path==='/chat/town-hall/'+hall)return preview;
+ return {};};
+ window.__community=CommunityPortal.create({element:host,request,getActor:()=>__actor});await __community.activate();
+ })()`);
+            assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').scrollWidth<=document.getElementById('communityBrowserRoot').clientWidth+1`), true, `layout at ${width}`);
+            await evaluate(`__community.activate({mode:'friends'})`);
+            assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot .community-profile')`), true);
+            await evaluate(`document.documentElement.dataset.theme='dark'`);
+            assert.notEqual(await evaluate(`getComputedStyle(document.querySelector('#communityBrowserRoot .community-card')).backgroundColor`), 'rgb(255, 255, 255)', 'dark theme must not leave a white card');
+            await evaluate(`document.documentElement.dataset.theme='light'`);
+            await evaluate(`__community.activate({mode:'updates'})`);
+            await delay(80);
+            assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot .community-status-form')`), true);
+            await evaluate(`document.querySelector('#communityBrowserRoot .community-status-form textarea').value='Keep this draft';__community.refresh()`);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-status-form textarea').value`), 'Keep this draft');
+            await evaluate(`document.activeElement.blur();__community.activate({mode:'town-hall'})`);
+            await delay(80);
+            assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot [data-hall-create]')`), true);
+            await evaluate(`document.querySelector('#communityBrowserRoot [data-hall-detail]').click()`);
+            await delay(80);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-body').textContent.includes('Offer previews')`), true);
+            await evaluate(`__community.openID('11111111-1111-4111-8111-111111111111')`);
+            await evaluate(`document.querySelector('#communityBrowserRoot .community-compose textarea').value='Retry me';__failSend=true;document.querySelector('#communityBrowserRoot .community-compose').requestSubmit()`);
+            await delay(80);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-compose textarea').value`), 'Retry me');
+            await evaluate(`__failSend=false;document.querySelector('#communityBrowserRoot .community-compose').requestSubmit()`);
+            await delay(80);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-compose textarea').value`), '');
+            assert.equal(await evaluate(`(()=>{const sends=__calls.filter(([path,method])=>path.includes('/messages')&&method==='POST');return JSON.parse(sends[0][2]).client_message_id===JSON.parse(sends[1][2]).client_message_id})()`), true, 'same retry reference');
+            await evaluate(`window.__realNow=Date.now;Date.now=()=>__realNow()+360001;window.__notModified=true;__community.openID('11111111-1111-4111-8111-111111111111')`);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-history').textContent.includes('Hello')`),true,'expired private cache must fetch history instead of accepting an empty 304');await evaluate(`Date.now=__realNow;window.__notModified=false`);
+            await send('Emulation.setDeviceMetricsOverride', { width, height: 450, deviceScaleFactor: 1, mobile: width < 768 });
+            await evaluate(`document.documentElement.style.setProperty('--visible-viewport-height','450px');document.querySelector('#communityBrowserRoot textarea').focus();document.querySelector('#communityBrowserRoot .community-compose').scrollIntoView({block:'end'})`);
+            assert.ok((await evaluate(`document.querySelector('#communityBrowserRoot .community-compose').getBoundingClientRect().bottom`)) <= 450, 'community composer stays reachable with reduced keyboard viewport');
+            await evaluate(`__actor='second-account';__community.reset()`);
+            assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').textContent`), '');
+            assert.equal(await evaluate(`__errors.length`), 0);
+        }
+        console.log('Community browser passed: responsive tabs, friend controls, status draft preservation, Town Hall preview, stable send retry and account reset.');
+    }
+    finally {
+        socket.close();
+    }
+})().catch(error => { console.error(error); process.exitCode = 1; });
