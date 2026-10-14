@@ -17,7 +17,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
         await send('Page.enable');
         for (const width of [320, 390, 768, 1440]) {
             await send('Emulation.setDeviceMetricsOverride', { width, height: 844, deviceScaleFactor: 1, mobile: width < 768 });
-            await send('Page.navigate', { url: 'http://127.0.0.1:5175/provider.html' });
+            await send('Page.navigate', { url: (process.env.COMMUNITY_TEST_ORIGIN || 'http://127.0.0.1:5175')+'/provider.html' });
             await evaluate(`new Promise((resolve,reject)=>{let tries=0;const poll=()=>{if(window.CommunityPortal&&window.CommunityUpdates&&window.CommunityTownHall)return resolve();if(++tries>100)return reject(Error('Community modules did not load'));setTimeout(poll,50)};poll()})`);
             await evaluate(`(async()=>{
  window.__errors=[];addEventListener('error',event=>__errors.push(event.message));window.__actor='first-account';window.__calls=[];window.__failSend=false;
@@ -27,7 +27,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
  if(path==='/chat/profile')return {handle:'emma',discoverable:true,connection_promotions:false};
  if(path.startsWith('/chat/friends'))return {items:[{id:friend,user_id:friend,name:'Friend',handle:'friend',state:'accepted'}]};
  if(path==='/chat/blocks')return {items:[]};
- if(path.startsWith('/chat/inbox'))return {items:[{id:room,source:'shared',kind:'direct',title:'Friend',state:'open',unread_count:1,context:{},peer_user_id:friend}]};
+ if(path.startsWith('/chat/inbox')){if(window.__failInbox)throw Error('Community is temporarily unavailable. Please retry');return {items:[{id:room,source:'shared',kind:'direct',title:'Friend',state:'open',unread_count:1,context:{},peer_user_id:friend}]};}
  if(path==='/chat/conversations')return {id:room};
  if(path.includes('/read'))return {};
  if(path.includes('/messages')){if(options.method==='POST'){if(__failSend)throw Error('Temporary send failure');return {id:'44444444-4444-4444-8444-444444444444',body:JSON.parse(options.body).message,created_at:new Date().toISOString(),is_mine:true}}if(window.__notModified&&options.headers?.['If-None-Match'])return {unchanged:true};return {_etag:'steady',items:[{id:friend,body:'Hello',created_at:new Date().toISOString(),is_mine:false}],can_send:true};}
@@ -53,9 +53,11 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             await evaluate(`document.activeElement.blur();__community.activate({mode:'town-hall'})`);
             await delay(80);
             assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot [data-hall-create]')`), true);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot [data-hall-create]').querySelectorAll('input,textarea').length`),1,'one message field, no structured request form');
+            assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').scrollWidth<=document.getElementById('communityBrowserRoot').clientWidth+1`),true,'Hall fits viewport');
             await evaluate(`document.querySelector('#communityBrowserRoot [data-hall-detail]').click()`);
             await delay(80);
-            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-body').textContent.includes('Offer previews')`), true);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-body').textContent.includes('Offers on the table')`), true);
             await evaluate(`__community.openID('11111111-1111-4111-8111-111111111111')`);
             await evaluate(`document.querySelector('#communityBrowserRoot .community-compose textarea').value='Retry me';__failSend=true;document.querySelector('#communityBrowserRoot .community-compose').requestSubmit()`);
             await delay(80);
@@ -69,7 +71,11 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             await send('Emulation.setDeviceMetricsOverride', { width, height: 450, deviceScaleFactor: 1, mobile: width < 768 });
             await evaluate(`document.documentElement.style.setProperty('--visible-viewport-height','450px');document.querySelector('#communityBrowserRoot textarea').focus();document.querySelector('#communityBrowserRoot .community-compose').scrollIntoView({block:'end'})`);
             assert.ok((await evaluate(`document.querySelector('#communityBrowserRoot .community-compose').getBoundingClientRect().bottom`)) <= 450, 'community composer stays reachable with reduced keyboard viewport');
-            await evaluate(`__actor='second-account';__community.reset()`);
+            await evaluate(`document.activeElement.blur();__failInbox=true;__community.reset();__community.activate()`);
+            assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').textContent.includes('Loading conversations...')`),false,'failed request must end loading state');
+            await evaluate(`__community.activate({mode:'town-hall'})`);await delay(80);
+            assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot [data-hall-create]')`),true,'Hall remains reachable independently of inbox failure');
+            await evaluate(`__failInbox=false;__actor='second-account';__community.reset()`);
             assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').textContent`), '');
             assert.equal(await evaluate(`__errors.length`), 0);
         }
