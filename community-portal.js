@@ -4,17 +4,19 @@
     const validID = id => /^[a-f0-9-]{36}$/i.test(id || '');
     function create({ element, request, getActor }) {
         let actor = '', mode = 'chats', profile = null, inbox = [], friends = [], selected = null, messages = [], cursor = '', messageCursor = '', canSend = true, generation = 0, threadGeneration = 0, busy = false, photos = [], retry = null, disposeUpdates = null, hallRoomId = '';
-        const etags = new Map(), readAcknowledged = new Map(), cache = root.PortalChatHistory.create();
+        const etags = new Map(), readAcknowledged = new Map(), readPending = new Map(), readFlights = new Map(), cache = root.PortalChatHistory.create();
+        function showRoom(open) { element.classList.toggle('community-room-open',open);document.body.classList.toggle('community-chat-open',open); }
         const live = (captured, sequence) => captured === getActor() && captured === actor && sequence === generation;
         const button = (text, attributes = '', secondary = true) => `<button type="button" class="${secondary ? 'secondary' : ''}" ${attributes}>${escape(text)}</button>`;
         function error(message) { const target = element.querySelector('.community-error'); if (target)
             target.textContent = message || ''; }
-        function reset() { generation++; threadGeneration++; disposeUpdates?.(); disposeUpdates = null; actor = '';mode='chats';hallRoomId=''; profile = null; inbox = []; friends = []; selected = null; messages = []; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; etags.clear();readAcknowledged.clear(); cache.clear(); element.replaceChildren(); delete element.dataset.communityMode; }
+        function reset() { generation++; threadGeneration++; showRoom(false);disposeUpdates?.(); disposeUpdates = null; actor = '';mode='chats';hallRoomId=''; profile = null; inbox = []; friends = []; selected = null; messages = []; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; etags.clear();readAcknowledged.clear();readPending.clear();readFlights.clear(); cache.clear(); element.replaceChildren(); delete element.dataset.communityMode; }
         function shell() { element.innerHTML = `<div class="community-tabs">${[['chats', 'Chats'], ['friends', 'Friends'], ['updates', 'Updates'], ['town-hall', 'Town Hall']].map(([key, label]) => button(label, `data-community-mode="${key}" class="${mode === key ? 'is-active' : ''}"`)).join('')}</div><p class="community-error" role="status"></p><div class="community-body"></div>`; for (const b of element.querySelectorAll('[data-community-mode]')) {
             b.classList.toggle('is-active', b.dataset.communityMode === mode);
             b.onclick = () => { threadGeneration++; selected = null; mode = b.dataset.communityMode; cursor = ''; void refresh(); };
         } }
         function renderList() {
+            showRoom(false);
             disposeUpdates?.();
             disposeUpdates = null;
             shell();
@@ -96,8 +98,7 @@
                 reset();
                 actor = getActor();
             }
-            if (selected)
-                return readThread();
+            if (selected) { try { await readThread(); } catch(e) { error(e.message); } return; }
             if (element.contains(document.activeElement) && document.activeElement.matches('input,textarea,select'))
                 return;
             const captured = actor, sequence = ++generation;
@@ -138,10 +139,11 @@
             }
         }
         function renderThread() {
+            showRoom(true);
             shell();
             const body = element.querySelector('.community-body');
             body.innerHTML = `<div class="community-row">${button('Back to chats', 'data-community-back')}<h3>${escape(selected.title)}</h3>${selected.source === 'shared' && selected.kind === 'direct' ? button('Block', 'data-community-block') + button('Report', 'data-community-report') : ''}</div><p class="community-note">${escape(selected.context?.title || '')}</p><div class="community-thread"><div class="community-history" role="log" aria-label="Chat messages"></div><div class="community-photos"></div><p class="community-note community-readonly"></p><form class="community-compose"><label aria-label="Attach photos"><input type="file" accept="image/jpeg,image/png,image/webp" multiple aria-label="Attach photos"/></label><textarea name="message" maxlength="2000" rows="2" aria-label="Message" placeholder="Write a message"></textarea><button type="submit">Send</button></form></div>`;
-            body.querySelector('[data-community-back]').onclick = () => { threadGeneration++;if(selected.kind==='town_hall'){hallRoomId=selected.id;mode='town-hall';delete element.dataset.communityMode;} selected = null; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; void refresh(); };
+            body.querySelector('[data-community-back]').onclick = () => { threadGeneration++;if(selected.kind==='town_hall'){hallRoomId=selected.id;mode='town-hall';delete element.dataset.communityMode;} selected = null; photos.forEach(p => URL.revokeObjectURL(p.uri)); photos = []; retry = null; renderList();void refresh(); };
             const block = body.querySelector('[data-community-block]');
             if (block)
                 block.onclick = () => { if (confirm('Block this person from sending you direct messages?'))
@@ -195,12 +197,8 @@
                     etags.delete(room);
                     renderPhotos();
                     renderMessages();
-                    try {
-                        await readThread();
-                    }
-                    catch {
-                        error('Message sent. Refresh to load the latest replies.');
-                    }
+                    // Sending is complete. A slow refresh must not lock the composer.
+                    void readThread().catch(()=>{if(actor===captured&&selected?.id===room)error('Message sent. Refresh to load the latest replies.');});
                 });
             };
             renderMessages();
@@ -225,35 +223,52 @@
             form.querySelectorAll('textarea,input,button').forEach(node => node.disabled = !canSend || busy);
             element.querySelector('.community-readonly').textContent = canSend ? '' : 'This conversation is read-only, blocked, or needs subscription renewal.';
         }
-        async function readThread(older = '') {
+        function acknowledge(room,message,captured) {
+            if(!message||document.hidden||readAcknowledged.get(room)===message||readPending.has(room))return;
+            const flight=request(`/chat/conversations/${room}/read`,{method:'POST',body:JSON.stringify({message_id:message})});
+            readPending.set(room,flight);
+            void flight.then(()=>{if(captured===getActor())readAcknowledged.set(room,message);}).catch(()=>{/* Retry on the next history refresh; sending stays available. */}).finally(()=>{if(readPending.get(room)===flight)readPending.delete(room);});
+        }
+        function readThread(older = '') {
+            if(!selected)return Promise.resolve();
+            const key=JSON.stringify([actor,selected.id,threadGeneration,older]);
+            if(readFlights.has(key))return readFlights.get(key);
+            const flight=loadThread(older);readFlights.set(key,flight);
+            void flight.finally(()=>{if(readFlights.get(key)===flight)readFlights.delete(key);}).catch(()=>{});
+            return flight;
+        }
+        async function loadThread(older = '') {
             if (!selected)
                 return;
-            const room = selected.id, captured = actor, sequence = ++threadGeneration;
-            const data = await request(`/chat/conversations/${room}/messages?limit=40${older ? '&cursor=' + encodeURIComponent(older) : ''}`, { headers: !older && etags.has(room) ? { 'If-None-Match': etags.get(room) } : {} });
+            const room = selected.id, captured = actor, sequence = threadGeneration;
+            const data = await request(`/chat/conversations/${room}/messages?limit=40&mark_read=false${older ? '&cursor=' + encodeURIComponent(older) : ''}`, { headers: !older && etags.has(room) ? { 'If-None-Match': etags.get(room) } : {} });
             if (sequence !== threadGeneration || captured !== getActor() || selected?.id !== room)
                 return;
             if (data.unchanged) {
                 const latest = messages.at(-1);
                 if (!older && latest && !document.hidden && readAcknowledged.get(room) !== latest.id) {
-                    await request(`/chat/conversations/${room}/read`, { method: 'POST', body: JSON.stringify({ message_id: latest.id }) });
-                    readAcknowledged.set(room, latest.id);
+                    acknowledge(room,latest.id,captured);
                 }
                 return;
             }
             if (data._etag && !older)
                 etags.set(room, data._etag);
-            messages = merge(messages, (data.items || []).map(item => ({ ...item, is_mine: selected.source === 'legacy' ? item.sender_type === selected.actor_role : item.is_mine })));
-            messageCursor = data.next_cursor || '';
+            const incoming=data.items||[],first=incoming[0],oldest=messages[0];
+            const keepEarlierCursor=!older&&oldest&&first&&(oldest.created_at<first.created_at||(oldest.created_at===first.created_at&&oldest.id<first.id));
+            const nextCursor=keepEarlierCursor?messageCursor:(data.next_cursor||'');
+            const next=merge(messages, incoming.map(item => ({ ...item, is_mine: selected.source === 'legacy' ? item.sender_type === selected.actor_role : item.is_mine })));
+            const changed=JSON.stringify(next)!==JSON.stringify(messages)||messageCursor!==nextCursor||canSend!==(data.can_send!==false&&selected.state==='open');
+            messages=next;
+            messageCursor = nextCursor;
             canSend = data.can_send !== false && selected.state === 'open';
             cache.put(actor, room, messages, messageCursor);
-            renderMessages();
+            if(changed)renderMessages();
             if (!older && messages.length && !document.hidden) {
-                await request(`/chat/conversations/${room}/read`, { method: 'POST', body: JSON.stringify({ message_id: messages.at(-1).id }) });
-                readAcknowledged.set(room, messages.at(-1).id);
+                acknowledge(room,messages.at(-1).id,captured);
             }
         }
         async function open(item) { if (!item)
-            return; generation++; selected = item; mode = 'chats'; const cached = cache.get(actor, item.id);if(!cached)etags.delete(item.id); messages = cached?.messages || []; messageCursor = cached?.cursor || ''; canSend = item.state === 'open'; photos = []; retry = null; renderThread(); if (history.state?.communityChat !== item.id)
+            return; generation++; threadGeneration++;selected = item; mode = 'chats'; const cached = cache.get(actor, item.id);if(!cached)etags.delete(item.id); messages = cached?.messages || []; messageCursor = cached?.cursor || ''; canSend = item.state === 'open'; photos = []; retry = null; renderThread(); if (history.state?.communityChat !== item.id)
             history.pushState({ providerView: 'messages', communityChat: item.id }, '', location.pathname + '?view=messages&shared=' + encodeURIComponent(item.id)); try {
             await readThread();
         }
@@ -270,7 +285,7 @@
             reset();
             actor = getActor();
         } if (options.mode)
-            { mode = options.mode; selected=null; delete element.dataset.communityMode; } if (options.hallRoomId) {
+            { threadGeneration++;showRoom(false);mode = options.mode; selected=null; delete element.dataset.communityMode; } if (options.hallRoomId) {
             hallRoomId = options.hallRoomId;
             mode = 'town-hall';
             selected = null;
@@ -284,7 +299,7 @@
             if (input)
                 input.value = options.invite;
         } }
-        return { activate, refresh, reset, isOpen: () => !!selected, close: () => { threadGeneration++; selected = null; void refresh(); }, openID };
+        return { activate, refresh, reset, isOpen: () => !!selected, close: () => { threadGeneration++; selected = null; renderList();void refresh(); }, openID };
     }
     root.CommunityPortal = { create };
 })(typeof window !== 'undefined' ? window : globalThis);
