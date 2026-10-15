@@ -30,9 +30,9 @@
   hallShortcut.addEventListener('pointermove',event=>{if(!hallPointer)return;const dx=event.clientX-hallPointer.x,dy=event.clientY-hallPointer.y;if(Math.abs(dx)+Math.abs(dy)>8)hallMoved=true;if(!hallMoved)return;hallShortcut.style.left=Math.max(8,Math.min(innerWidth-hallShortcut.offsetWidth-8,hallPointer.left+dx))+'px';hallShortcut.style.top=Math.max(8,Math.min(innerHeight-hallShortcut.offsetHeight-90,hallPointer.top+dy))+'px';hallShortcut.style.right='auto';hallShortcut.style.bottom='auto';});
   hallShortcut.addEventListener('pointerup',()=>{hallPointer=null;});
   hallShortcut.addEventListener('click',event=>{if(hallMoved){event.preventDefault();event.stopImmediatePropagation();hallMoved=false;}},true);
-  async function refreshHallShortcut(){hallShortcut.classList.toggle('hidden',!state.token||state.activeView!=='overview'||document.activeElement?.matches('input,textarea,select'));if(hallShortcut.classList.contains('hidden')||document.hidden)return;const actor=state.token;try{const data=await api('/chat/town-hall/activity');if(actor!==state.token)return;const badge=hallShortcut.querySelector('small');badge.hidden=!data.count;badge.textContent=Number(data.count)>99?'99+':String(data.count||'');}catch(_){/* Keep the entry point available when activity cannot refresh. */}}
+  async function refreshHallShortcut(){hallShortcut.classList.toggle('hidden',!state.token||!['overview','listings'].includes(state.activeView)||document.activeElement?.matches('input,textarea,select'));if(hallShortcut.classList.contains('hidden')||document.hidden)return;const actor=state.token;try{const data=await api('/chat/town-hall/activity');if(actor!==state.token)return;const badge=hallShortcut.querySelector('small');badge.hidden=!data.count;badge.textContent=Number(data.count)>99?'99+':String(data.count||'');}catch(_){/* Keep the entry point available when activity cannot refresh. */}}
   setInterval(()=>void refreshHallShortcut(),60000);
-  const hideHallForKeyboard=()=>hallShortcut.classList.toggle('hidden',!state.token||state.activeView!=='overview'||document.activeElement?.matches('input,textarea,select'));
+  const hideHallForKeyboard=()=>hallShortcut.classList.toggle('hidden',!state.token||!['overview','listings'].includes(state.activeView)||document.activeElement?.matches('input,textarea,select'));
   document.addEventListener('focusin',hideHallForKeyboard);document.addEventListener('focusout',()=>setTimeout(hideHallForKeyboard,0));
   if(community)document.querySelector('[data-view="messages"]')?.removeAttribute("data-provider-profile");
   const money = (value, currency = "NGN") => {
@@ -438,10 +438,12 @@
     }
     return true;
   }
+  let subscriptionFlight=false;
   async function subscribe(planId, paymentMethod = "card", durationMonths = 1) {
+    if(subscriptionFlight)return;
     if(window.ProviderNativeBridge?.embedded())return;
     if (state.provider?.verification_status !== "approved") return setMessage("Your business must be approved before subscription checkout.");
-    document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = true; });
+    subscriptionFlight=true; const checkoutButton=[...document.querySelectorAll('[data-subscribe]')].find(button=>button.dataset.subscribe===planId&&button.dataset.method===paymentMethod); if(checkoutButton){checkoutButton.disabled=true;checkoutButton.setAttribute('aria-busy','true');}
     const pending = hasPendingSubscription();
     setMessage(pending ? "Checking your existing payment with Flutterwave..." : "Opening secure Flutterwave checkout...", true);
     try {
@@ -460,7 +462,7 @@
       location.href = data.checkout_link;
     }
     catch (error) { setMessage(error.message); renderPlans(); }
-    finally { document.querySelectorAll("[data-subscribe]").forEach((button) => { button.disabled = false; }); }
+    finally { subscriptionFlight=false;if(checkoutButton){checkoutButton.disabled=false;checkoutButton.removeAttribute('aria-busy');} }
   }
   function renderPlans() {
     if(window.ProviderNativeBridge?.embedded()){
@@ -493,7 +495,7 @@
     if (files.length > 20) throw new Error("A listing can have at most 20 images.");
     const urls = [];
     for (let index = 0; index < files.length; index += 1) {
-      const file = files[index]; setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
+      const file = await ListingImages.prepare(files[index]); setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
       const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing" }) });
       urls.push(await PortalStorageUpload.upload(file, signed));
     }

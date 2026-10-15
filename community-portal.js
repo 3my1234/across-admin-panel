@@ -33,7 +33,7 @@
             }
         }
         async function act(fn) { if (busy)
-            return; busy = true; error(''); element.querySelectorAll('button').forEach(b => b.disabled = true); try {
+            return; busy = true; error(''); if(selected)renderMessages(); try {
             await fn();
         }
         catch (e) {
@@ -41,7 +41,6 @@
         }
         finally {
             busy = false;
-            element.querySelectorAll('button').forEach(b => b.disabled = false);
             if (selected)
                 renderMessages();
         } }

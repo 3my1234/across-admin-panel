@@ -200,10 +200,11 @@
     try { await request(`/api/v1/admin/provider-listings/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadProviderListings({ reset: true }); }
     catch (error) { setText("providerListingStatus", error.message); }
   }
+  const moderationFlights = new Set();
   async function moderateListingVerified(button) {
     const id = button.dataset.id; const status = button.dataset.listingStatus;
     const notes = prompt(status + " listing. Add an internal note (optional):", ""); if (notes === null) return;
-    const buttons = [...document.querySelectorAll("[data-listing-status]")].filter(item => item.dataset.id === id); buttons.forEach(item => { item.disabled = true; });
+    if(moderationFlights.has('listing:'+id))return; moderationFlights.add('listing:'+id); button.disabled=true; button.setAttribute('aria-busy','true');
     try {
       const item=state.providerListings.find(listing=>listing.id===id);
       const result = await request("/api/v1/admin/provider-listings/" + id + "/moderation", { method: "PATCH", body: { status, notes,expected_content_revision:item?.content_revision } });
@@ -211,7 +212,7 @@
       await loadProviderListings({ reset: true });
       setText("providerListingStatus", result.title + " (listing " + id.slice(0, 8) + ") is confirmed " + status + ".");
     } catch (error) { setText("providerListingStatus", error.message); }
-    finally { buttons.forEach(item => { item.disabled = false; }); }
+    finally { moderationFlights.delete('listing:'+id); button.disabled=false; button.removeAttribute('aria-busy'); }
   }
   function merchantBuyerPriceSummary(item) {
     return (item.delivery_areas || []).map(area => {
@@ -231,7 +232,7 @@
     const separate = (product?.delivery_areas || []).filter(area => area.currency_code === product.currency_code && Number(area.delivered_price) - Number(area.delivery_fee || 0) !== Number(product.local_selling_price));
     if (status === "approved" && separate.length && !confirm(`Buyers will pay separate destination item prices (${separate.map(area => `${area.country_code}: ${area.currency_code} ${(Number(area.delivered_price) - Number(area.delivery_fee || 0)).toFixed(2)}`).join(", ")}), rather than the main price ${product.currency_code} ${product.local_selling_price}. Approve those exact buyer prices? Cancel and ask the provider to use the main price if this is unintended.`)) return;
     const notes = prompt(`${status} product. Add a moderation note (optional):`, ""); if (notes === null) return;
-    const buttons = [...document.querySelectorAll("[data-product-status]")].filter(item => item.dataset.id === id); buttons.forEach(item => { item.disabled = true; });
+    if(moderationFlights.has('product:'+id))return; moderationFlights.add('product:'+id); button.disabled=true; button.setAttribute('aria-busy','true');
     try {
       const result = await request(`/api/v1/admin/merchant-products/${id}/moderation`, { method: "PATCH", body: { status, notes } });
       if (result.id !== id || result.status !== status) throw new Error("The server did not confirm this product moderation change.");
@@ -239,7 +240,7 @@
       setText("merchantProductModerationStatus", result.title + " (product " + id.slice(0, 8) + ") is confirmed " + status + ".");
     }
     catch (error) { setText("merchantProductModerationStatus", error.message); }
-    finally { buttons.forEach(item => { item.disabled = false; }); }
+    finally { moderationFlights.delete('product:'+id); button.disabled=false; button.removeAttribute('aria-busy'); }
   }
 
   async function loadMerchantFulfillments({ reset = false } = {}) {
