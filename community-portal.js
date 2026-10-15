@@ -137,6 +137,7 @@
                     const data = await request(`/chat/conversations/${room}/messages`, { method: 'POST', body: JSON.stringify({ message: text, media_keys: keys,location:locationPin, client_message_id: retry.id }) });
                     if (actor !== captured || selected?.id !== room)
                         return;
+                    if(!data?.id||!data.created_at)throw Error('The server did not confirm your message. Please retry.');
                     messages = merge(messages, [{ ...data, is_mine: true }]);
                     form.reset();
                     photos.forEach(p => URL.revokeObjectURL(p.uri));
@@ -154,7 +155,7 @@
         }
         function merge(old, received) { return root.PortalChatHistory.merge(old,received); }
         function renderPhotos() { const target = element.querySelector('.community-photos'); if (!target)
-            return; target.innerHTML = photos.map((photo, index) => `<button type="button" data-remove-photo="${index}" aria-label="Remove attached photo"><img src="${escape(photo.uri)}" alt="Attached photo"/></button>`).join('')+(locationPin?root.AtlLocation.render(locationPin)+'<button type="button" data-remove-pin>Remove location</button>':'');target.querySelector('[data-remove-pin]')?.addEventListener('click',()=>{if(!busy){locationPin=null;renderPhotos();}}); target.querySelectorAll('[data-remove-photo]').forEach(b => b.onclick = () => { if (busy)
+            return; target.innerHTML = photos.map((photo, index) => `<button type="button" data-remove-photo="${index}" aria-label="Remove attached photo"><img src="${escape(photo.uri)}" alt="Attached photo"/></button>`).join('')+(locationPin?root.AtlLocation.render(locationPin,{draft:true})+'<button type="button" data-remove-pin>Remove location</button>':'');target.querySelector('[data-remove-pin]')?.addEventListener('click',()=>{if(!busy){locationPin=null;renderPhotos();}}); target.querySelectorAll('[data-remove-photo]').forEach(b => b.onclick = () => { if (busy)
             return; URL.revokeObjectURL(photos[Number(b.dataset.removePhoto)].uri); photos.splice(Number(b.dataset.removePhoto), 1); renderPhotos(); }); }
         function renderMessages() {
             const target = element.querySelector('.community-history');
