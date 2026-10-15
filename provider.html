@@ -6,7 +6,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <script src="./chat-history.js?v=20261011-chat-app" defer></script>
-  <script src="./theme.js?v=20261012-theme-ready"></script>
+  <script src="./theme.js?v=20261016-keyboard"></script>
   <title>Atlantic Express Provider Portal</title>
   <script>
     try {
@@ -17,38 +17,39 @@
   </script>
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
-  <link rel="stylesheet" href="./provider.css?v=20261012-notification-links" />
+  <link rel="stylesheet" href="./provider.css?v=20261016-overview" />
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
-  <script src="./location-sharing.js?v=20261015-receipts" defer></script>
-  <script src="./driver-availability.js?v=20261015-receipts" defer></script>
-  <script src="./listing-images.js?v=20261015-receipts" defer></script>
+  <script src="./location-sharing.js?v=20261016-overview" defer></script>
+  <script src="./driver-availability.js?v=20261016-overview" defer></script>
+  <script src="./listing-images.js?v=20261016-overview" defer></script>
   <script src="./storage-upload.js?v=20261008-chat" defer></script>
-  <script src="./service-categories-data.js?v=20261015-receipts" defer></script>
-  <script src="./service-categories.js?v=20261015-receipts" defer></script>
+  <script src="./service-categories-data.js?v=20261016-overview" defer></script>
+  <script src="./service-categories.js?v=20261016-overview" defer></script>
   <script src="./provider-form-defaults.js?v=20261014" defer></script>
-  <script src="./hall-icon.js?v=20261015-receipts" defer></script>
+  <script src="./hall-icon.js?v=20261016-overview" defer></script>
   <script src="./provider-map-loader.js?v=20261015" defer></script>
-  <script src="./provider-native.js?v=20261015-receipts" defer></script>
+  <script src="./provider-native.js?v=20261016-overview" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./community-town-hall.js?v=20261015-receipts" defer></script>
+  <script src="./community-town-hall.js?v=20261016-overview" defer></script>
   <script src="./private-chat-store.js?v=20261015" defer></script>
-  <script src="./community-portal.js?v=20261015-receipts" defer></script>
-  <link rel="stylesheet" href="./community-portal.css?v=20261015-receipts" />
-  <link rel="stylesheet" href="./town-hall.css?v=20261015-receipts" />
-  <script src="./provider.js?v=20261015-receipts" defer></script>
+  <script src="./community-portal.js?v=20261016-overview" defer></script>
+  <link rel="stylesheet" href="./community-portal.css?v=20261016-overview" />
+  <link rel="stylesheet" href="./town-hall.css?v=20261016-overview" />
+  <script src="./provider.js?v=20261016-overview" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
   <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
   <script src="./chat-photo-viewer.js?v=20261011-chat-app" defer></script>
   <script src="./provider-updates.js?v=20261012-app-update" defer></script>
-  <script src="./provider-pwa.js?v=20261012-app-update" defer></script>
+  <script src="./provider-pwa.js?v=20261016-overview" defer></script>
   <link rel="manifest" href="./provider.webmanifest" />
   <meta name="theme-color" content="#12221C" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<link rel="stylesheet" href="provider-identity.css?v=20261015-receipts" />
-<script src="provider-identity.js?v=20261015-receipts" defer></script>
+<link rel="stylesheet" href="provider-identity.css?v=20261016-overview" />
+<script src="provider-identity.js?v=20261016-overview" defer></script>
 <link rel="stylesheet" href="./settings.css?v=20261015" />
-<script src="./settings.js?v=20261015-receipts" defer></script>
+<script src="./settings.js?v=20261016-overview" defer></script>
+<link rel="stylesheet" href="./provider-overview.css?v=20261016"/>
 </head>
 <body class="auth-mode">
   <header class="provider-header">
@@ -140,12 +141,12 @@
           <div id="manifestRows" class="stack-list"></div><button id="loadMoreManifests" type="button" class="secondary hidden">Load more manifests</button>
         </section>
 
-        <section data-view-panel="overview" class="card">
-          <div class="section-heading"><div><span class="eyebrow">Account</span><h2>Provider overview</h2><div id="providerIdentity"></div></div><button id="refreshPortal" class="secondary">Refresh</button></div>
-          <div class="metrics"><article><span>Verification</span><strong id="metricVerification">—</strong></article><article><span>Subscription</span><strong id="metricSubscription">—</strong></article><article><span>Listings</span><strong id="metricListings">0</strong></article><article><span>Open requests</span><strong id="metricRequests">0</strong></article></div>
+        <section data-view-panel="overview" class="card provider-overview"><div class="overview-top">
+          <div class="section-heading"><div><h2>Provider overview</h2></div><button id="refreshPortal" class="secondary"><span class="overview-refresh-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 8a8 8 0 1 0 0 8M20 3v5h-5"/></svg></span>Refresh</button></div><div class="overview-identity" id="providerIdentity"></div><div class="overview-summary">
+          <div class="metrics"><article><span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg></span><div><span>Verification</span><strong id="metricVerification">—</strong></div></article><article><span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 4 5 5-8 5 8 4-5-2 13H5Z"/></svg></span><div><span>Subscription</span><strong id="metricSubscription">—</strong></div></article><article><span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></span><div><span>Listings</span><strong id="metricListings">0</strong></div></article><article><span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z"/></svg></span><div><span>Open requests</span><strong id="metricRequests">0</strong></div></article></div></div></div>
           <section id="providerBranding" class="verification-box hidden"><h3>Public profile</h3><p>Your photo and banner appear with your products, services and customer chats.</p><div id="providerBrandPreview"></div><form id="providerMediaForm" class="form-grid compact"><label>Profile photo<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"/><small>A square photo works best. Maximum 5 MB.</small></label><label>Business banner<input name="banner" type="file" accept="image/jpeg,image/png,image/webp"/><small>A wide image works best. Maximum 5 MB.</small></label><button type="submit">Save profile images</button><button type="button" class="secondary" id="removeProviderPhoto">Remove photo</button><button type="button" class="secondary" id="removeProviderBanner">Remove banner</button><p id="providerMediaMessage" class="message" role="status"></p></form></section>
           <section id="driverAvailability" class="verification-box hidden"></section>
-          <div id="accountGuidance" class="notice"></div>
+          <div class="overview-guidance"><span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg></span><div id="accountGuidance" class="notice"></div></div>
           <section id="sellerSettlement" class="verification-box hidden">
             <div class="section-heading"><div><span class="eyebrow">Product seller settlement</span><h3>Connect your Flutterwave settlement account</h3></div><span id="payoutStatus" class="badge">Not configured</span></div>
             <p>Required when you offer Flutterwave checkout. Contact-only products do not need this account. Customers pay securely through Atlantic Express; Flutterwave sends the seller portion to this account and the 1% Atlantic Express service fee to the marketplace account.</p>

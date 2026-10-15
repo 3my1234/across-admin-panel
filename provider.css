@@ -496,3 +496,5 @@ dialog.chat-photo-viewer { width:100vw; height:100dvh; max-width:none!important;
  button,input,select,textarea { font-size:16px; }
  button,a,input,textarea { -webkit-tap-highlight-color:transparent; }
 }
+
+@media(max-width:850px){dialog#conversationDialog{inset:auto 0 auto;top:var(--visible-viewport-top,0px);padding-bottom:8px} #conversationReplyForm textarea{scroll-margin:0}}

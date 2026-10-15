@@ -42,6 +42,9 @@
   function revealFocusedField() {
     const field = document.activeElement;
     if (!field?.matches("input:not([type=checkbox]):not([type=radio]),textarea,select")) return;
+    // Full-screen chats already size themselves to the visual viewport. A
+    // second scroll-to-centre lifts the composer away from the keyboard.
+    if (field.closest?.('.community-room-open, #conversationDialog[open]')) return;
     const bounds = field.getBoundingClientRect();
     const top = viewport?.offsetTop || 0;
     const bottom = top + (viewport?.height || window.innerHeight);
@@ -49,10 +52,14 @@
   }
   function updateViewport() {
     document.documentElement.style.setProperty("--visible-viewport-height", `${viewport?.height || window.innerHeight}px`);
+    document.documentElement.style.setProperty("--visible-viewport-top", `${viewport?.offsetTop || 0}px`);
     clearTimeout(revealTimer);
     revealTimer = setTimeout(revealFocusedField, 80);
   }
   viewport?.addEventListener("resize", updateViewport);
+  viewport?.addEventListener("scroll", () => {
+    document.documentElement.style.setProperty("--visible-viewport-top", `${viewport?.offsetTop || 0}px`);
+  });
   // Scrolling must not force focus back into view: that traps users at a form
   // and can interfere with long-page screenshots. Focus/resize handles keyboards.
   window.addEventListener("resize", updateViewport);

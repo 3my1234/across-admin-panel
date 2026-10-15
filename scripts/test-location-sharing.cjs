@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
 (async()=>{
  const listeners={},nodes=new Map(),events={};const node=()=>({innerHTML:'',textContent:'',value:'',options:[],disabled:false,replaceChildren(){this.options=[];},append(v){this.options.push(v);this.value||=v.value;}});
- for(const name of ['listing','load','online','offline','status'])nodes.set(`[data-driver-${name}]`,node());
+ for(const name of ['listing','load','online','offline','status','pill'])nodes.set(`[data-driver-${name}]`,{...node(),classList:{toggle(){}}});
  const element={innerHTML:'',querySelector:s=>nodes.get(s)};
  let gps=0,actor='driver-one',captureResolve;const calls=[],offline=[],timers=new Map();let seq=0;
  const context={console,Number,Date,Promise,JSON,navigator:{geolocation:{getCurrentPosition(ok,fail,options){gps++;assert.equal(options.maximumAge,0);ok({coords:{latitude:9.08,longitude:7.45,accuracy:15},timestamp:Date.now()});}}},document:{hidden:false,createElement:()=>node(),addEventListener:(name,f)=>listeners[name]=f,removeEventListener:()=>{}},window:{addEventListener:(name,f)=>events[name]=f,removeEventListener:()=>{}},setTimeout:(f,delay)=>{timers.set(++seq,{f,delay});return seq;},clearTimeout:id=>timers.delete(id)};

@@ -3,7 +3,7 @@
 :root[data-theme] .community-card{background:var(--dashboard-surface,var(--panel,#fff));color:var(--dashboard-text,var(--ink,#17212e))}
 .community-card h3,.community-row h3,.community-card p{overflow-wrap:anywhere}
 /* The composer belongs to the visible chat viewport, not below the dashboard header. */
-body.community-chat-open{overflow:hidden}
+body.community-chat-open{overflow:hidden;overscroll-behavior:none}
 body.community-chat-open .provider-mobile-nav{display:none!important}
 .community-room-open{position:fixed!important;inset:0!important;margin:0!important;z-index:110!important;height:var(--visible-viewport-height,100dvh);box-sizing:border-box;background:var(--dashboard-surface,var(--panel,#fff));color:var(--dashboard-text,var(--ink,#17212e));display:flex;flex-direction:column;overflow:hidden!important;padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom))}
 .community-room-open .community-tabs{display:none}
@@ -30,3 +30,6 @@ body.community-chat-open .provider-mobile-nav{display:none!important}
 
 .community-town-room .chat-bubble small{display:inline;text-align:left}.community-thread:not(.unused) .community-compose textarea{resize:none}
 .community-room-open [data-community-back]{background:transparent!important;color:inherit;border:0;padding:3px;font-size:25px;min-width:40px;min-height:44px}.chat-header-avatar{width:40px;height:40px;border-radius:50%;background:#12805f25;display:grid;place-items:center;font-size:20px;font-weight:700;flex-shrink:0}.community-room-open .community-row h3{flex:1;margin:0}.chat-safety{position:relative}.chat-safety summary{font-size:25px;list-style:none;min-width:35px;text-align:center;cursor:pointer}.chat-safety[open]{display:flex;flex-direction:column;gap:6px}.chat-inbox-meta button{font-size:18px;padding:0;min-width:28px}.support-chat-bubble p{color:inherit!important}
+
+/* Match the panned visual viewport without scrolling the composer to centre. */
+.community-room-open{inset:auto 0 auto!important;top:var(--visible-viewport-top,0px)!important;height:var(--visible-viewport-height,100dvh);max-height:var(--visible-viewport-height,100dvh);padding-bottom:8px}.community-room-open .community-compose textarea{scroll-margin:0}

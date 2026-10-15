@@ -40,6 +40,7 @@ jobs:
           node scripts/test-provider-badges.cjs
           node scripts/test-provider-access.cjs
           node scripts/test-theme.cjs
+          node scripts/test-plan-link-and-keyboard.cjs
           node scripts/test-provider-updates.cjs
           node scripts/test-listing-review.cjs
           node scripts/test-moderation-feedback.cjs
@@ -61,6 +62,7 @@ jobs:
           done
           node scripts/test-private-chat-browser.cjs
           node scripts/test-provider-browser.cjs
+          node scripts/test-overview-browser.cjs
           node scripts/test-community-browser.cjs
           node scripts/test-launch-browser.cjs
           node scripts/test-hall-live-browser.cjs
@@ -74,6 +76,7 @@ jobs:
           sleep 2
           curl --fail http://127.0.0.1:8080/provider.html
           curl --fail http://127.0.0.1:8080/provider.webmanifest
+          curl --fail http://127.0.0.1:8080/provider-overview.css --output /tmp/provider-overview.css
           curl --fail http://127.0.0.1:8080/provider-updates.js --output /tmp/provider-updates.js
           curl --fail http://127.0.0.1:8080/community-portal.js --output /tmp/community-portal.js
           curl --fail http://127.0.0.1:8080/provider-native.js --output /tmp/provider-native.js
