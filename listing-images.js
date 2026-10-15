@@ -1,15 +1,15 @@
 (function(root){
     'use strict';
     // Only listing photos are transformed; identity/verification documents remain original.
-    async function prepare(file){
-        if(!file || !/^image\/(jpeg|png|webp|avif)$/i.test(file.type) || file.size<350000)return file;
+    async function prepare(file,{maxDimension=1600}={}){
+        if(!file || !/^image\/(jpeg|png|webp|avif)$/i.test(file.type) || (file.size<350000&&maxDimension===1600))return file;
         let image,objectURL;
         try{
             if(typeof root.createImageBitmap==='function') image=await root.createImageBitmap(file);
             else {objectURL=URL.createObjectURL(file);image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=objectURL;});}
             const width=image.width||image.naturalWidth,height=image.height||image.naturalHeight;
             if(!width||!height)return file;
-            const scale=Math.min(1,1600/Math.max(width,height)),canvas=document.createElement('canvas');
+            const scale=Math.min(1,maxDimension/Math.max(width,height)),canvas=document.createElement('canvas');
             canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
             const context=canvas.getContext('2d');if(!context)return file;
             context.drawImage(image,0,0,canvas.width,canvas.height);

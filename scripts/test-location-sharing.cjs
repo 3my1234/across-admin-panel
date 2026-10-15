@@ -1,0 +1,23 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict');
+(async()=>{
+ const listeners={},nodes=new Map(),events={};const node=()=>({innerHTML:'',textContent:'',value:'',options:[],disabled:false,replaceChildren(){this.options=[];},append(v){this.options.push(v);this.value||=v.value;}});
+ for(const name of ['listing','load','online','offline','status'])nodes.set(`[data-driver-${name}]`,node());
+ const element={innerHTML:'',querySelector:s=>nodes.get(s)};
+ let gps=0,actor='driver-one',captureResolve;const calls=[],offline=[],timers=new Map();let seq=0;
+ const context={console,Number,Date,Promise,JSON,navigator:{geolocation:{getCurrentPosition(ok,fail,options){gps++;assert.equal(options.maximumAge,0);ok({coords:{latitude:9.08,longitude:7.45,accuracy:15},timestamp:Date.now()});}}},document:{hidden:false,createElement:()=>node(),addEventListener:(name,f)=>listeners[name]=f,removeEventListener:()=>{}},window:{addEventListener:(name,f)=>events[name]=f,removeEventListener:()=>{}},setTimeout:(f,delay)=>{timers.set(++seq,{f,delay});return seq;},clearTimeout:id=>timers.delete(id)};
+ vm.createContext(context);for(const file of ['location-sharing.js','driver-availability.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context);
+ assert.equal(gps,0,'no GPS request on page load');
+ assert.equal(context.AtlLocation.render({latitude:91,longitude:1}), '');
+ assert.equal(context.AtlLocation.render({latitude:'<script>',longitude:1}), '');
+ assert.match(context.AtlLocation.render({latitude:9.08,longitude:7.45}),/query=9.08,7.45/);
+ const api=async(path,options={})=>{calls.push({path,options});if(path.includes('/listings'))return {items:[{id:'approved-driver',title:'Local rides',category:'Independent driver'},{id:'other',title:'Plumbing',category:'Plumber'}]};return {};};
+ const driver=context.DriverAvailability.mount({element,request:api,getActor:()=>actor,offline:async token=>offline.push(token)});
+ await nodes.get('[data-driver-load]').onclick({currentTarget:nodes.get('[data-driver-load]')});assert.equal(nodes.get('[data-driver-listing]').options.length,1);
+ nodes.get('[data-driver-online]').onclick();await new Promise(r=>setImmediate(r));assert.equal(calls.filter(v=>v.options.method==='PUT').length,1);assert.equal(gps,1);
+ assert.ok([...timers.values()].some(v=>v.delay===30000),'heartbeat is bounded to 30 seconds');
+ context.document.hidden=true;listeners.visibilitychange();await new Promise(r=>setImmediate(r));assert.equal(offline.length,1);assert.equal(timers.size,0);
+ context.document.hidden=false;listeners.visibilitychange();await new Promise(r=>setImmediate(r));assert.equal(gps,1,'foregrounding never silently opts back in');
+ context.AtlLocation.capture=()=>new Promise(resolve=>captureResolve=resolve);nodes.get('[data-driver-online]').onclick();const stopping=driver.stop();actor='another-account';captureResolve({latitude:9,longitude:7,accuracy_m:10,captured_at:new Date().toISOString()});await stopping;
+ assert.equal(calls.filter(v=>v.options.method==='PUT').length,1,'late GPS cannot publish after stop/logout');assert.equal(offline.at(-1),'driver-one','offline always uses original actor');driver.destroy();
+ console.log('Location/driver checks passed: explicit permission, safe map URLs, approved categories, heartbeat, background stop, no automatic restart and late GPS/account isolation.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
