@@ -51,7 +51,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             assert.equal(await evaluate(`document.getElementById('communityBrowserRoot').scrollWidth<=document.getElementById('communityBrowserRoot').clientWidth+1`),true,'Hall fits viewport');
             await evaluate(`document.querySelector('#communityBrowserRoot [data-hall-detail]').click()`);
             await delay(80);
-            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-body').textContent.includes('Offers on the table')`), true);
+            assert.equal(await evaluate(`document.querySelector('#communityBrowserRoot .community-body').textContent.includes('Offer previews')`), true);
             await evaluate(`__community.openID('11111111-1111-4111-8111-111111111111')`);
             await evaluate(`(async()=>{window.__roomKind='town_hall';__community.reset();await __community.activate();await __community.openID('11111111-1111-4111-8111-111111111111');})()`);
             assert.equal(await evaluate(`!!document.querySelector('#communityBrowserRoot .room-name')&&!!document.querySelector('#communityBrowserRoot .room-welcome')`),true,'Town Hall renders compact named room lines');
