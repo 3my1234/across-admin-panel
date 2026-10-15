@@ -17,6 +17,7 @@
     productCursor: "", productHasMore: false, merchantOrderCursor: "", merchantOrderHasMore: false, manifestCursor: "", manifestHasMore: false, editingProductID: "", editingListingID: "", listingRetainedMediaUrls: [], listingLocationAccuracy: null, listingLocationSource: "", listingMap: null, listingMarker: null, lastLocationSearchAt: 0, notificationTimer: null, booting: false,
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
+  window.MessageReceiptSession=window.AtlMessageReceipts?.create({request:api,getActor:()=>state.token,provider:true});
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token,offline:actor=>fetch(API+'/providers/me/driver-availability',{method:'DELETE',headers:{Authorization:'Bearer '+actor},keepalive:true})});
   const hallShortcut=document.createElement('button');
@@ -110,6 +111,7 @@
       throw error;
     }
     if(data && typeof data==="object")data._etag=response.headers?.get("ETag");
+    globalThis.MessageReceiptSession?.observe(path,data,authToken);
     return data;
   }
 
@@ -1213,7 +1215,7 @@
     } catch (error) { if (seq === supportListSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
   }
   function renderProviderSupportMessages() {
-      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article class="notice support-chat-bubble ${message.sender_type==="admin"?"support-incoming":"support-outgoing"}"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}</small></article>`).join("");
+      $("providerSupportMessages").innerHTML = supportMessages.map(message => `<article data-receipt-message="${escapeHtml(message.id||'')}" class="notice support-chat-bubble ${message.sender_type==="admin"?"support-incoming":"support-outgoing"}"><strong>${message.sender_type === "admin" ? "Atlantic Express Support" : "You"}</strong><p style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(message.message)}</p><small>${escapeHtml(new Date(message.created_at).toLocaleString())}${globalThis.AtlMessageReceipts?.render(message.id,message.sender_type!=="admin")||''}</small></article>`).join("");
     $("providerSupportSubject").textContent=supportTicket.subject;$("providerSupportThread").classList.remove("hidden");
   }
   function openProviderSupport(older = false) {
@@ -1321,7 +1323,7 @@
   window.addEventListener("popstate",event=>{if(document.querySelector(".chat-photo-viewer[open],.provider-more-menu[open]"))return;if($("conversationDialog").open){$("conversationDialog").close();return;}if(community?.isOpen()){if(event.state?.communityChat)void community.openID(event.state.communityChat);else community.close();}switchView(event.state?.providerView || "overview",{persist:false});});
   navigator.serviceWorker?.addEventListener("message",event=>{if(event.data?.type==="provider-notification")void openProviderLink(event.data.url).catch(error=>setMessage(error.message));});
   let communityActivityTimer=null;
-  navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type!=='provider-community-activity'||document.hidden||!state.token)return;clearTimeout(communityActivityTimer);communityActivityTimer=setTimeout(()=>{if(document.hidden||!state.token)return;if(state.activeView==='messages')void community?.refresh();void loadProviderNotifications({silent:true});},200);});
+  navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type!=='provider-community-activity'||document.hidden||!state.token)return;void globalThis.MessageReceiptSession?.receiveNotification(event.data.routing||{});clearTimeout(communityActivityTimer);communityActivityTimer=setTimeout(()=>{if(document.hidden||!state.token)return;if(state.activeView==='messages')void community?.refresh();void loadProviderNotifications({silent:true});},200);});
   const requestedView=new URLSearchParams(location.search).get("view");if(PROVIDER_VIEWS.has(requestedView))state.activeView=requestedView;
   function resetAuthForms() {
     ["loginForm", "signupForm"].forEach((id) => {

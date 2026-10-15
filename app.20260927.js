@@ -1300,6 +1300,8 @@ function logout() {
   renderSession();
 }
 
+window.MessageReceiptSession=window.AtlMessageReceipts?.create({request:(path,options={})=>request('/api/v1/admin'+path,{...options,body:options.body?JSON.parse(options.body):undefined}),getActor:()=>state.token,admin:true});
+
 async function request(path, options = {}) {
   const authToken = state.token;
   const readOnly = !options.method || options.method === "GET";
@@ -1325,6 +1327,7 @@ async function request(path, options = {}) {
         }
         throw error;
       }
+      globalThis.MessageReceiptSession?.observe(path,data,authToken);
       return data;
     } catch (error) {
       const transient = error.name === "AbortError" || error instanceof TypeError || [502,503,504].includes(error.status);
@@ -2502,10 +2505,10 @@ function renderTicketHistory(ticketId,subject) {
     const messages = ticketHistory.length ? ticketHistory : (ticket?.message ? [{ sender_type: "user", message: ticket.message, created_at: ticket.created_at }] : []);
     const container = $("ticketMessagesList");
     container.innerHTML = messages.length ? messages.map(m => `
-      <div class="support-chat-bubble ${m.sender_type==='admin'?'support-outgoing':'support-incoming'}" style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
+      <div data-receipt-message="${escapeHtml(m.id||'')}" class="support-chat-bubble ${m.sender_type==='admin'?'support-outgoing':'support-incoming'}" style="margin-bottom:12px;padding:12px;border-radius:8px;background:${m.sender_type === 'admin' ? '#EAF8F2' : '#FFFFFF'};border:1px solid #D9E0DD;">
         <p style="font-weight:700;font-size:12px;color:#66736F;margin-bottom:4px;">${m.sender_type === 'admin' ? 'Admin' : 'User'}</p>
         <p style="color:#191919;font-size:14px;">${escapeHtml(m.message)}</p>
-        <p style="font-size:11px;color:#8C8C8C;margin-top:4px;">${format(m.created_at)}</p>
+        <p style="font-size:11px;color:#8C8C8C;margin-top:4px;">${format(m.created_at)}${globalThis.AtlMessageReceipts?.render(m.id,m.sender_type==='admin')||''}</p>
       </div>
     `).join("") : `<p style="color:#66736F;">This ticket has no message content. Reload the ticket list, then try again.</p>`;
     if (ticketCursor) { const earlier = document.createElement("button"); earlier.textContent = "Load earlier messages"; earlier.onclick = () => openTicketView(ticketId,subject,ticketCursor); container.prepend(earlier); }
