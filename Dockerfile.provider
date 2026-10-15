@@ -6,6 +6,7 @@ COPY provider-updates.js provider-identity.js provider-identity.css /usr/share/n
 COPY town-hall.css community-portal.js community-portal.css community-town-hall.js /usr/share/nginx/html/
 COPY service-categories-data.js service-categories.js provider-form-defaults.js /usr/share/nginx/html/
 COPY hall-icon.js IONICONS_LICENSE.txt /usr/share/nginx/html/
+COPY message-receipts.js message-receipts.css /usr/share/nginx/html/
 COPY location-sharing.js driver-availability.js /usr/share/nginx/html/
 COPY provider-native.js /usr/share/nginx/html/
 COPY provider.html provider.js provider.css provider.webmanifest provider-sw.js provider-pwa.js provider-offline.html provider-icon-192.png provider-icon-512.png favicon.png theme.js theme.css dashboard.css chat-history.js chat-photo-viewer.js storage-upload.js delivery-areas.js catalog-live.js /usr/share/nginx/html/

@@ -28,6 +28,7 @@ jobs:
           node --check community-portal.js
           node --check driver-availability.js
           node --check location-sharing.js
+          node --check message-receipts.js
           node scripts/test-location-sharing.cjs
           node --check provider-native.js
           node --check service-categories.js
@@ -63,6 +64,7 @@ jobs:
           node scripts/test-launch-browser.cjs
           node scripts/test-hall-live-browser.cjs
           node scripts/test-provider-branding-browser.cjs
+          node scripts/test-message-receipts-browser.cjs
       - name: Build and check separate provider image
         run: |
           docker build -f Dockerfile.provider -t provider-app:ci .
@@ -76,6 +78,8 @@ jobs:
           curl --fail http://127.0.0.1:8080/provider-native.js --output /tmp/provider-native.js
           curl --fail http://127.0.0.1:8080/location-sharing.js --output /tmp/location-sharing.js
           curl --fail http://127.0.0.1:8080/driver-availability.js --output /tmp/driver-availability.js
+          curl --fail http://127.0.0.1:8080/message-receipts.js --output /tmp/message-receipts.js
+          curl --fail http://127.0.0.1:8080/message-receipts.css --output /tmp/message-receipts.css
           curl --fail http://127.0.0.1:8080/service-categories-data.js --output /tmp/service-categories-data.js
           curl --fail http://127.0.0.1:8080/hall-icon.js --output /tmp/hall-icon.js
           curl --fail http://127.0.0.1:8080/settings.js --output /tmp/settings.js
