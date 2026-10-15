@@ -4,7 +4,7 @@
  function graphic(status){return `<svg width="18" height="16" viewBox="0 0 22 18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m2 9 4 4L16 3"/>${status==='sent'?'':'<path d="m10 12 2 2L22 4"/>'}</svg>`;}
  function render(id,mine,group=false){if(!mine||!valid(id))return '';return `<span class="message-receipt" data-message-receipt="${id}" data-receipt-group="${group?'true':'false'}" data-state="sent" aria-label="Sent to Atlantic Express">${group?'Sent':graphic('sent')}</span>`;}
  function create({request,getActor,admin=false,provider=false}){
-  let actor='',alive=true,privacyVersion=0,previewBusy=false;const previews=new Map(),threads=new Map(),delivered=new Set(),read=new Set(),states=new Map(),viewed=new Set(),watched=new Map();
+  let actor='',alive=true,privacyVersion=0,previewBusy=false;const notificationFlights=new Map(),previews=new Map(),threads=new Map(),delivered=new Set(),read=new Set(),states=new Map(),viewed=new Set(),watched=new Map();
   const blocked=()=>document.hidden||!!document.querySelector('dialog[open]');
   const observer=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{for(const entry of entries){const id=entry.target.dataset.receiptMessage;const item=watched.get(id);if(!item||item.node!==entry.target)continue;clearTimeout(item.timer);if(entry.isIntersecting&&entry.intersectionRatio>=.5){item.timer=setTimeout(()=>{if(!blocked()&&item.node.isConnected){viewed.add(id);void poll();}},750);}else viewed.delete(id);}},{threshold:[0,.5,1]}):null;
   const modalObserver=typeof MutationObserver==='function'?new MutationObserver(()=>{for(const item of watched.values()){clearTimeout(item.timer);observer?.unobserve(item.node);}watched.clear();viewed.clear();if(alive)requestAnimationFrame(watch);}):null;
@@ -39,9 +39,17 @@
    requestAnimationFrame(()=>{if(captured===getActor()){watch();paint();void poll();}});
   }
   async function preferences(){if(!getActor())throw Error('Sign in to change read receipts.');if(actor!==getActor())reset();return request('/messaging/preferences');}
+  async function receiveNotification(payload){
+   const captured=getActor();if(!alive||!captured||document.hidden)return;
+   const ticket=valid(payload.ticket_id)?payload.ticket_id:'',room=[payload.chat_room_id,payload.conversation_id].find(valid);if(!ticket&&!room)return;
+   const path=ticket?'/support/tickets/'+ticket+'/messages?limit=40':'/chat/conversations/'+room+'/messages?limit=40&mark_read=false',key=captured+':'+path;
+   if(notificationFlights.has(key))return notificationFlights.get(key);
+   if(notificationFlights.size>=4)return;
+   const flight=(async()=>{try{const data=await request(path);if(!alive||captured!==getActor())return;const messages=(data.messages||data.items||[]).filter(m=>valid(m.id)).slice(0,100);if(messages.length)await request('/messaging/deliveries',{method:'POST',body:JSON.stringify({messages:messages.map(m=>({channel:ticket?'support':data.kind?'shared':'business',conversation_id:ticket||room,message_id:m.id}))})});}catch{/* Keep receipt failures separate from chat and notification display. */}})();notificationFlights.set(key,flight);try{await flight;}finally{if(notificationFlights.get(key)===flight)notificationFlights.delete(key);}
+  }
   async function savePreference(enabled){const captured=getActor();const data=await request('/messaging/preferences',{method:'PATCH',body:JSON.stringify({read_receipts_enabled:enabled})});if(captured!==getActor())throw Error('Session changed');privacyVersion++;states.clear();read.clear();paint();void poll();return data;}
   const timer=setInterval(()=>void poll(),5000),foreground=()=>{if(!document.hidden)void poll();};document.addEventListener('visibilitychange',foreground);
-  return {observe,preferences,savePreference,reset,destroy(){alive=false;clearInterval(timer);modalObserver?.disconnect();document.removeEventListener('visibilitychange',foreground);reset();}};
+  return {observe,preferences,savePreference,receiveNotification,reset,destroy(){alive=false;clearInterval(timer);modalObserver?.disconnect();document.removeEventListener('visibilitychange',foreground);reset();}};
  }
  root.AtlMessageReceipts={create,render};
 })(globalThis);

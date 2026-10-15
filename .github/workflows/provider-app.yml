@@ -29,6 +29,7 @@ jobs:
           node --check driver-availability.js
           node --check location-sharing.js
           node --check message-receipts.js
+          node scripts/test-receipt-routing.cjs
           node scripts/test-location-sharing.cjs
           node --check provider-native.js
           node --check service-categories.js

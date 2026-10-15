@@ -1323,7 +1323,7 @@
   window.addEventListener("popstate",event=>{if(document.querySelector(".chat-photo-viewer[open],.provider-more-menu[open]"))return;if($("conversationDialog").open){$("conversationDialog").close();return;}if(community?.isOpen()){if(event.state?.communityChat)void community.openID(event.state.communityChat);else community.close();}switchView(event.state?.providerView || "overview",{persist:false});});
   navigator.serviceWorker?.addEventListener("message",event=>{if(event.data?.type==="provider-notification")void openProviderLink(event.data.url).catch(error=>setMessage(error.message));});
   let communityActivityTimer=null;
-  navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type!=='provider-community-activity'||document.hidden||!state.token)return;clearTimeout(communityActivityTimer);communityActivityTimer=setTimeout(()=>{if(document.hidden||!state.token)return;if(state.activeView==='messages')void community?.refresh();void loadProviderNotifications({silent:true});},200);});
+  navigator.serviceWorker?.addEventListener('message',event=>{if(event.data?.type!=='provider-community-activity'||document.hidden||!state.token)return;void globalThis.MessageReceiptSession?.receiveNotification(event.data.routing||{});clearTimeout(communityActivityTimer);communityActivityTimer=setTimeout(()=>{if(document.hidden||!state.token)return;if(state.activeView==='messages')void community?.refresh();void loadProviderNotifications({silent:true});},200);});
   const requestedView=new URLSearchParams(location.search).get("view");if(PROVIDER_VIEWS.has(requestedView))state.activeView=requestedView;
   function resetAuthForms() {
     ["loginForm", "signupForm"].forEach((id) => {
