@@ -9,7 +9,7 @@
  const group=label=>{const section=document.createElement('section');section.innerHTML='<h3>'+label+'</h3>';body.append(section);return section;};
  const appearance=group('Appearance');const controls=[...document.querySelectorAll('.appearance-control')];if(controls[0])appearance.append(controls[0]);for(const control of controls.slice(1))control.remove();
  if(provider){const notifications=group('Notifications and app');for(const id of ['enableProviderNotifications','providerPushStatus','installProviderApp']){const node=document.getElementById(id);if(node)notifications.append(node);}
-  const business=group('Business account');const subscription=document.querySelector('[data-view="subscription"]');if(subscription)business.append(subscription);
+  const business=group('Business account');const branding=document.getElementById('providerBranding');if(branding)business.append(branding);const subscription=document.querySelector('[data-view="subscription"]');if(subscription)business.append(subscription);
   const verification=document.getElementById('verificationDocuments');if(verification)business.append(verification);
  }else{const account=group('Administration');const admins=document.querySelector('.side-nav [data-tab="admins"]');if(admins)account.append(admins);}
  const account=group('Account');const logout=document.getElementById(provider?'signOut':'logoutButton');if(logout)account.append(logout);

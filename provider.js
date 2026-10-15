@@ -18,7 +18,7 @@
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
-  const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token});
+  const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token,offline:actor=>fetch(API+'/providers/me/driver-availability',{method:'DELETE',headers:{Authorization:'Bearer '+actor},keepalive:true})});
   const hallShortcut=document.createElement('button');
   hallShortcut.type='button';hallShortcut.className='provider-hall-shortcut hidden';
   hallShortcut.setAttribute('aria-label','Open Town Hall');
@@ -163,6 +163,7 @@
   }
 
   function signOut() {
+    void driverAvailability?.stop();
     window.ProviderNativeBridge?.signedOut();
     community?.reset();
     window.ProviderPWA?.disconnect(state.token);
@@ -1132,8 +1133,36 @@
         : "Upload a government ID plus any professional licence, qualification, business registration, or proof of address relevant to your work.";
   }
 
+  const driverAvailability=window.DriverAvailability?.mount({element:$('driverAvailability'),request:api,getActor:()=>state.token});
+  let brandingFlight=false;
+  async function saveProviderMedia(event) {
+    event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type=submit]');if(button.disabled||brandingFlight)return;
+    const actor=state.token;brandingFlight=true;button.disabled=true;const payload={};setMessage('Uploading profile images...',false,'providerMediaMessage');
+    try {for(const [name,purpose,field] of [['photo','logo','photo_url'],['banner','banner','banner_url']]) {
+      const source=form.elements[name].files[0];if(!source)continue;
+      if(!['image/jpeg','image/png','image/webp'].includes(source.type)||source.size>5*1024*1024)throw new Error('Choose a JPG, PNG or WebP image no larger than 5 MB.');
+      const file=await ListingImages.prepare(source,{maxDimension:purpose==='logo'?512:1600});if(actor!==state.token)return;
+      const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose})});
+      payload[field]=await PortalStorageUpload.upload(file,signed);if(actor!==state.token)return;
+    }
+    if(!Object.keys(payload).length)throw new Error('Choose a photo or banner first.');
+    await api('/providers/me/media',{method:'PUT',body:JSON.stringify(payload)});if(actor!==state.token)return;
+    const updated=await api('/providers/me');if(actor!==state.token)return;state.provider=updated;form.reset();renderOverview();setMessage('Profile images saved.',true,'providerMediaMessage');
+    }catch(error){if(actor===state.token)setMessage(error.message,false,'providerMediaMessage');}finally{brandingFlight=false;button.disabled=false;}
+  }
+  async function removeProviderMedia(field,button){
+    if(button.disabled||brandingFlight)return;brandingFlight=true;button.disabled=true;const actor=state.token;
+    try{await api('/providers/me/media',{method:'PUT',body:JSON.stringify({[field]:''})});if(actor!==state.token)return;const updated=await api('/providers/me');if(actor===state.token){state.provider=updated;renderOverview();setMessage('Profile image removed.',true,'providerMediaMessage');}}
+    catch(error){if(actor===state.token)setMessage(error.message,false,'providerMediaMessage');}finally{brandingFlight=false;button.disabled=false;}
+  }
+  $('providerMediaForm').addEventListener('submit',saveProviderMedia);
+  $('removeProviderPhoto').onclick=event=>void removeProviderMedia('photo_url',event.currentTarget);
+  $('removeProviderBanner').onclick=event=>void removeProviderMedia('banner_url',event.currentTarget);
   function renderOverview() {
     const p = state.provider, verification = p?.verification_status || "Not submitted", subscription = p?.subscription?.status || "None";
+    $('providerBranding').classList.toggle('hidden',!p);
+    $('driverAvailability').classList.toggle('hidden',!p?.can_offer_services);
+    $('providerBrandPreview').innerHTML=(window.ProviderIdentity?.banner(p?.provider_identity)||'')+ (window.ProviderIdentity?.render(p?.provider_identity)||'');
     const subscriptionActive = hasProviderAccess();
     const freeLaunch = p?.subscription?.launch_access_active === true;
     const subscriptionLabel = hasActiveSubscription() ? "Active paid plan" : "Free ? one listing";

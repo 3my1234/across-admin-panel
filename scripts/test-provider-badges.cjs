@@ -11,5 +11,9 @@ assert.match(render({name:'Free',verified:true,paid_active:false,tier:'gold'}),/
 assert.doesNotMatch(render({name:'Pending',verified:false,paid_active:true,tier:'diamond'}),/data-provider-badge/);
 assert.doesNotMatch(render({name:'<script>bad<\/script>',avatar_url:'javascript:alert(1)'}),/<script>|<img/);
 assert.match(render({name:'Avatar',avatar_url:'https://example.com/avatar.jpg'}),/<img/);
+assert.match(g.ProviderIdentity.banner({name:'Provider',banner_url:'https://example.com/banner.jpg'}),/provider-business-banner/);
+assert.equal(g.ProviderIdentity.banner({banner_url:'javascript:alert(1)'}),'');
+assert.equal(g.ProviderIdentity.banner({banner_url:'data:image/svg+xml,bad'}),'');
+assert.doesNotMatch(g.ProviderIdentity.banner({name:'<script>bad</script>',banner_url:'https://example.com/banner.jpg'}),/<script>/);
 assert.match(fs.readFileSync('provider-identity.css','utf8'),/prefers-reduced-motion/);
 console.log('Provider badges passed: four tiers, free/expired, unverified, unique SVG IDs, escaping, static lists and reduced motion.');
