@@ -31,7 +31,7 @@ async function run() {
   assert.ok(start > 0 && end > start);
   const pending = [];
   const state = { merchantProducts: [], merchantProductCursor: "" };
-  const loader = vm.createContext({ state, productLoadRevision: 0, setText: () => {}, renderMerchantProducts: () => {}, queryParams: () => "", request: () => new Promise(resolve => pending.push(resolve)) });
+  const loader = vm.createContext({ state, productLoadRevision: 0, providerFeedback:()=>{}, setText: () => {}, renderMerchantProducts: () => {}, queryParams: () => "", request: () => new Promise(resolve => pending.push(resolve)) });
   vm.runInContext(source.slice(start, end), loader);
   const old = loader.loadMerchantProducts({ reset: true });
   const recent = loader.loadMerchantProducts({ reset: true });

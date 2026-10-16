@@ -167,6 +167,7 @@
   function signOut() {
     void driverAvailability?.stop();
     window.ProviderNativeBridge?.signedOut();
+    if(state.token)void window.PrivateChatStore?.clear(state.token);
     community?.reset();
     window.ProviderPWA?.disconnect(state.token);
     resetProviderSupport();
@@ -1200,17 +1201,24 @@
     $("providerSupportThread").classList.add("hidden");
     $("providerSupportForm").reset(); $("providerSupportReply").reset();
   }
-  async function loadProviderSupport(older = false) {
-    const seq = ++supportListSequence, token = state.token;
-    setMessage("Loading support conversations...", false, "providerSupportStatus");
-    try {
-      const data = await api(`/support/tickets${older && supportTicketCursor ? `?cursor=${encodeURIComponent(supportTicketCursor)}` : ""}`);
-      if (seq !== supportListSequence || token !== state.token) return;
-      supportTickets = [...new Map([...supportTickets, ...(data.tickets || [])].map(ticket => [ticket.id, ticket])).values()].sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)));
-      if (older || !supportTicketCursor) supportTicketCursor = data.next_cursor || "";
+  function renderProviderSupportTickets(){
       $("providerSupportTickets").innerHTML = supportTickets.map(ticket => `<button type="button" class="secondary${ticket.unread_count ? ' chat-unread' : ''}" data-support-ticket="${escapeHtml(ticket.id)}">${escapeHtml(ticket.subject)} · ${escapeHtml(ticket.status)}${ticket.unread_count ? ` - ${ticket.unread_count} unread` : ""}</button>`).join("") || "<p>No support conversations yet. Send your first message above.</p>";
       $("providerSupportTickets").querySelectorAll("[data-support-ticket]").forEach(button => button.addEventListener("click", () => { supportTicket = supportTickets.find(ticket => ticket.id === button.dataset.supportTicket); void openProviderSupport(); }));
       $("moreProviderSupport").classList.toggle("hidden", !supportTicketCursor);
+  }
+  async function loadProviderSupport(older = false) {
+    const seq = ++supportListSequence, token = state.token;
+    setMessage(supportTickets.length?"Updating support conversations…":"Loading support conversations...", false, "providerSupportStatus");
+    let networkApplied=false,hydrated=false;
+    if(!older&&!supportTickets.length)void window.PrivateChatStore?.get(token,"support:inbox").then(saved=>{if(!networkApplied&&seq===supportListSequence&&token===state.token&&!supportTickets.length&&Array.isArray(saved?.tickets)){hydrated=true;supportTickets=saved.tickets;supportTicketCursor=saved.cursor||"";renderProviderSupportTickets();setMessage("Saved conversations · updating…",false,"providerSupportStatus");}});
+    try {
+      const data = await api(`/support/tickets${older && supportTicketCursor ? `?cursor=${encodeURIComponent(supportTicketCursor)}` : ""}`);
+      if (seq !== supportListSequence || token !== state.token) return;
+      networkApplied=true;
+      if(!older)window.PrivateChatStore?.put(token,"support:inbox",{tickets:data.tickets||[],cursor:data.next_cursor||""});
+      supportTickets = [...new Map([...supportTickets, ...(data.tickets || [])].map(ticket => [ticket.id, ticket])).values()].sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)) || String(b.id).localeCompare(String(a.id)));
+      if (older || !supportTicketCursor || hydrated) supportTicketCursor = data.next_cursor || "";
+      renderProviderSupportTickets();
       setMessage("", true, "providerSupportStatus");
     } catch (error) { if (seq === supportListSequence && token === state.token) setMessage(error.message, false, "providerSupportStatus"); }
   }
@@ -1231,9 +1239,13 @@
     const id = supportTicket.id, seq = ++supportThreadSequence, token = state.token;
     if(loadedSupportID!==id){const cached=chatCache.get(token,`support:${id}`);supportMessages=cached?.messages || [];supportMessageCursor=cached?.cursor || "";loadedSupportID=id;renderProviderSupportMessages();if(!cached)$("providerSupportMessages").textContent='Loading recent messages…';}
     const hadHistory=supportMessages.length>0;
+    let networkApplied=false;
+    if(!older&&!hadHistory)void window.PrivateChatStore?.get(token,"support:"+id).then(saved=>{if(!networkApplied&&seq===supportThreadSequence&&token===state.token&&supportTicket?.id===id&&!supportMessages.length&&Array.isArray(saved?.messages)){supportMessages=saved.messages;supportMessageCursor=saved.cursor||"";chatCache.put(token,"support:"+id,supportMessages,supportMessageCursor);renderProviderSupportMessages();$("earlierProviderSupport").classList.toggle("hidden",!supportMessageCursor);$("providerSupportReply").classList.toggle("hidden",saved.status==="closed");}});
     try {
       const data = await api(`/support/tickets/${encodeURIComponent(id)}/messages${older && supportMessageCursor ? `?cursor=${encodeURIComponent(supportMessageCursor)}` : ""}`);
       if (seq !== supportThreadSequence || token !== state.token || supportTicket?.id !== id) return;
+      networkApplied=true;
+      if(!older)window.PrivateChatStore?.put(token,"support:"+id,{messages:data.messages||[],cursor:data.next_cursor||"",status:data.ticket_status});
       const existing = loadedSupportID === id ? supportMessages : [];
       supportMessages = [...new Map([...existing, ...(data.messages || [])].map(message => [message.id, message])).values()].sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)));
       if (older || !hadHistory) supportMessageCursor = data.next_cursor || "";

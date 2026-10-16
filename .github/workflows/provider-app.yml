@@ -47,6 +47,7 @@ jobs:
           node scripts/test-subscription-periods.cjs
           node scripts/test-provider-pwa.cjs
           node scripts/test-provider-support.cjs
+          node scripts/test-support-device-cache.cjs
           node scripts/test-chat-unread.cjs
           node scripts/test-product-chat.cjs
           node scripts/test-page-refresh.cjs
@@ -63,6 +64,7 @@ jobs:
           node scripts/test-private-chat-browser.cjs
           node scripts/test-provider-browser.cjs
           node scripts/test-overview-browser.cjs
+          node scripts/test-admin-providers-browser.cjs
           node scripts/test-community-browser.cjs
           node scripts/test-launch-browser.cjs
           node scripts/test-hall-live-browser.cjs

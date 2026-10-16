@@ -41,7 +41,7 @@
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261009-wallet" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
-    <script src="./provider-admin.js?v=20261015-launch-fixes" defer></script>
+    <script src="./provider-admin.js?v=20261016-provider-design" defer></script>
     <script src="./community-admin.js?v=20261014" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
@@ -49,6 +49,7 @@
 <script src="provider-identity.js?v=1" defer></script>
 <link rel="stylesheet" href="./settings.css?v=20261015" />
 <script src="./settings.js?v=20261015-receipts" defer></script>
+<link rel="stylesheet" href="./admin-providers.css?v=20261016"/>
 </head>
   <body>
     <main class="shell">
@@ -341,7 +342,7 @@
           <section class="tab-panel hidden" data-panel="providers">
             <section class="panel">
               <div class="section-head">
-                <div><h2>Service Providers</h2><p class="muted">Verify provider businesses before any subscribed listing can be published.</p></div>
+                <div><h2>Service Providers</h2><p class="muted">Verify provider documents before any storefront listing can be published.</p></div>
                 <button type="button" id="reloadProvidersButton" class="secondary-button">Reload providers</button>
               </div>
               <div class="filter-grid"><label>Search providers <input id="providerSearch" type="search" placeholder="Business, email, city, or status" autocomplete="off" /></label><label>Verification <select id="providerVerificationStatus"><option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
@@ -387,7 +388,7 @@
                 </form>
                 <p id="providerPlanStatus" class="success"></p>
               </details>
-              <div class="section-head"><div><h3>Existing Flutterwave renewals</h3><p class="muted">These continue billing independently of the Free/Paid app setting. Cancel each subscription deliberately before a fully free launch.</p></div><button type="button" id="reloadGatewaySubscriptionsButton" class="secondary-button">Refresh renewals</button></div>
+              <div class="section-head"><div><h3>Existing Flutterwave renewals</h3><p class="muted">These continue billing independently of the app. Cancel each subscription individually to stop renewal.</p></div><button type="button" id="reloadGatewaySubscriptionsButton" class="secondary-button">Refresh renewals</button></div>
               <p id="gatewaySubscriptionsStatus" class="muted"></p>
               <div class="table-wrap"><table id="gatewaySubscriptionsTable"></table></div>
             </section>
