@@ -51,6 +51,7 @@ jobs:
           node scripts/test-chat-unread.cjs
           node scripts/test-product-chat.cjs
           node scripts/test-page-refresh.cjs
+          node scripts/test-catalog-live.cjs
       - name: Check Settings, encrypted cache and responsive chat in Chrome
         env:
           COMMUNITY_TEST_ORIGIN: http://127.0.0.1:5176
