@@ -1309,13 +1309,19 @@
     } catch(error) {setMessage(error.message || "This page could not refresh. Retry when connected.");}
     finally {visibleProviderRefreshing=false;}
   }
-  setInterval(() => { if (!["products","listings"].includes(state.activeView)) void refreshVisibleProviderPage(); },12000);
+  let nextVisiblePageRefresh = 0;
+  setInterval(() => {
+    if (["products","listings"].includes(state.activeView) || Date.now() < nextVisiblePageRefresh) return;
+    nextVisiblePageRefresh = Date.now() + (["messages","support"].includes(state.activeView) ? 12000 : 60000);
+    void refreshVisibleProviderPage();
+  },12000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) void refreshVisibleProviderPage(); });
   window.addEventListener("focus", () => { void refreshVisibleProviderPage(); });
   function switchView(view, { persist = true } = {}) {
     if(view==='requests')view='messages';
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
+    nextVisiblePageRefresh = 0;
     void refreshHallShortcut();
     if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",providerViewURL(nextView));}
     document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === nextView));
