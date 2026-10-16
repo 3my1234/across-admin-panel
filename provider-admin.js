@@ -1,6 +1,9 @@
 /* Provider marketplace administration. Loaded after the main admin bundle. */
 (() => {
   const PAGE_SIZE = 25;
+  function providerFeedback(id,text,tone="loading"){setText(id,text);const node=$(id);if(node){node.dataset.feedback=tone;node.setAttribute("role",tone==="error"?"alert":"status");}}
+  const navPaths={overview:'M3 10 12 3l9 7v11H3ZM9 21v-8h6v8',providers:'M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21v-3a6 6 0 0 1 12 0v3ZM18 4v7M15 7h6M17 15h5v6h-5Z',"merchant-fulfillments":'M3 4h18v17H3ZM8 4v5h8V4M7 14h10M7 17h6',orders:'M5 6h14v15H5ZM9 6V3h6v3',transactions:'M4 5h16v14H4ZM8 9h8M8 13h5',waitlist:'M3 4h18v17H3ZM7 1v6M17 1v6M3 10h18',"xp-withdrawals":'M3 7h18v14H3ZM3 7l13-5v5M16 12h5v5h-5Z',support:'M3 14v-3a9 9 0 0 1 18 0v3M3 12h4v8H3Zm14 0h4v8h-4Z',community:'M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z',analytics:'M4 21V11h4v10M10 21V3h4v18M16 21V7h4v14',complaints:'M12 3 2 21h20ZM12 9v6M12 18v1'};
+  for(const button of document.querySelectorAll(".side-nav [data-tab]")){const d=navPaths[button.dataset.tab];if(d)button.insertAdjacentHTML("afterbegin",'<svg class="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+d+'"/></svg>');}
   const originalAllowedTabsForRole = allowedTabsForRole;
   allowedTabsForRole = (role = state.role) => {
     const tabs = originalAllowedTabsForRole(role);
@@ -9,6 +12,7 @@
   };
   const originalLoadTabData = loadTabData;
   loadTabData = (tab, options = {}) => {
+    document.body.classList.toggle("providers-view",tab==="providers");
     if (tab === "providers") {
       $("providerBillingSection")?.classList.toggle("hidden", state.role !== "super_admin");
       if (state.role === "super_admin") void loadProviderBilling();
@@ -71,7 +75,7 @@
 
   async function cancelGatewaySubscription(id) {
     const subscription = state.gatewaySubscriptions.find((item) => String(item.id) === String(id));
-    if (!subscription || !confirm(`Stop future Flutterwave renewals for subscription ${id} (${subscription.customer_email || "unknown customer"})? This does not refund earlier charges. Paid access will require a new subscription after the free period.`)) return;
+    if (!subscription || !confirm(`Stop future Flutterwave renewals for subscription ${id} (${subscription.customer_email || "unknown customer"})? This does not refund earlier charges. This does not change already-paid access; future access follows the existing subscription rules.`)) return;
     const button = document.querySelector(`[data-stop-renewal="${id}"]`);
     button.disabled = true;
     setText("gatewaySubscriptionsStatus", `Cancelling subscription ${id} with Flutterwave...`);
@@ -117,39 +121,39 @@
   }
 
   async function loadProviders({ reset = false } = {}) {
-    setText("providerStatus", "Loading providers...");
+    providerFeedback("providerStatus", "Loading providers...");
     try {
       const data = await request(`/api/v1/admin/providers?${queryParams("providerSearch", "providerVerificationStatus", reset ? "" : state.providerCursor)}`);
       state.providers = reset ? (data.items || []) : [...state.providers, ...(data.items || [])];
       state.providerCursor = data.next_cursor || ""; state.providerHasMore = Boolean(data.has_more);
-      renderProviders(); setText("providerStatus", `${state.providers.length} providers loaded.`);
-    } catch (error) { setText("providerStatus", error.message); }
+      renderProviders(); providerFeedback("providerStatus", `${state.providers.length} providers loaded.`,"success");
+    } catch (error) { providerFeedback("providerStatus", error.message,"error"); }
   }
 
   async function loadProviderListings({ reset = false } = {}) {
     const revision = ++listingLoadRevision;
-    setText("providerListingStatus", "Loading listings...");
+    providerFeedback("providerListingStatus", "Loading listings...");
     try {
       const data = await request(`/api/v1/admin/provider-listings?${queryParams("providerListingSearch", "providerListingModerationStatus", reset ? "" : state.providerListingCursor)}`);
       if (revision !== listingLoadRevision) return false;
       state.providerListings = reset ? (data.items || []) : [...state.providerListings, ...(data.items || [])];
       state.providerListingCursor = data.next_cursor || ""; state.providerListingHasMore = Boolean(data.has_more);
-      renderProviderListings(); setText("providerListingStatus", `${state.providerListings.length} listings loaded.`);
+      renderProviderListings(); providerFeedback("providerListingStatus", `${state.providerListings.length} listings loaded.`,"success");
       return true;
-    } catch (error) { if (revision === listingLoadRevision) setText("providerListingStatus", error.message); return false; }
+    } catch (error) { if (revision === listingLoadRevision) providerFeedback("providerListingStatus", error.message,"error"); return false; }
   }
 
   async function loadMerchantProducts({ reset = false } = {}) {
     const revision = ++productLoadRevision;
-    setText("merchantProductModerationStatus", "Loading merchant products...");
+    providerFeedback("merchantProductModerationStatus", "Loading merchant products...");
     try {
       const data = await request(`/api/v1/admin/merchant-products?${queryParams("merchantProductSearch", "merchantProductStatus", reset ? "" : state.merchantProductCursor)}`);
       if (revision !== productLoadRevision) return false;
       state.merchantProducts = reset ? (data.items || []) : [...state.merchantProducts, ...(data.items || [])];
       state.merchantProductCursor = data.page?.next_cursor || ""; state.merchantProductHasMore = Boolean(data.page?.has_more);
-      renderMerchantProducts(); setText("merchantProductModerationStatus", `${state.merchantProducts.length} merchant products loaded.`);
+      renderMerchantProducts(); providerFeedback("merchantProductModerationStatus", `${state.merchantProducts.length} merchant products loaded.`,"success");
       return true;
-    } catch (error) { if (revision === productLoadRevision) setText("merchantProductModerationStatus", error.message); return false; }
+    } catch (error) { if (revision === productLoadRevision) providerFeedback("merchantProductModerationStatus", error.message,"error"); return false; }
   }
 
   function renderProviders() {
@@ -157,7 +161,7 @@
       <td>${window.ProviderIdentity?.render(item.provider_identity) || `<strong>${escapeHtml(item.business_name)}</strong>`}<br><span class="muted">${escapeHtml((item.provider_type || "mixed").replaceAll("_", " "))}${item.provider_type_other ? ` — ${escapeHtml(item.provider_type_other)}` : ""}</span><br><span class="muted">${format(item.created_at)}</span></td>
       <td>${escapeHtml(item.contact_email)}<br>${escapeHtml(item.contact_phone)}</td><td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td>
       <td><span class="status-pill ${item.verification_status === "approved" ? "active" : item.verification_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.verification_status)}</span></td>
-      <td>${escapeHtml(item.subscription_status || "none")}${item.subscription_ends_at ? `<br><span class="muted">to ${format(item.subscription_ends_at)}</span>` : ""}</td>
+      <td><span class="provider-subscription"><i class="${item.subscription_status === "active" ? "active" : ""}" aria-hidden="true"></i>${escapeHtml(item.subscription_status || "none")}</span>${item.subscription_ends_at ? `<br><span class="muted">to ${format(item.subscription_ends_at)}</span>` : ""}</td>
       <td class="table-actions"><button data-provider-docs="${item.id}" class="secondary-button">Review documents</button><button data-provider-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-provider-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-provider-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
     </tr><tr id="provider-docs-${item.id}" class="hidden"><td colspan="6"></td></tr>`).join("") || `<tr><td colspan="6">No matching providers.</td></tr>`}</tbody>`;
     $("loadMoreProvidersButton")?.classList.toggle("hidden", !state.providerHasMore);
@@ -177,18 +181,18 @@
   async function reviewDocument(providerID, documentID, status) {
     const notes = prompt(`${status} document. Add a note (optional):`, ""); if (notes === null) return;
     try { await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`, { method: "PATCH", body: { status, notes } }); await loadProviderDocuments(providerID); }
-    catch (error) { setText("providerStatus", error.message); }
+    catch (error) { providerFeedback("providerStatus", error.message,"error"); }
   }
   async function moderateProvider(id, status) {
     const notes = prompt(`${status} provider. Add an internal note (optional):`, ""); if (notes === null) return;
     try { await request(`/api/v1/admin/providers/${id}/verification`, { method: "PATCH", body: { status, notes } }); await loadProviders({ reset: true }); }
-    catch (error) { setText("providerStatus", error.message); }
+    catch (error) { providerFeedback("providerStatus", error.message,"error"); }
   }
 
   function renderProviderListings() {
     $("providerListingsTable").innerHTML = `<thead><tr><th>Images</th><th>Listing</th><th>Provider</th><th>Service</th><th>Location</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerListings.map((item) => `<tr>
       <td><div class="moderation-media">${(item.media_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td>
-      <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span>${window.ListingReview?.render(item) || ""}</td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
+      <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml((item.description || "").slice(0, 150))}</span>${window.ListingReview?.render(item) || ""}</td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
       <td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td><td>${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : `${item.attributes?.price_mode === "from" ? "From " : ""}${escapeHtml(item.currency_code)} ${format(item.price)} / ${escapeHtml(item.pricing_unit || "unit")}`}</td>
       <td><span class="status-pill ${item.status === "approved" ? "active" : item.status === "rejected" ? "inactive" : ""}">${escapeHtml(item.status)}</span></td><td class="table-actions"><button data-listing-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-listing-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-listing-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
     </tr>`).join("") || `<tr><td colspan="8">No matching listings.</td></tr>`}</tbody>`;
@@ -198,7 +202,7 @@
   async function moderateListing(id, status) {
     const notes = prompt(`${status} listing. Add an internal note (optional):`, ""); if (notes === null) return;
     try { await request(`/api/v1/admin/provider-listings/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadProviderListings({ reset: true }); }
-    catch (error) { setText("providerListingStatus", error.message); }
+    catch (error) { providerFeedback("providerListingStatus", error.message,"error"); }
   }
   const moderationFlights = new Set();
   async function moderateListingVerified(button) {
@@ -211,7 +215,7 @@
       if (result.id !== id || result.status !== status) throw new Error("The server did not confirm this moderation change.");
       await loadProviderListings({ reset: true });
       setText("providerListingStatus", result.title + " (listing " + id.slice(0, 8) + ") is confirmed " + status + ".");
-    } catch (error) { setText("providerListingStatus", error.message); }
+    } catch (error) { providerFeedback("providerListingStatus", error.message,"error"); }
     finally { moderationFlights.delete('listing:'+id); button.disabled=false; button.removeAttribute('aria-busy'); }
   }
   function merchantBuyerPriceSummary(item) {
@@ -222,7 +226,7 @@
     }).join("");
   }
   function renderMerchantProducts() {
-    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml(item.description || "").slice(0, 100)}</span></td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.currency_code)} ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}${merchantBuyerPriceSummary(item)}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
+    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 4).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml((item.description || "").slice(0, 150))}</span></td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.currency_code)} ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}${merchantBuyerPriceSummary(item)}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
     $("loadMoreMerchantProductsButton")?.classList.toggle("hidden", !state.merchantProductHasMore);
     $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProductVerified(button));
   }
@@ -239,7 +243,7 @@
       await loadMerchantProducts({ reset: true });
       setText("merchantProductModerationStatus", result.title + " (product " + id.slice(0, 8) + ") is confirmed " + status + ".");
     }
-    catch (error) { setText("merchantProductModerationStatus", error.message); }
+    catch (error) { providerFeedback("merchantProductModerationStatus", error.message,"error"); }
     finally { moderationFlights.delete('product:'+id); button.disabled=false; button.removeAttribute('aria-busy'); }
   }
 
