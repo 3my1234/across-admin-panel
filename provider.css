@@ -19,7 +19,7 @@ body {
   font: 15px/1.5 Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-body.auth-mode {
+html:not(.provider-session-pending) body.auth-mode {
   min-height: 100vh;
   background-color: var(--theme-background, #f7f1e9);
   background-image: linear-gradient(90deg, rgba(255,255,255,.72) 0%, rgba(255,255,255,.42) 44%, rgba(255,255,255,.04) 76%), url("./provider-background.png?v=20261012-artwork");
@@ -28,7 +28,7 @@ body.auth-mode {
   background-attachment: fixed;
 }
 
-body.auth-mode main {
+html:not(.provider-session-pending) body.auth-mode main {
   max-width: none;
   padding-inline: clamp(1rem, 5vw, 5rem);
 }
@@ -54,13 +54,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 html.provider-session-pending #authPanel,
 html.provider-session-pending #sessionRestorePanel { display: none !important; }
 html.provider-session-pending #portal.hidden { display: grid !important; }
-html.provider-session-pending body.auth-mode {
-  background: var(--theme-background, #f5f7f6);
-}
-html.provider-session-pending body.auth-mode main {
-  max-width: 1440px;
-  padding: clamp(1rem, 3vw, 2rem);
-}
 body.session-restoring .workspace {
   opacity: .55;
   pointer-events: none;
@@ -133,7 +126,7 @@ main {
   align-items: center;
 }
 
-body.auth-mode .auth-card {
+html:not(.provider-session-pending) body.auth-mode .auth-card {
   grid-template-columns: 1fr;
   max-width: 570px;
   margin: clamp(2rem, 8vh, 6rem) auto clamp(2rem, 8vh, 6rem) 0;
@@ -426,12 +419,12 @@ small { font-weight: 400; color: var(--muted); }
   .list-row { display: flex; }
   .list-actions { justify-content: flex-start; }
   .metrics { grid-template-columns: 1fr 1fr; }
-  body.auth-mode {
+  html:not(.provider-session-pending) body.auth-mode {
     background-position: 63% center;
     background-image: linear-gradient(rgba(255,255,255,.66), rgba(255,255,255,.76)), url("./provider-background.png?v=20261012-artwork");
   }
-  body.auth-mode main { padding-inline: 1rem; }
-  body.auth-mode .auth-card { margin: 2vh auto; }
+  html:not(.provider-session-pending) body.auth-mode main { padding-inline: 1rem; }
+  html:not(.provider-session-pending) body.auth-mode .auth-card { margin: 2vh auto; }
   .provider-type-grid { grid-template-columns: 1fr; }
 }
 
@@ -477,11 +470,11 @@ dialog.chat-photo-viewer { width:100vw; height:100dvh; max-width:none!important;
 .provider-more-menu { width:min(420px,calc(100vw - 24px)); }
 .provider-more-menu button { display:block; min-height:48px; width:100%; margin:8px 0; }
 @media(max-width:850px) {
- body:not(.auth-mode) main { padding-bottom:calc(90px + env(safe-area-inset-bottom)); }
- body:not(.auth-mode) .provider-mobile-nav { position:fixed; display:flex; justify-content:space-around; bottom:0; left:0; right:0; z-index:50; background:var(--theme-surface,#fff); border-top:1px solid var(--line); padding:8px 2px calc(8px + env(safe-area-inset-bottom)); }
+ :is(body:not(.auth-mode), html.provider-session-pending body) main { padding-bottom:calc(90px + env(safe-area-inset-bottom)); }
+ :is(body:not(.auth-mode), html.provider-session-pending body) .provider-mobile-nav { position:fixed; display:flex; justify-content:space-around; bottom:0; left:0; right:0; z-index:50; background:var(--theme-surface,#fff); border-top:1px solid var(--line); padding:8px 2px calc(8px + env(safe-area-inset-bottom)); }
  .provider-mobile-nav button { background:transparent; color:var(--muted); padding:8px 4px; font-size:12px; min-height:44px; border:0; border-radius:10px; }
  .provider-mobile-nav button.active { background:var(--theme-red-soft,#fff0f0); color:var(--danger); font-weight:800; }
- body:not(.auth-mode) .side-card { display:none; }
+ :is(body:not(.auth-mode), html.provider-session-pending body) .side-card { display:none; }
  body.provider-keyboard-open .provider-mobile-nav { display:none; }
  .provider-header { padding-top:calc(12px + env(safe-area-inset-top)); }
  dialog#conversationDialog { margin:0; width:100vw; max-width:none; height:var(--visible-viewport-height,100dvh); max-height:var(--visible-viewport-height,100dvh); border-radius:0; padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom)); box-sizing:border-box; }

@@ -21,3 +21,13 @@ normal-form reveal. Chrome tests cover four viewport widths, both overview theme
 no horizontal overflow, preserved controls, private cache/Settings and reduced-height
 composers. Captured local previews are under .tmp/overview-review (workspace root).
 Actual Android/iOS keyboards still need phone acceptance testing.
+
+Startup follow-up: returning users briefly retain body.auth-mode while
+provider-session-pending reveals the portal shell. Overview and responsive portal
+styles now apply during that pending state too; real sign-in rules explicitly
+exclude it. Removed old pending background/main overrides and hid account controls
+that Settings will relocate. This avoids the old-shell-to-new-shell restyle without
+hiding the entire application or waiting for network validation. Shell v17 and new
+stylesheet URLs deliver the repair. Browser regression compares pending vs ready
+background, theme variables, padding, header, tiles, sidebar and navigation at all
+four widths in both themes. No auth, API, mobile or database behavior changed.
