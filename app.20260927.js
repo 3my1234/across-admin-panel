@@ -425,6 +425,8 @@ async function loadTabData(tab, { force = true } = {}) {
     ]);
   }
   if (tab === "support") return loadTickets();
+  if (tab === "analytics") return loadAnalytics();
+  if (tab === "complaints") return loadComplaints();
 }
 
 async function loadProducts({ append = false, reset = false } = {}) {
@@ -1305,9 +1307,9 @@ window.MessageReceiptSession=window.AtlMessageReceipts?.create({request:(path,op
 async function request(path, options = {}) {
   const authToken = state.token;
   const readOnly = !options.method || options.method === "GET";
-  for (let attempt = 0; attempt < (readOnly ? 2 : 1); attempt++) {
+  for (let attempt = 0; attempt < (readOnly && options.retry !== false ? 2 : 1); attempt++) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 15000);
     try {
       const response = await fetch(`${state.apiUrl}${path}`, {
         signal: controller.signal, method: options.method || "GET", cache: "no-store",
@@ -1331,7 +1333,7 @@ async function request(path, options = {}) {
       return data;
     } catch (error) {
       const transient = error.name === "AbortError" || error instanceof TypeError || [502,503,504].includes(error.status);
-      if (readOnly && attempt === 0 && transient && authToken === state.token) continue;
+      if (readOnly && options.retry !== false && attempt === 0 && transient && authToken === state.token) continue;
       if (error.name === "AbortError" || error instanceof TypeError) throw new Error(readOnly ? "Unable to connect. Previously loaded information is kept. Please retry." : "Could not confirm whether your change was saved. Refresh to check before trying again.");
       throw error;
     } finally { clearTimeout(timeout); }
@@ -2584,63 +2586,7 @@ async function closeTicket(ticketId) {
 $("reloadAnalyticsButton").addEventListener("click", loadAnalytics);
 
 async function loadAnalytics() {
-  setText("analyticsSummary", "Loading...");
-  try {
-    const data = await request("/api/v1/admin/analytics/daily-sales");
-    const isSuper = state.role === "super_admin";
-    const daily = data.daily || [];
-    const totalOrders = data.total_orders || 0;
-    const totalRevenue = data.total_revenue || 0;
-
-    setText("analyticsSummary", `Total orders: ${format(totalOrders)}${isSuper ? ' · Total revenue: NGN ' + format(totalRevenue) : ''}`);
-
-    // Stats cards
-    const statsHtml = daily.slice(0, 7).map(d => `
-      <article class="stat">
-        <span>${new Date(d.date).toLocaleDateString()}</span>
-        <strong>${d.order_count} orders</strong>
-        ${isSuper && d.total_revenue ? `<span>NGN ${format(d.total_revenue)}</span>` : ''}
-      </article>
-    `).join("");
-    $("analyticsStats").innerHTML = statsHtml || '<p class="muted">No sales data yet.</p>';
-
-    // Simple bar chart
-    const chartContainer = $("salesChart");
-    if (daily.length === 0) {
-      chartContainer.innerHTML = '<p class="muted">No sales data to chart.</p>';
-      return;
-    }
-    const maxVal = Math.max(...daily.map(d => isSuper ? (d.total_revenue || 0) : d.order_count));
-    chartContainer.innerHTML = '<div style="display:flex;align-items:end;gap:4px;height:180px;padding:8px 0;">' +
-      daily.slice(0, 14).reverse().map(d => {
-        const val = isSuper ? (d.total_revenue || 0) : d.order_count;
-        const pct = maxVal > 0 ? (val / maxVal * 100) : 0;
-        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;">
-          <div style="width:100%;background:#FF4747;border-radius:4px 4px 0 0;height:${Math.max(pct, 2)}%;min-height:4px;" title="${new Date(d.date).toLocaleDateString()}: ${val}"></div>
-          <span style="font-size:9px;color:#8C8C8C;margin-top:4px;writing-mode:vertical-lr;">${new Date(d.date).toLocaleDateString().slice(0,5)}</span>
-        </div>`;
-      }).join('') + '</div>';
-
-    // Load profit/loss for super admin
-    if (isSuper) {
-      try {
-        const pl = await request("/api/v1/admin/analytics/profit-loss");
-        const entries = pl.profit_loss || [];
-        if (entries.length > 0) {
-          const totalProfit = entries.reduce((s, e) => s + (e.profit || 0), 0);
-          const totalRefunds = entries.reduce((s, e) => s + (e.refunds || 0), 0);
-          chartContainer.innerHTML += `
-            <div class="stats-grid" style="margin-top:16px;">
-              <article class="stat"><span>Net Profit</span><strong style="color:#12805F;">NGN ${format(totalProfit)}</strong></article>
-              <article class="stat"><span>Total Refunds</span><strong style="color:#B42318;">NGN ${format(totalRefunds)}</strong></article>
-              <article class="stat"><span>Complaints</span><strong>${entries.reduce((s, e) => s + (e.complaints || 0), 0)}</strong></article>
-            </div>`;
-        }
-      } catch {}
-    }
-  } catch (error) {
-    setText("analyticsSummary", error.message);
-  }
+  return window.AtlAdminAnalytics?.load();
 }
 
 // ---- Complaints ----
