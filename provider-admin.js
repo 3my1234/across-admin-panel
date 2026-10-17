@@ -2,27 +2,20 @@
 (() => {
   const PAGE_SIZE = 25;
   function providerFeedback(id,text,tone="loading"){setText(id,text);const node=$(id);if(node){node.dataset.feedback=tone;node.setAttribute("role",tone==="error"?"alert":"status");}}
-  const navPaths={overview:'M3 10 12 3l9 7v11H3ZM9 21v-8h6v8',providers:'M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21v-3a6 6 0 0 1 12 0v3ZM18 4v7M15 7h6M17 15h5v6h-5Z',"merchant-fulfillments":'M3 4h18v17H3ZM8 4v5h8V4M7 14h10M7 17h6',orders:'M5 6h14v15H5ZM9 6V3h6v3',transactions:'M4 5h16v14H4ZM8 9h8M8 13h5',waitlist:'M3 4h18v17H3ZM7 1v6M17 1v6M3 10h18',"xp-withdrawals":'M3 7h18v14H3ZM3 7l13-5v5M16 12h5v5h-5Z',support:'M3 14v-3a9 9 0 0 1 18 0v3M3 12h4v8H3Zm14 0h4v8h-4Z',community:'M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z',analytics:'M4 21V11h4v10M10 21V3h4v18M16 21V7h4v14',complaints:'M12 3 2 21h20ZM12 9v6M12 18v1'};
+  const navPaths={overview:'M3 10 12 3l9 7v11H3ZM9 21v-8h6v8',subscriptions:'M4 5h16v14H4ZM8 9h8M8 13h5',"service-moderation":'M3 4h18v17H3ZM7 9h10M7 14h10',"product-moderation":'M3 8l9-5 9 5v12H3ZM3 8l9 5 9-5M12 13v7',providers:'M8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21v-3a6 6 0 0 1 12 0v3ZM18 4v7M15 7h6M17 15h5v6h-5Z',"merchant-fulfillments":'M3 4h18v17H3ZM8 4v5h8V4M7 14h10M7 17h6',orders:'M5 6h14v15H5ZM9 6V3h6v3',transactions:'M4 5h16v14H4ZM8 9h8M8 13h5',waitlist:'M3 4h18v17H3ZM7 1v6M17 1v6M3 10h18',"xp-withdrawals":'M3 7h18v14H3ZM3 7l13-5v5M16 12h5v5h-5Z',support:'M3 14v-3a9 9 0 0 1 18 0v3M3 12h4v8H3Zm14 0h4v8h-4Z',community:'M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z',analytics:'M4 21V11h4v10M10 21V3h4v18M16 21V7h4v14',complaints:'M12 3 2 21h20ZM12 9v6M12 18v1'};
   for(const button of document.querySelectorAll(".side-nav [data-tab]")){const d=navPaths[button.dataset.tab];if(d)button.insertAdjacentHTML("afterbegin",'<svg class="admin-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+d+'"/></svg>');}
   const originalAllowedTabsForRole = allowedTabsForRole;
   allowedTabsForRole = (role = state.role) => {
     const tabs = originalAllowedTabsForRole(role);
-    const withFulfilment = tabs.includes("merchant-fulfillments") ? tabs : [...tabs, "merchant-fulfillments"];
-    return ["super_admin", "catalog_admin"].includes(role) && !withFulfilment.includes("providers") ? [...withFulfilment.slice(0, 2), "providers", ...withFulfilment.slice(2)] : withFulfilment;
+    return tabs;
   };
   const originalLoadTabData = loadTabData;
   loadTabData = (tab, options = {}) => {
-    document.body.classList.toggle("providers-view",tab==="providers");
-    if (tab === "providers") {
-      $("providerBillingSection")?.classList.toggle("hidden", state.role !== "super_admin");
-      if (state.role === "super_admin") void loadProviderBilling();
-      return Promise.all([
-        loadProviders({ reset: true }),
-        loadProviderListings({ reset: true }),
-        loadMerchantProducts({ reset: true }),
-        ...(state.role === "super_admin" ? [loadProviderAccess()] : [])
-      ]);
-    }
+    document.body.classList.toggle("providers-view",["providers","service-moderation","product-moderation","subscriptions"].includes(tab));
+    $("providerBillingSection")?.classList.toggle("hidden",state.role!=="super_admin");
+    if (tab === "providers") return loadProviders({reset:true});
+    if (tab === "service-moderation") return loadProviderListings({reset:true});
+    if (tab === "product-moderation") return loadMerchantProducts({reset:true});
     return tab === "merchant-fulfillments" ? loadMerchantFulfillments({ reset: true }) : originalLoadTabData(tab, options);
   };
 
@@ -54,6 +47,8 @@
     });
     return billingLoadPromise;
   }
+
+  window.AtlProviderBilling={load:()=>Promise.all([loadProviderBilling(),loadProviderAccess()])};
 
   async function loadGatewaySubscriptions(fresh = false) {
     setText("gatewaySubscriptionsStatus", "Checking active Flutterwave renewals...");
@@ -157,13 +152,12 @@
   }
 
   function renderProviders() {
-    $("providersTable").innerHTML = `<thead><tr><th>Business</th><th>Contact</th><th>Location</th><th>Verification</th><th>Subscription</th><th>Action</th></tr></thead><tbody>${state.providers.map((item) => `<tr>
+    $("providersTable").innerHTML = `<thead><tr><th>Business</th><th>Contact</th><th>Location</th><th>Verification</th><th>Action</th></tr></thead><tbody>${state.providers.map((item) => `<tr>
       <td>${window.ProviderIdentity?.render(item.provider_identity) || `<strong>${escapeHtml(item.business_name)}</strong>`}<br><span class="muted">${escapeHtml((item.provider_type || "mixed").replaceAll("_", " "))}${item.provider_type_other ? ` — ${escapeHtml(item.provider_type_other)}` : ""}</span><br><span class="muted">${format(item.created_at)}</span></td>
       <td>${escapeHtml(item.contact_email)}<br>${escapeHtml(item.contact_phone)}</td><td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td>
       <td><span class="status-pill ${item.verification_status === "approved" ? "active" : item.verification_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.verification_status)}</span></td>
-      <td><span class="provider-subscription"><i class="${item.subscription_status === "active" ? "active" : ""}" aria-hidden="true"></i>${escapeHtml(item.subscription_status || "none")}</span>${item.subscription_ends_at ? `<br><span class="muted">to ${format(item.subscription_ends_at)}</span>` : ""}</td>
       <td class="table-actions"><button data-provider-docs="${item.id}" class="secondary-button">Review documents</button><button data-provider-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-provider-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-provider-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
-    </tr><tr id="provider-docs-${item.id}" class="hidden"><td colspan="6"></td></tr>`).join("") || `<tr><td colspan="6">No matching providers.</td></tr>`}</tbody>`;
+    </tr><tr id="provider-docs-${item.id}" class="hidden"><td colspan="5"></td></tr>`).join("") || `<tr><td colspan="5">No matching providers.</td></tr>`}</tbody>`;
     $("loadMoreProvidersButton")?.classList.toggle("hidden", !state.providerHasMore);
     $("providersTable").querySelectorAll("[data-provider-status]").forEach((button) => button.addEventListener("click", () => moderateProvider(button.dataset.id, button.dataset.providerStatus)));
     $("providersTable").querySelectorAll("[data-provider-docs]").forEach((button) => button.addEventListener("click", () => loadProviderDocuments(button.dataset.providerDocs)));
@@ -378,10 +372,10 @@
   configureRoleUi();
   window.watchCatalogChanges({
     url: `${state.apiUrl}/api/v1/catalog/version`,
-    enabled: () => Boolean(state.token && state.activeTab === "providers" && ["super_admin", "catalog_admin"].includes(state.role)),
+    enabled: () => Boolean(state.token && ["service-moderation","product-moderation"].includes(state.activeTab) && ["super_admin", "catalog_admin"].includes(state.role)),
     refresh: async () => {
       if (document.querySelector("#editListingDialog[open], #editProductDialog[open]") || document.querySelector("[data-product-status]:disabled")) return false;
-      const results = await Promise.all([loadMerchantProducts({ reset: true }), loadProviderListings({ reset: true })]);
+      const results = await Promise.all([state.activeTab === "product-moderation" ? loadMerchantProducts({ reset: true }) : loadProviderListings({ reset: true })]);
       return results.every(result => result !== false);
     }
   });

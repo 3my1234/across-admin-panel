@@ -1,6 +1,6 @@
 /* Presentation only: keep the existing operational handlers and role checks. */
 (() => {
-  const views = new Set(["orders", "transactions", "xp-withdrawals", "complaints", "support", "analytics", "community"]);
+  const views = new Set(["orders", "transactions", "xp-withdrawals", "complaints", "support", "analytics", "community", "overview", "providers", "service-moderation", "product-moderation", "subscriptions"]);
   function syncView(tab) {
     document.body.classList.toggle("operations-view", views.has(tab));
     document.body.dataset.operationsPage = views.has(tab) ? tab : "";
