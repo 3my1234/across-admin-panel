@@ -1,12 +1,16 @@
 /* Presentation only: keep the existing operational handlers and role checks. */
 (() => {
   const views = new Set(["orders", "transactions", "xp-withdrawals", "complaints", "support"]);
-  const originalLoad = loadTabData;
-  loadTabData = (tab, options = {}) => {
+  function syncView(tab) {
     document.body.classList.toggle("operations-view", views.has(tab));
     document.body.dataset.operationsPage = views.has(tab) ? tab : "";
+  }
+  const originalLoad = loadTabData;
+  loadTabData = (tab, options = {}) => {
+    syncView(tab);
     return originalLoad(tab, options);
   };
+  syncView(state.activeTab);
   const paths = {
     refresh: "M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 3M5 15a8 8 0 0 0 13 3",
     bell: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4",
