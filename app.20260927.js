@@ -1,4 +1,8 @@
 const DEFAULT_API_URL = "https://api.atlxpres.com";
+// A fast session response can arrive before later deferred feature scripts.
+// Initial loading must use their installed tab handlers after parsing finishes.
+const adminWorkspaceReady = document.readyState === "complete" ? Promise.resolve() :
+  new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
 
 function resolveSavedApiUrl() {
   const saved = localStorage.getItem("across.admin.apiUrl");
@@ -34,7 +38,7 @@ function resolveSavedApiUrl() {
   ),
   productSearch: "",
   productPage: { cursor: "", total: 0, hasMore: false, loading: false, requestSeq: 0 },
-  activeTab: localStorage.getItem("across.admin.activeTab") || "overview",
+  activeTab: ["orders", "transactions", "merchant-fulfillments"].includes(localStorage.getItem("across.admin.activeTab")) ? "overview" : localStorage.getItem("across.admin.activeTab") || "overview",
   resetAdminTarget: null,
   activityCursor: "",
   activityItems: [],
@@ -296,8 +300,10 @@ $("adminForm").addEventListener("submit", async (event) => {
 });
 
 async function loadDashboard({ force = false } = {}) {
+  await adminWorkspaceReady;
+  if (!window.AtlAdminWorkspace) throw new Error("The admin interface could not load. Reload this page to retry.");
   const results = await Promise.allSettled([
-    loadOverview(),
+    loadOverview({force}),
     loadTabData(state.activeTab, { force })
   ]);
   const failure = results.find((result) => result.status === "rejected");
@@ -405,15 +411,12 @@ function renderAdminNotifications() {
   });
 }
 
-async function loadOverview() {
-  const overview = await request("/api/v1/admin/overview");
-  setText("orderCount", overview.order_count ?? 0);
-  setText("transactionCount", overview.transaction_count ?? 0);
-  setText("manifestCount", overview.manifest_count ?? overview.batch_count ?? 0);
-  writeAdminCache("overview", overview);
+async function loadOverview(options = {}) {
+  return window.AtlAdminWorkspace?.overview(options);
 }
 
 async function loadTabData(tab, { force = true } = {}) {
+  if (tab === "overview") return loadOverview();
   if (tab === "products") return loadProducts({ reset: force || !state.products.length });
   if (tab === "orders") return loadNamedList("orders", { reset: force || !state.orders.length });
   if (tab === "transactions") return loadNamedList("transactions", { reset: force || !state.transactions.length });
@@ -1179,9 +1182,9 @@ function sessionRoleLabel(value) {
 function allowedTabsForRole(role = state.role) {
   switch (role) {
     case "super_admin":
-      return ["overview", "providers", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
+      return ["overview", "providers", "service-moderation", "product-moderation", "subscriptions", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
     case "catalog_admin":
-      return ["overview", "providers", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
+      return ["overview", "providers", "service-moderation", "product-moderation", "subscriptions", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
     default:
       return ["overview"];
   }

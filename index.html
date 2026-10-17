@@ -36,24 +36,26 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css?v=20261011-chat-app" />
-    <script src="./app.20260927.js?v=20261017-analytics" defer></script>
+    <script src="./app.20260927.js?v=20261017-workspace" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261017-operations" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
-    <script src="./provider-admin.js?v=20261016-provider-design" defer></script>
+    <script src="./provider-admin.js?v=20261017-workspace" defer></script>
     <script src="./community-admin.js?v=20261017-reports" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
 <link rel="stylesheet" href="provider-identity.css?v=1" />
 <script src="provider-identity.js?v=1" defer></script>
 <link rel="stylesheet" href="./settings.css?v=20261015" />
-<script src="./settings.js?v=20261015-receipts" defer></script>
+<script src="./settings.js?v=20261017-records" defer></script>
 <link rel="stylesheet" href="./admin-providers.css?v=20261016"/>
 <link rel="stylesheet" href="./admin-operations.css?v=20261017-analytics"/>
-<script src="./admin-operations.js?v=20261017-analytics" defer></script>
+<script src="./admin-operations.js?v=20261017-workspace" defer></script>
 <link rel="stylesheet" href="./admin-analytics.css?v=20261017" />
 <script src="./admin-analytics.js?v=20261017" defer></script>
+<link rel="stylesheet" href="./admin-workspace.css?v=20261017" />
+<script src="./admin-workspace.js?v=20261017" defer></script>
 </head>
   <body>
     <main class="shell">
@@ -92,9 +94,9 @@
           <nav class="side-nav" aria-label="Admin sections">
             <button class="nav-item active" data-tab="overview">Overview</button>
             <button class="nav-item" data-tab="providers">Providers</button>
-            <button class="nav-item" data-tab="merchant-fulfillments">Merchant Fulfilment</button>
-            <button class="nav-item" data-tab="orders">Orders</button>
-            <button class="nav-item" data-tab="transactions">Transactions</button>
+            <button class="nav-item" data-tab="service-moderation">Services</button>
+            <button class="nav-item" data-tab="product-moderation">Products</button>
+            <button class="nav-item" data-tab="subscriptions">Subscriptions</button>
             <button class="nav-item" data-tab="waitlist">Launch waitlist</button>
             <button class="nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
             <button class="nav-item" data-tab="admins">Admins</button>
@@ -132,21 +134,12 @@
             </div>
           </header>
 
+          <div id="legacyAdminNavigation" class="hidden"><button class="nav-item" data-tab="merchant-fulfillments">Merchant Fulfilment</button><button class="nav-item" data-tab="orders">Orders</button><button class="nav-item" data-tab="transactions">Transactions</button></div>
           <section class="tab-panel" data-panel="overview">
-            <section class="stats-grid stats-scroll">
-              <article class="stat">
-                <span>Orders</span>
-                <strong id="orderCount">0</strong>
-              </article>
-              <article class="stat">
-                <span>Transactions</span>
-                <strong id="transactionCount">0</strong>
-              </article>
-              <article class="stat">
-                <span>Pending Manifests</span>
-                <strong id="manifestCount">0</strong>
-              </article>
-            </section>
+            <section class="panel"><div class="section-head"><div><h2>Business overview</h2><p class="muted">Provider access, moderation and customer care.</p></div><button id="reloadBusinessOverview" class="secondary-button">Refresh overview</button></div><p id="businessOverviewStatus" role="status">Loading overview...</p><div id="businessOverviewStats" class="business-metrics"></div></section>
+            <section class="panel"><div class="section-head"><div><h2>Needs attention</h2><p class="muted">Open the relevant workspace to review each queue.</p></div></div><div id="businessAttention" class="business-attention"></div></section>
+            <section class="panel"><div class="section-head"><div><h2>System snapshot</h2><p class="muted">Current dependency and delivery-queue checks. These do not measure total server capacity.</p></div></div><div id="businessSystem" class="business-system"></div></section>
+            <div class="hidden" aria-hidden="true"><span id="orderCount"></span><span id="transactionCount"></span><span id="manifestCount"></span></div>
           </section>
 
           <section class="tab-panel hidden" data-panel="products">
@@ -346,7 +339,7 @@
           <section class="tab-panel hidden" data-panel="providers">
             <section class="panel">
               <div class="section-head">
-                <div><h2>Service Providers</h2><p class="muted">Verify provider documents before any storefront listing can be published.</p></div>
+                <div><h2>Providers</h2><p class="muted">Verify provider documents before any storefront listing can be published.</p></div>
                 <button type="button" id="reloadProvidersButton" class="secondary-button">Reload providers</button>
               </div>
               <div class="filter-grid"><label>Search providers <input id="providerSearch" type="search" placeholder="Business, email, city, or status" autocomplete="off" /></label><label>Verification <select id="providerVerificationStatus"><option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
@@ -354,19 +347,29 @@
               <div class="table-wrap"><table id="providersTable"></table></div>
               <button type="button" id="loadMoreProvidersButton" class="secondary-button hidden">Load more providers</button>
             </section>
+          </section>
+          <section class="tab-panel hidden" data-panel="service-moderation">
             <section class="panel">
-              <div class="section-head"><div><h2>Listing Moderation</h2><p class="muted">Approve only accurate, safe listings from verified providers.</p></div><button type="button" id="reloadProviderListingsButton" class="secondary-button">Reload listings</button></div>
+              <div class="section-head"><div><h2>Service moderation</h2><p class="muted">Approve only accurate, safe listings from verified providers.</p></div><button type="button" id="reloadProviderListingsButton" class="secondary-button">Reload listings</button></div>
               <div class="filter-grid"><label>Search listings <input id="providerListingSearch" type="search" placeholder="Title, location, provider, or service" autocomplete="off" /></label><label>Status <select id="providerListingModerationStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
               <p class="error" id="providerListingStatus"></p>
               <div class="table-wrap"><table id="providerListingsTable"></table></div>
               <button type="button" id="loadMoreProviderListingsButton" class="secondary-button hidden">Load more listings</button>
             </section>
+          </section>
+          <section class="tab-panel hidden" data-panel="product-moderation">
             <section class="panel">
-              <div class="section-head"><div><h2>Merchant Product Moderation</h2><p class="muted">Review physical products, images, prices, discounts, and inventory before publication.</p></div><button type="button" id="reloadMerchantProductsButton" class="secondary-button">Reload products</button></div>
+              <div class="section-head"><div><h2>Product moderation</h2><p class="muted">Review physical products, images, prices, discounts, and inventory before publication.</p></div><button type="button" id="reloadMerchantProductsButton" class="secondary-button">Reload products</button></div>
               <div class="filter-grid"><label>Search products <input id="merchantProductSearch" type="search" placeholder="Product, SKU, or merchant" autocomplete="off" /></label><label>Status <select id="merchantProductStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
               <p class="error" id="merchantProductModerationStatus"></p><div class="table-wrap"><table id="merchantProductsTable"></table></div><button type="button" id="loadMoreMerchantProductsButton" class="secondary-button hidden">Load more products</button>
             </section>
-            <section class="panel" id="providerBillingSection">
+          </section>
+          <section class="tab-panel hidden" data-panel="subscriptions">
+            <section class="panel"><div class="section-head"><div><h2>Subscriptions</h2><p class="muted">Paid provider access, ordered by expiry. Free profiles and future prepaid periods are not active subscribers.</p></div><button id="reloadSubscribersButton" class="secondary-button">Refresh subscribers</button></div>
+              <div class="filter-grid"><label>Search subscribers<input id="subscriberSearch" type="search" maxlength="120" placeholder="Business, email or plan" /></label><label>Paid access<select id="subscriberStatus"><option value="active">All active subscribers</option><option value="expiring">Expiring within 7 days</option></select></label></div>
+              <p id="subscriberStatusText" role="status"></p><div class="table-wrap"><table id="subscribersTable"></table></div><button id="moreSubscribersButton" class="secondary-button hidden">Load more subscribers</button>
+            </section>
+            <details class="panel" id="providerBillingSection"><summary>Plan pricing and renewal controls</summary>
               <div class="section-head">
                 <div>
                   <h2>Monthly Subscription Plans</h2>
@@ -395,7 +398,7 @@
               <div class="section-head"><div><h3>Existing Flutterwave renewals</h3><p class="muted">These continue billing independently of the app. Cancel each subscription individually to stop renewal.</p></div><button type="button" id="reloadGatewaySubscriptionsButton" class="secondary-button">Refresh renewals</button></div>
               <p id="gatewaySubscriptionsStatus" class="muted"></p>
               <div class="table-wrap"><table id="gatewaySubscriptionsTable"></table></div>
-            </section>
+            </details>
           </section>
 
           <section class="tab-panel hidden" data-panel="merchant-fulfillments">
@@ -540,9 +543,9 @@
           <div class="mobile-bottom-nav-scroll">
             <button class="mobile-nav-item active" data-tab="overview">Overview</button>
             <button class="mobile-nav-item" data-tab="providers">Providers</button>
-            <button class="mobile-nav-item" data-tab="merchant-fulfillments">Fulfilment</button>
-            <button class="mobile-nav-item" data-tab="orders">Orders</button>
-            <button class="mobile-nav-item" data-tab="transactions">Transactions</button>
+            <button class="mobile-nav-item" data-tab="service-moderation">Services</button>
+            <button class="mobile-nav-item" data-tab="product-moderation">Products</button>
+            <button class="mobile-nav-item" data-tab="subscriptions">Subscriptions</button>
             <button class="mobile-nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
             <button class="mobile-nav-item" data-tab="waitlist">Waitlist</button>
             <button class="mobile-nav-item" data-tab="admins">Admins</button>
