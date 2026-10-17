@@ -36,10 +36,10 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css?v=20261011-chat-app" />
-    <script src="./app.20260927.js?v=20261015-receipts" defer></script>
+    <script src="./app.20260927.js?v=20261017-operations" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
-    <script src="./xp-withdrawals.js?v=20261009-wallet" defer></script>
+    <script src="./xp-withdrawals.js?v=20261017-operations" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
     <script src="./provider-admin.js?v=20261016-provider-design" defer></script>
     <script src="./community-admin.js?v=20261014" defer></script>
@@ -50,6 +50,8 @@
 <link rel="stylesheet" href="./settings.css?v=20261015" />
 <script src="./settings.js?v=20261015-receipts" defer></script>
 <link rel="stylesheet" href="./admin-providers.css?v=20261016"/>
+<link rel="stylesheet" href="./admin-operations.css?v=20261017"/>
+<script src="./admin-operations.js?v=20261017" defer></script>
 </head>
   <body>
     <main class="shell">
@@ -408,7 +410,22 @@
 
           <section class="tab-panel hidden" data-panel="waitlist"><div class="panel"><h2>Launch waitlist</h2><p>People who opted in for launch emails. Keep this contact list private and use it for the purpose they agreed to.</p><div class="form-actions"><button id="waitlistRefresh">Refresh</button><button id="waitlistExport">Export CSV</button></div><p id="waitlistStatus" role="status"></p><div class="table-wrap"><table><thead><tr><th>Email</th><th>Name</th><th>Phone</th><th>Interest</th><th>Source</th><th>Joined</th></tr></thead><tbody id="waitlistRows"></tbody></table></div></div></section>
  <section class="tab-panel hidden" data-panel="xp-withdrawals">
- <div class="panel"><h2>XP withdrawals</h2><p>1 XP = NGN 1. Minimum: 1,000 XP. Check the customer's identity, bank details and reward history before paying. Mark processing first, make the bank transfer, then record its unique reference as paid. Rejection returns reserved XP. No transfer is sent by this page.</p><button id="xpWithdrawalRefresh">Refresh requests</button><p id="xpWithdrawalStatus" role="status"></p><div id="xpWithdrawalList" style="display:grid;gap:16px"></div></div>
+ <div class="panel xp-withdrawals-panel">
+  <div class="section-head"><h2>XP withdrawals</h2><button id="xpWithdrawalRefresh" type="button">Refresh requests</button></div>
+  <ol class="withdrawal-steps" aria-label="Withdrawal review process">
+   <li><span class="step-number" aria-hidden="true">1</span><p>1 XP = NGN 1 ·<br>Minimum: 1,000 XP.</p></li>
+   <li><span class="step-number" aria-hidden="true">2</span><p>Check the customer's identity, bank details and reward history before paying.</p></li>
+   <li><span class="step-number" aria-hidden="true">3</span><p>Mark processing first, make the bank transfer, then record its unique reference as paid.</p></li>
+   <li><span class="step-number" aria-hidden="true">4</span><p>Rejection returns reserved XP.</p></li>
+  </ol>
+  <p class="operations-notice"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg>No transfer is sent by this page.</p>
+  <p id="xpWithdrawalStatus" role="status"></p>
+  <div id="xpWithdrawalList"></div>
+  <div id="xpWithdrawalEmpty" class="operations-empty hidden">
+   <svg class="empty-wallet" viewBox="0 0 160 130" fill="none" aria-hidden="true"><ellipse cx="80" cy="113" rx="63" ry="10" fill="currentColor" opacity=".09"/><g stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M49 64V53l43-15q10-3 13 9l4 13M57 60h44M46 60h62q10 0 10 10v32q0 10-10 10H46q-10 0-10-10V70q0-10 10-10Z"/><path d="M118 78H99q-11 0-11 11t11 11h19Z"/><circle cx="100" cy="89" r="2"/><path d="M80 25V14m-14 16-7-8m35 8 7-8"/></g></svg>
+   <p>No withdrawal requests yet.</p>
+  </div>
+ </div>
  </section>
  <section class="tab-panel hidden" data-panel="transactions">
             <section class="panel">
@@ -468,7 +485,7 @@
                 <div class="form-grid">
                   <label>Order ID <input name="order_id" placeholder="Optional" /></label>
                   <label>Product ID <input name="product_id" placeholder="Optional" /></label>
-                  <label>User Email <input name="user_email" placeholder="Optional" /></label>
+                  <label>User Email <input name="user_email" type="email" maxlength="254" placeholder="Optional" /></label>
                   <label>Refund Amount NGN <input name="refund_amount" type="number" min="0" step="1" value="0" /></label>
                 </div>
                 <label>Description <textarea name="description" rows="2" required placeholder="Describe the issue..."></textarea></label>

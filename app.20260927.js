@@ -2365,7 +2365,12 @@ function renderTable(id, columns, rows) {
   thead.innerHTML = `<tr>${columns.map((column) => `<th>${label(column)}</th>`).join("")}</tr>`;
   const tbody = document.createElement("tbody");
   tbody.innerHTML = rows
-    .map((row) => `<tr>${columns.map((column) => `<td>${format(row[column])}</td>`).join("")}</tr>`)
+    .map((row) => `<tr>${columns.map((column) => {
+      const value = escapeHtml(format(row[column]));
+      return ["status", "payment_status", "refund_status", "chargeback_status", "settlement_status"].includes(column)
+        ? `<td><span class="status-pill" data-status="${escapeHtml(String(row[column] || "unknown").toLowerCase())}">${value}</span></td>`
+        : `<td>${value}</td>`;
+    }).join("")}</tr>`)
     .join("");
   table.append(thead, tbody);
 }
@@ -2455,7 +2460,7 @@ function renderTicketsTable(tickets) {
     row.innerHTML = `
       <td>${escapeHtml(ticket.subject)}${ticket.unread_count ? ` <strong>${ticket.unread_count} unread</strong>` : ""}</td>
       <td>${escapeHtml(ticket.user_email)}</td>
-      <td><span class="status-pill ${ticket.status === 'open' ? 'active' : ticket.status === 'responded' ? '' : 'inactive'}">${escapeHtml(ticket.status)}</span></td>
+      <td><span class="status-pill ${ticket.status === 'open' ? 'active' : ticket.status === 'responded' ? '' : 'inactive'}" data-status="${escapeHtml(ticket.status)}">${escapeHtml(ticket.status)}</span></td>
       <td>${format(ticket.created_at)}</td>
       <td class="table-actions">
         <button type="button" class="secondary-button" data-action="view-ticket" data-id="${ticket.id}" data-subject="${escapeHtml(ticket.subject)}">View</button>
@@ -2484,7 +2489,7 @@ function renderTicketCards(tickets) {
   container.innerHTML = tickets.map(t => `
     <article class="mobile-card${t.unread_count ? ' chat-unread' : ''}">
       <h3 class="mobile-card-title">${escapeHtml(t.subject)}${t.unread_count ? ` - ${t.unread_count} unread` : ""}</h3>
-      <p class="mobile-card-meta">${escapeHtml(t.user_email)} · <span class="status-pill ${t.status === 'open' ? 'active' : t.status === 'responded' ? '' : 'inactive'}">${escapeHtml(t.status)}</span></p>
+      <p class="mobile-card-meta">${escapeHtml(t.user_email)} · <span class="status-pill ${t.status === 'open' ? 'active' : t.status === 'responded' ? '' : 'inactive'}" data-status="${escapeHtml(t.status)}">${escapeHtml(t.status)}</span></p>
       <p class="mobile-card-meta">${format(t.created_at)}</p>
       <div class="mobile-card-actions">
         <button type="button" class="secondary-button" data-action="view-ticket" data-id="${t.id}" data-subject="${escapeHtml(t.subject)}">View</button>
@@ -2642,7 +2647,11 @@ async function loadAnalytics() {
 $("reloadComplaintsButton").addEventListener("click", loadComplaints);
 $("complaintForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const button = formElement.querySelector('button[type="submit"]');
+  if (button.disabled) return;
+  const form = new FormData(formElement);
+  button.disabled = true;
   setText("complaintStatus", "");
   try {
     await request("/api/v1/admin/analytics/complaints", {
@@ -2650,18 +2659,21 @@ $("complaintForm").addEventListener("submit", async (event) => {
       body: {
         order_id: form.get("order_id"),
         product_id: form.get("product_id"),
+        user_email: String(form.get("user_email") || "").trim(),
         description: form.get("description"),
         refund_amount: Number(form.get("refund_amount") || 0)
       }
     });
-    event.currentTarget.reset();
-    clearFormDraft(event.currentTarget);
+    formElement.reset();
+    clearFormDraft(formElement);
     setText("complaintStatus", "Complaint logged.");
     $("complaintStatus").className = "success";
     await loadComplaints();
   } catch (error) {
     $("complaintStatus").className = "error";
     setText("complaintStatus", error.message);
+  } finally {
+    button.disabled = false;
   }
 });
 

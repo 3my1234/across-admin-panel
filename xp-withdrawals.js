@@ -8,6 +8,7 @@
  async function loadWithdrawals(){
   const requestId=++generation,token=state.token;
   $("xpWithdrawalStatus").textContent="Loading withdrawal requests...";
+  $("xpWithdrawalEmpty")?.classList.add("hidden");
   try {
    const data=await request("/api/v1/admin/xp/withdrawals");
    if(requestId!==generation||token!==state.token)return;
@@ -34,7 +35,8 @@
      };
     } list.append(card);
    }
-   $("xpWithdrawalStatus").textContent=data.items?.length?`${data.items.length} most recent requests`:"No withdrawal requests yet.";
+   $("xpWithdrawalStatus").textContent=data.items?.length?`${data.items.length} most recent requests`:"";
+   $("xpWithdrawalEmpty")?.classList.toggle("hidden",Boolean(data.items?.length));
   }catch(error){if(token===state.token)$("xpWithdrawalStatus").textContent=error.message;}
  }
  $("xpWithdrawalRefresh").onclick=()=>void loadWithdrawals();
