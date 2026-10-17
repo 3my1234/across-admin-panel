@@ -80,7 +80,7 @@
     const readOnly = !options.method || options.method === "GET";
     for (let attempt = 0; attempt < (readOnly ? 2 : 1); attempt++) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), path==='/providers/me/subscription-renewal'&&!readOnly?45000:15000);
       try {
         response = await fetch(`${API}${path}`, { cache: "no-store", ...options, headers, signal: options.signal || controller.signal });
         raw = response.status === 204 ? "" : await response.text();
@@ -179,7 +179,7 @@
     if ($("conversationDialog").open) $("conversationDialog").close();
     $("conversationMessages").textContent = ""; $("conversationRows").textContent = "";
     $("loadEarlierConversations").classList.add("hidden");
-    state.token = ""; state.account = null; state.provider = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
+    state.token = ""; state.account = null; state.provider = null; state.renewal = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
     document.body.classList.add("auth-mode");
     document.body.classList.remove("session-restoring");
@@ -336,7 +336,12 @@
     finally { button.disabled = false; }
   }
 
-  async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; state.transferMonths = (data.transfer_months || [1]).filter(months=>[1,3,6,12].includes(months)); renderPlans(); }
+  async function loadRenewalStatus() {
+    const actor=state.token;
+    try { const renewal=await api('/providers/me/subscription-renewal');if(actor===state.token)state.renewal=renewal; }
+    catch(error){if(actor===state.token)state.renewal={error:error.message};}
+  }
+  async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; state.transferMonths = (data.transfer_months || [1]).filter(months=>[1,3,6,12].includes(months)); if(state.provider)await loadRenewalStatus();renderPlans(); }
   async function loadBuyerMarkets() {
     try {
       const data = await api("/buyer-markets");
@@ -474,22 +479,50 @@
       return {duration_months:months,amount_ngn:quote?Number(quote.amount_ngn):Number(plan.amount_ngn)*months,savings_ngn:quote?Number(quote.savings_ngn):0,discount_percent:quote?Number(quote.discount_percent):0,card_available:quote?quote.card_available===true:months===1&&plan.card_available!==false,banktransfer_available:quote?quote.banktransfer_available===true:true};
     });
   }
+  let renewalFlight=false;
+  function renderRenewalControls(native=false) {
+    const renewal=state.renewal;
+    if(!renewal)return;
+    const root=$('subscriptionGuidance');
+    const box=document.createElement('section');box.className='renewal-controls';
+    if(renewal.error){box.textContent='Renewal settings unavailable. Reopen Subscriptions to retry. Your paid access is unchanged.';root.append(box);return;}
+    const active=hasActiveSubscription(),stopped=renewal.renewal_status==='stopped',uncertain=renewal.renewal_status==='uncertain';
+    const end=state.provider?.subscription?.current_period_end;
+    box.innerHTML=`<h3>Renewal settings</h3><p>${uncertain?'Cancellation has not been confirmed. Retry below; future billing may still be active.':stopped?'Automatic renewal stopped.':state.provider?.subscription?.billing_mode==='one_time'?'This prepaid period does not renew automatically.':'Monthly card payments renew automatically until cancelled.'}${active&&end?' Paid access continues until '+escapeHtml(new Date(end).toLocaleString())+'.':''}</p>`;
+    if(stopped&&renewal.next_plan_id&&!native){const due=new Date(renewal.change_at);box.innerHTML+=`<p>Next choice: <strong>${escapeHtml(renewal.next_plan_name||'Selected plan')}</strong>, from ${escapeHtml(due.toLocaleString())}. ${Date.now()>=due.getTime()?'Your next plan is ready for checkout below.':'Return when this paid period ends to complete checkout.'} The new tier starts after payment is verified. It will not be charged automatically.</p>`;}
+    if(renewal.can_manage&&(active||uncertain||renewal.next_plan_id)){
+      if(active&&!native){const options=state.plans.filter(p=>p.id!==renewal.current_plan_id);box.innerHTML+=`<label>Plan for your next paid period<select data-next-renewal-plan>${options.map(p=>`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} - ${money(p.amount_ngn)}/month</option>`).join('')}</select></label><button type="button" data-schedule-renewal ${options.length?'':'disabled'}>Choose next plan</button><p class="muted">Stops the current renewal. Your existing tier stays until its paid period ends. Complete a new checkout then, at the price shown at checkout.</p>`;}
+      box.innerHTML+=`<button type="button" class="secondary" data-stop-renewal>${uncertain?'Retry cancellation':renewal.next_plan_id?'Cancel next plan and stop renewal':stopped?'Confirm renewal is stopped':'Stop automatic renewal'}</button>`;
+    }
+    root.append(box);
+    box.querySelector('[data-stop-renewal]')?.addEventListener('click',()=>void manageRenewal(''));
+    box.querySelector('[data-schedule-renewal]')?.addEventListener('click',()=>void manageRenewal(box.querySelector('[data-next-renewal-plan]').value));
+    if(renewalFlight)box.querySelectorAll('button,select').forEach(el=>el.disabled=true);
+  }
+  async function manageRenewal(nextPlanId) {
+    if(renewalFlight)return;
+    if(!confirm(nextPlanId?'Stop the current automatic renewal and save this plan for checkout after your paid period ends? Your current access stays unchanged.':'Stop future automatic payments? Access already paid for remains until its expiry.'))return;
+    const actor=state.token;renewalFlight=true;renderPlans();
+    try {await api('/providers/me/subscription-renewal',{method:'POST',body:JSON.stringify({next_plan_id:nextPlanId})});if(actor!==state.token)return;setMessage(nextPlanId?'Next plan saved. Complete checkout when your current paid period ends.':'Automatic renewal stopped. Your paid access is unchanged.',true);}
+    catch(error){if(actor===state.token)setMessage(error.message);}
+    finally{renewalFlight=false;if(actor===state.token){await loadRenewalStatus();renderPlans();}}
+  }
   function renderPlans() {
     if(window.ProviderNativeBridge?.embedded()){
       const subscription=state.provider?.subscription;
       $("subscriptionGuidance").textContent=hasActiveSubscription()?`Your paid plan is active${subscription?.current_period_end?' until '+new Date(subscription.current_period_end).toLocaleDateString():''}.`:'Free plan: one listing total after document approval.';
       $("plans").innerHTML='<p class="notice">Your current provider access applies here. Subscription purchasing is unavailable in the mobile workspace.</p>';
-      renderSubscriptionGates();return;
+      renderRenewalControls(true);renderSubscriptionGates();return;
     }
     const active = hasActiveSubscription();
     const freeLaunch = state.provider?.subscription?.launch_access_active === true;
     const approved = state.provider?.verification_status === "approved";
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
-    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free plan available.</strong> One listing total after document approval." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid access. Pay again when your paid period expires; it does not renew automatically." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Free plan.</strong> You can create one listing total across all categories. Choose a paid plan for more listings and a coloured badge after payment confirmation." : "Your business must be approved before you can purchase a provider plan.";
+    $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free plan available.</strong> One listing total after document approval." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid access. Pay again when your paid period expires; it does not renew automatically." : state.renewal?.renewal_status === "stopped" ? "Automatic renewal has stopped; your paid access remains until expiry." : state.renewal?.renewal_status === "uncertain" ? "Renewal cancellation is not yet confirmed." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Free plan.</strong> You can create one listing total across all categories. Choose a paid plan for more listings and a coloured badge after payment confirmation." : "Your business must be approved before you can purchase a provider plan.";
     $("plans").innerHTML = `<article class="plan plan-free"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One listing total across products, services and every other provider category. Documents must be approved before publication.</p></article>` + (state.plans.length ? state.plans.map(plan => {
       const periods=planPeriodPrices(plan), yearly=periods.find(p=>p.duration_months===12);
-      return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${Number(plan.listing_limit)} product listings + ${Number(plan.listing_limit)} service/property listings</p><p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Contact support@atlxpres.com to arrange a plan change; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
+      return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${Number(plan.listing_limit)} product listings + ${Number(plan.listing_limit)} service/property listings</p><p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Use Renewal settings to choose your next tier; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
     }).join('') : '<p class="notice">No active plan is available.</p>');
     document.querySelectorAll("[data-subscribe]").forEach(button => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method,Number(document.querySelector(`[data-transfer-months="${button.dataset.subscribe}"]`)?.value || 1)));
     document.querySelectorAll('[data-transfer-months]').forEach(select => {
@@ -507,7 +540,7 @@
       };
       select.onchange=update;update();
     });
-    renderSubscriptionGates();
+    renderRenewalControls();renderSubscriptionGates();
   }
   function renderSubscriptionGates() {
     const active = hasProviderAccess();
@@ -1326,7 +1359,7 @@
       else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
       else if (state.activeView === "messages") { if(community)await community.refresh();else await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
-      else if (state.activeView === "subscription") {state.provider=await api("/providers/me");if(!state.plans.length)await loadPlans();renderOverview();}
+      else if (state.activeView === "subscription") {state.provider=await api("/providers/me");if(!state.plans.length)await loadPlans();else await loadRenewalStatus();renderOverview();}
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
       else if (state.activeView === "products" && $("productForm").classList.contains("hidden")) await loadProducts({reset:true});
       else if (state.activeView === "listings" && $("listingForm").classList.contains("hidden")) await loadListings({reset:true});
