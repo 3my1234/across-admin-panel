@@ -1,0 +1,113 @@
+/* Orders, payments, XP, complaints and Support share the operations reference. */
+body.operations-view {
+  --dashboard-bg:#eff7f3; --dashboard-surface:#ffffff; --dashboard-line:#d3e3dc;
+  --dashboard-text:#152b23; --dashboard-muted:#526d63; --operations-soft:#e5f4ed;
+  --operations-accent:#087d58; --operations-primary:#08a975; --operations-amber:#805b00;
+  --operations-amber-bg:#fff8e5; --operations-amber-line:#ddbf75;
+  --operations-danger-bg:#ffe8eb; --operations-danger:#a1273b;
+  color:var(--dashboard-text); background:var(--dashboard-bg);
+  --panel:var(--dashboard-surface); --ink:var(--dashboard-text); --line:var(--dashboard-line); --muted:var(--dashboard-muted);
+}
+:root[data-theme=dark] body.operations-view {
+  --dashboard-bg:#091814; --dashboard-surface:#12241f; --dashboard-line:#304c42;
+  --dashboard-text:#f2f8f5; --dashboard-muted:#b5cbd0; --operations-soft:#183a2e;
+  --operations-accent:#71f1ca; --operations-primary:#10ba87; --operations-amber:#ffc454;
+  --operations-amber-bg:#302b18; --operations-amber-line:#897020;
+  --operations-danger-bg:#4e2027; --operations-danger:#ffa4b3;
+  background:linear-gradient(120deg,#0c2019,#091613 80%);
+}
+.operations-view .dashboard { grid-template-columns:260px minmax(0,1fr); }
+.operations-view .sidebar { background:color-mix(in srgb,var(--dashboard-surface) 75%,var(--dashboard-bg)); padding:32px 18px; border-color:var(--dashboard-line); overflow-y:auto; }
+.operations-view .brand-block { padding:0 12px 24px; }
+.operations-view .eyebrow { color:var(--dashboard-muted); font-size:12px; font-weight:750; letter-spacing:.35px; }
+.operations-view .brand-block .eyebrow { color:var(--operations-accent); }
+.operations-view .sidebar h1 { font-size:27px; margin:8px 0; }
+.operations-view .side-nav { gap:7px; }
+.operations-view .side-nav .nav-item { display:flex; align-items:center; gap:13px; font-size:14px; font-weight:500; padding:14px 16px; border-radius:10px; color:var(--dashboard-muted); }
+.operations-view .admin-nav-icon { width:22px; height:22px; margin:0; flex-shrink:0; }
+.operations-view .side-nav .nav-item.active { color:var(--operations-accent); background:var(--operations-soft); box-shadow:inset 4px 0 var(--operations-accent); }
+.operations-view .main-pane { padding:28px 30px 50px; min-width:0; }
+.operations-view .topbar { padding:0; background:transparent; border:0; margin-bottom:26px; gap:20px; }
+.operations-view .topbar h1 { font-size:clamp(24px,2vw,32px); font-weight:750; line-height:1.25; letter-spacing:-.5px; }
+.operations-view .session-identity p { margin:6px 0; }
+.operations-view .session-identity { display:block; }
+.operations-view .topbar .action-row { margin:0; gap:10px; flex-wrap:wrap; }
+.operations-view button { display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:44px; padding:10px 16px; border:1px solid transparent; border-radius:9px; font-size:14px; font-weight:650; line-height:1.4; }
+.operations-view .topbar button { min-height:46px; padding:11px 16px; white-space:nowrap; }
+.operations-view #refreshButton,.operations-view #xpWithdrawalRefresh { background:#ff343d; color:#fff; }
+.operations-view[data-operations-page=support] #refreshButton { background:var(--operations-primary); color:#fff; }
+.operations-view button.secondary-button,.operations-view #adminNotificationButton { background:color-mix(in srgb,var(--dashboard-surface),var(--dashboard-line) 15%); color:var(--dashboard-text); border-color:var(--dashboard-line); }
+.operations-view .atl-settings-button { color:var(--dashboard-text); border-color:var(--dashboard-line); background:transparent; }
+.operations-view button.danger-button { background:var(--operations-danger-bg); border-color:color-mix(in srgb,var(--operations-danger) 35%,transparent); color:var(--operations-danger); }
+.operations-view button:not(:disabled):hover { filter:brightness(1.07); }
+.operations-view button:disabled { opacity:.5; cursor:wait; }
+.operations-view button:focus-visible,.operations-view input:focus-visible,.operations-view select:focus-visible,.operations-view textarea:focus-visible { outline:3px solid var(--operations-accent); outline-offset:3px; }
+.operations-icon,.operations-notice svg { width:21px; height:21px; flex-shrink:0; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.operations-view .tab-panel>.panel { padding:25px; margin:0; border:1px solid var(--dashboard-line); border-radius:15px; background:var(--dashboard-surface); box-shadow:none; }
+.operations-view .panel h2 { margin:0; font-size:25px; font-weight:750; letter-spacing:-.4px; line-height:1.35; }
+.operations-view .section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:25px; }
+.operations-view .section-head p { margin:8px 0 0; }
+.operations-view .section-head h2 { padding-top:5px; }
+.operations-view .muted { color:var(--dashboard-muted); font-size:14px; line-height:1.65; }
+.operations-view label { display:flex; flex-direction:column; gap:8px; font-size:14px; font-weight:650; color:var(--dashboard-text); }
+.operations-view input,.operations-view select,.operations-view textarea { box-sizing:border-box; width:100%; min-height:46px; padding:12px 15px; border-radius:9px; border:1px solid var(--dashboard-line); background:color-mix(in srgb,var(--dashboard-surface),var(--dashboard-bg) 35%); color:var(--dashboard-text); font:inherit; font-size:14px; }
+.operations-view input,.operations-view select,.operations-view textarea { font-weight:400; }
+.operations-view input::placeholder,.operations-view textarea::placeholder { color:var(--dashboard-muted); opacity:1; }
+.operations-view .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 20px; }
+.operations-view textarea { resize:vertical; min-height:96px; }
+.operations-view .list-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:20px; margin:22px 0 16px; }
+.operations-view .list-toolbar .muted { margin:0; }
+.operations-search { display:flex; align-items:center; position:relative; flex:1 1 300px; max-width:620px; min-width:0; }
+.operations-search>.operations-icon { position:absolute; left:15px; color:var(--dashboard-muted); pointer-events:none; }
+.operations-view .operations-search>input { padding-left:46px; }
+.operations-view .table-wrap { border:1px solid var(--dashboard-line); border-radius:11px; background:transparent; overflow:auto; max-height:70vh; }
+.operations-view table { width:100%; border-collapse:collapse; font-size:14px; }
+.operations-view table th { background:color-mix(in srgb,var(--dashboard-surface),var(--dashboard-line) 30%); color:var(--dashboard-muted); font-size:12px; font-weight:650; text-align:left; padding:16px; white-space:nowrap; }
+.operations-view table td { color:var(--dashboard-text); padding:18px 16px; font-size:14px; line-height:1.5; border-bottom:1px solid var(--dashboard-line); vertical-align:middle; }
+.operations-view table tbody tr:last-child td { border-bottom:0; }
+.operations-view table tr:hover td { background:color-mix(in srgb,var(--operations-soft) 30%,transparent); }
+.operations-view td.table-actions { display:table-cell; white-space:nowrap; min-width:170px; }
+.operations-view td.table-actions button { margin:0 8px 0 0; min-height:40px; padding:8px 14px; }
+.operations-view .status-pill { display:inline-flex; align-items:center; gap:7px; border-radius:18px; padding:7px 12px; font-size:11px; font-weight:750; background:var(--operations-soft); color:var(--operations-accent); white-space:nowrap; }
+.operations-view .status-pill[data-status=none],.operations-view .status-pill[data-status=unknown] { color:var(--dashboard-muted); background:transparent; padding:0; font-weight:400; text-transform:none; }
+.operations-view .status-pill[data-status=pending],.operations-view .status-pill[data-status=open],.operations-view .status-pill[data-status=processing] { background:var(--operations-amber-bg); color:var(--operations-amber); }
+.operations-view .status-pill[data-status=responded] { background:color-mix(in srgb,#23caca 15%,var(--dashboard-surface)); color:color-mix(in srgb,#23b8c9 70%,var(--dashboard-text)); }
+.operations-view .status-pill[data-status=failed],.operations-view .status-pill[data-status=rejected],.operations-view .status-pill[data-status=cancelled],.operations-view .status-pill[data-status=closed] { background:var(--operations-danger-bg); color:var(--operations-danger); }
+.operations-view #ordersTable .status-pill { text-transform:capitalize; font-size:12px; }
+.operations-view #ordersTable .status-pill::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor; }
+.operations-view .list-toggle:not(:empty) { background:var(--operations-soft); color:var(--dashboard-text); border:1px solid var(--dashboard-line); margin-top:12px; }
+.operations-view .list-toggle:empty { display:none; }
+.operations-view #complaintForm { gap:22px; margin-top:30px; margin-bottom:32px!important; }
+.operations-view #complaintForm>button,.operations-view #reconcilePaymentButton,.operations-view #sendTicketReply { background:var(--operations-primary); color:#fff; }
+.operations-view #complaintForm>button { width:100%; min-height:48px; }
+.operations-view #complaintStatus:empty,.operations-view #paymentReconciliationStatus:empty,.operations-view #ticketListStatus:empty,.operations-view #xpWithdrawalStatus:empty { display:none; }
+.operations-view [data-panel=complaints] .table-wrap:has(table:empty) { border:0; border-top:1px solid var(--dashboard-line); border-radius:0; min-height:24px; }
+.operations-view .reconciliation-panel { margin:18px 0 22px; padding:20px; gap:18px; border:1px solid var(--operations-amber-line); border-radius:11px; background:var(--operations-amber-bg); }
+.recovery-introduction { position:relative; padding-left:45px; }
+.recovery-introduction>.operations-icon { position:absolute; left:0; top:2px; width:25px; height:25px; color:var(--operations-amber); }
+.operations-view .recovery-introduction h3 { font-size:16px; font-weight:750; }
+.operations-view .recovery-introduction p { margin-top:5px; font-size:13px; }
+.operations-view #ticketStatusFilter { margin-top:8px; }
+.operations-view #ticketListStatus { font-size:12px; color:var(--dashboard-muted); }
+.operations-view #ticketMessages { background:var(--dashboard-bg)!important; border-color:var(--dashboard-line)!important; border-radius:12px!important; }
+.operations-view .withdrawal-steps { list-style:none; padding:0; margin:18px 0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.operations-view .withdrawal-steps li { display:flex; align-items:flex-start; gap:14px; min-width:0; padding:18px; border:1px solid var(--dashboard-line); border-radius:11px; background:color-mix(in srgb,var(--dashboard-surface),var(--dashboard-line) 8%); }
+.withdrawal-steps p { margin:0; font-size:14px; line-height:1.65; }
+.step-number { flex:0 0 28px; height:28px; display:grid; place-items:center; border-radius:50%; background:#a8d8c3; color:#123629; font-size:15px; font-weight:750; }
+.operations-view .operations-notice { display:flex; align-items:center; gap:12px; padding:14px 18px; margin:18px 0; border:1px solid var(--operations-amber-line); border-radius:10px; background:var(--operations-amber-bg); color:var(--operations-amber); font-size:14px; font-weight:650; }
+#xpWithdrawalList { display:grid; gap:16px; }
+.operations-view #xpWithdrawalList .card { background:var(--dashboard-surface); color:var(--dashboard-text); border-color:var(--dashboard-line); padding:20px; }
+.operations-view #xpWithdrawalList button { background:var(--operations-primary); color:#fff; }
+.withdrawal-card-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.withdrawal-card-heading h3 { margin:0; font-size:22px; }
+.withdrawal-details { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr)); gap:16px; margin:18px 0; }
+.withdrawal-details dt { color:var(--dashboard-muted); font-size:12px; margin-bottom:4px; }
+.withdrawal-details dd { margin:0; font-size:14px; overflow-wrap:anywhere; }
+.operations-view .xp-withdrawal-card form>textarea,.operations-view .xp-withdrawal-card form>p { grid-column:1/-1; }
+.operations-empty { min-height:260px; padding:25px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+.operations-empty .empty-wallet { width:160px; height:130px; color:var(--dashboard-muted); }
+.operations-empty p { font-size:18px; margin:10px 0; color:var(--dashboard-text); }
+.operations-empty.hidden { display:none; }
+@media(min-width:1500px) { .operations-view .dashboard { grid-template-columns:290px minmax(0,1fr); } .operations-view .main-pane { padding:32px; } .operations-view .sidebar { padding:34px 20px; } .operations-view .tab-panel>.panel { padding:27px; } .operations-view .side-nav .nav-item { font-size:15px; } }
+@media(max-width:1100px) { .operations-view .dashboard { grid-template-columns:215px minmax(0,1fr); } .operations-view .sidebar { padding:25px 12px; } .operations-view .side-nav .nav-item { padding:12px 10px; gap:9px; font-size:12px; } .operations-view .main-pane { padding:24px 18px 90px; } .operations-view .withdrawal-steps { grid-template-columns:repeat(2,minmax(0,1fr)); } .operations-view .topbar { flex-wrap:wrap; } }
+@media(max-width:760px) { .operations-view .dashboard { display:block; } .operations-view .sidebar { display:none; } .operations-view .main-pane { padding:20px 14px 100px; } .operations-view .tab-panel>.panel { padding:18px; } .operations-view .panel h2 { font-size:21px; } .operations-view .topbar { gap:12px; margin-bottom:20px; } .operations-view .topbar .action-row { gap:8px; } .operations-view .topbar button { font-size:12px; min-height:42px; padding:9px 12px; } .operations-view .section-head { gap:10px; flex-wrap:wrap; margin-bottom:20px; } .operations-view .form-grid { grid-template-columns:minmax(0,1fr); gap:18px; } .operations-view .list-toolbar { gap:10px; } .operations-view .list-toolbar .operations-search { max-width:none; flex-basis:100%; } .operations-view .withdrawal-steps { grid-template-columns:minmax(0,1fr); } .operations-view .withdrawal-steps li { padding:15px; } .operations-view .operations-empty { padding:15px; min-height:220px; } .operations-view .mobile-card { background:var(--dashboard-surface); border-color:var(--dashboard-line); color:var(--dashboard-text); } .operations-view .mobile-bottom-nav .active { background:var(--operations-soft); color:var(--operations-accent); } }
