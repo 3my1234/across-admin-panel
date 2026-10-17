@@ -1,4 +1,8 @@
 const DEFAULT_API_URL = "https://api.atlxpres.com";
+// A fast session response can arrive before later deferred feature scripts.
+// Initial loading must use their installed tab handlers after parsing finishes.
+const adminWorkspaceReady = document.readyState === "complete" ? Promise.resolve() :
+  new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
 
 function resolveSavedApiUrl() {
   const saved = localStorage.getItem("across.admin.apiUrl");
@@ -296,6 +300,8 @@ $("adminForm").addEventListener("submit", async (event) => {
 });
 
 async function loadDashboard({ force = false } = {}) {
+  await adminWorkspaceReady;
+  if (!window.AtlAdminWorkspace) throw new Error("The admin interface could not load. Reload this page to retry.");
   const results = await Promise.allSettled([
     loadOverview({force}),
     loadTabData(state.activeTab, { force })

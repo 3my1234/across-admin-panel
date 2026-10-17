@@ -11,6 +11,16 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 
  try{
   await send('Page.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
+
+  // Fast authenticated session + delayed feature script must still load Overview.
+  const installed=await send('Page.addScriptToEvaluateOnNewDocument',{source:`localStorage.setItem('across.admin.token','synthetic-restore');localStorage.setItem('across.admin.activeTab','overview');window.__bootCalls=[];const originalFetch=window.fetch;window.fetch=(url,options)=>{if(!String(url).startsWith('https://api.atlxpres.com'))return originalFetch(url,options);__bootCalls.push(String(url));let data={};if(String(url).includes('/admin/session'))data={role:'super_admin',admin_id:'synthetic-admin',full_name:'Synthetic Admin'};if(String(url).includes('/business-overview'))data={generated_at:new Date().toISOString(),active_accounts:50,active_providers:10,paid_providers:4,verified_providers:8};if(String(url).includes('/api/v1/ready'))data={ok:true};if(String(url).includes('/activity'))data={events:[],cursor:''};return Promise.resolve(new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}}));};`});
+  const paused=async event=>{const message=JSON.parse(event.data);if(message.method==='Fetch.requestPaused'){await new Promise(r=>setTimeout(r,650));await send('Fetch.continueRequest',{requestId:message.params.requestId});}};
+  socket.addEventListener('message',paused);await send('Fetch.enable',{patterns:[{urlPattern:'*admin-workspace.js*',requestStage:'Request'}]});
+  await send('Page.navigate',{url:'http://127.0.0.1:5176/index.html'});
+  await new Promise(r=>setTimeout(r,250));
+  await run(`new Promise((resolve,reject)=>{let n=0;const poll=()=>{if(document.querySelectorAll('.workspace-metric').length===4)return resolve();if(++n>150)return reject(Error('Fast restore did not load business counts'));setTimeout(poll,40)};poll()})`);
+  assert.equal(await run(`__bootCalls.filter(url=>url.includes('/business-overview')).length`),1,'startup requests coalesce');
+  await send('Fetch.disable');socket.removeEventListener('message',paused);await send('Page.removeScriptToEvaluateOnNewDocument',{identifier:installed.identifier});await run(`stopAdminActivityPolling();localStorage.clear();sessionStorage.clear()`);
   for(const width of [390,853,1440])for(const theme of ['light','dark']){
    await send('Emulation.setDeviceMetricsOverride',{width,height:1050,deviceScaleFactor:1,mobile:width<768});
    await send('Page.navigate',{url:'http://127.0.0.1:5176/index.html'});await new Promise(r=>setTimeout(r,250));
