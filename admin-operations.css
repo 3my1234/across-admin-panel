@@ -98,6 +98,12 @@ body.operations-view {
 #xpWithdrawalList { display:grid; gap:16px; }
 .operations-view #xpWithdrawalList .card { background:var(--dashboard-surface); color:var(--dashboard-text); border-color:var(--dashboard-line); padding:20px; }
 .operations-view #xpWithdrawalList button { background:var(--operations-primary); color:#fff; }
+.withdrawal-card-heading { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.withdrawal-card-heading h3 { margin:0; font-size:22px; }
+.withdrawal-details { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr)); gap:16px; margin:18px 0; }
+.withdrawal-details dt { color:var(--dashboard-muted); font-size:12px; margin-bottom:4px; }
+.withdrawal-details dd { margin:0; font-size:14px; overflow-wrap:anywhere; }
+.operations-view .xp-withdrawal-card form>textarea,.operations-view .xp-withdrawal-card form>p { grid-column:1/-1; }
 .operations-empty { min-height:260px; padding:25px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
 .operations-empty .empty-wallet { width:160px; height:130px; color:var(--dashboard-muted); }
 .operations-empty p { font-size:18px; margin:10px 0; color:var(--dashboard-text); }

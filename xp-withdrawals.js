@@ -14,11 +14,14 @@
    if(requestId!==generation||token!==state.token)return;
    const list=$("xpWithdrawalList");list.replaceChildren();
    for(const item of data.items||[]){
-    const card=document.createElement("article");card.className="card";
-    const title=document.createElement("h3");title.textContent=`NGN ${Number(item.points).toLocaleString()} · ${item.status}`;card.append(title);
-    for(const text of [item.email,`${item.bank_name} · ${item.account_number}`,item.account_name,`Requested ${new Date(item.created_at).toLocaleString()}`,item.admin_note,item.payout_reference]){
-     if(!text)continue;const line=document.createElement("p");line.textContent=text;card.append(line);
-    }
+    const card=document.createElement("article");card.className="card xp-withdrawal-card";
+    const heading=document.createElement("div");heading.className="withdrawal-card-heading";
+    const title=document.createElement("h3");title.textContent=`NGN ${Number(item.points).toLocaleString()}`;
+    const badge=document.createElement("span");badge.className="status-pill";badge.dataset.status=item.status;badge.textContent=item.status;heading.append(title,badge);card.append(heading);
+    const details=document.createElement("dl");details.className="withdrawal-details";
+    for(const [label,text] of [["Customer",item.email],["Bank account",`${item.bank_name} · ${item.account_number}`],["Account name",item.account_name],["Requested",new Date(item.created_at).toLocaleString()],["Review note",item.admin_note],["Transfer reference",item.payout_reference]]){
+     if(!text)continue;const group=document.createElement("div"),term=document.createElement("dt"),value=document.createElement("dd");term.textContent=label;value.textContent=text;group.append(term,value);details.append(group);
+    }card.append(details);
     if(["pending","processing"].includes(item.status)){
      const form=document.createElement("form");form.className="form-grid";
      const select=document.createElement("select");select.setAttribute("aria-label","Withdrawal action");
