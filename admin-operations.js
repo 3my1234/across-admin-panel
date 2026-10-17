@@ -1,6 +1,6 @@
 /* Presentation only: keep the existing operational handlers and role checks. */
 (() => {
-  const views = new Set(["orders", "transactions", "xp-withdrawals", "complaints", "support"]);
+  const views = new Set(["orders", "transactions", "xp-withdrawals", "complaints", "support", "analytics", "community"]);
   function syncView(tab) {
     document.body.classList.toggle("operations-view", views.has(tab));
     document.body.dataset.operationsPage = views.has(tab) ? tab : "";
@@ -24,7 +24,7 @@
     const path = document.createElementNS(svg.namespaceURI, "path"); path.setAttribute("d", paths[name]); svg.append(path);
     return svg;
   }
-  for (const id of ["refreshButton", "xpWithdrawalRefresh", "reloadTicketsButton", "reloadComplaintsButton"]) document.getElementById(id)?.prepend(icon("refresh"));
+  for (const id of ["refreshButton", "xpWithdrawalRefresh", "reloadTicketsButton", "reloadComplaintsButton", "reloadAnalyticsButton", "communityAdminRefresh"]) document.getElementById(id)?.prepend(icon("refresh"));
   document.getElementById("adminNotificationButton")?.prepend(icon("bell"));
   for (const [id, label] of [["ordersSearch", "Search orders"], ["transactionsSearch", "Search transactions"]]) {
     const input = document.getElementById(id); if (!input) continue;

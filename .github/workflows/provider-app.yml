@@ -17,6 +17,7 @@ jobs:
       - name: Check provider regressions
         run: |
           node --check settings.js
+          node --check admin-analytics.js
           node --check admin-operations.js
           node --check app.20260927.js
           node --check private-chat-store.js
@@ -69,6 +70,7 @@ jobs:
           node scripts/test-overview-browser.cjs
           node scripts/test-admin-providers-browser.cjs
           node scripts/test-admin-operations-browser.cjs
+          node scripts/test-admin-analytics-browser.cjs
           node scripts/test-community-browser.cjs
           node scripts/test-launch-browser.cjs
           node scripts/test-hall-live-browser.cjs
