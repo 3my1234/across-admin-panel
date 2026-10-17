@@ -25,6 +25,12 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
      assert.ok(await run(`$('analyticsStats').textContent.includes('1,500.00')`));
      assert.ok(await run(`document.querySelector('.analytics-bar[style="height:100%"]')?.getBoundingClientRect().height>150`),'bars have real height');
      assert.equal(await run(`__calls.some(c=>c.url.includes('profit-loss'))`),false);
+     await run(`(async()=>{window.__firstBar=document.querySelector('.analytics-bar');window.__analyticsLoads=__calls.filter(c=>c.url.includes('/analytics/overview')).length;await refreshVisibleAdminPage();await refreshVisibleAdminPage();const oldRequest=request;request=async(url,options)=>url.includes('/activity')?{events:[{id:'new-event',is_read:false}],cursor:'next'}:oldRequest(url,options);state.activityCursor='previous';await pollAdminActivity();request=oldRequest;})()`);
+     assert.equal(await run(`__calls.filter(c=>c.url.includes('/analytics/overview')).length`),await run(`__analyticsLoads`),'automatic polling must not reload Analytics');
+     await run(`$('reloadAnalyticsButton').click();new Promise(r=>setTimeout(r,30))`);
+     assert.equal(await run(`__calls.filter(c=>c.url.includes('/analytics/overview')).length`),await run(`__analyticsLoads+1`),'manual refresh remains available');
+     assert.equal(await run(`document.querySelector('.analytics-bar')===__firstBar`),true,'unchanged analytics keeps chart nodes and scroll stable');
+
     }
     if(width===1440&&process.env.ADMIN_ANALYTICS_SCREENSHOTS){fs.mkdirSync(process.env.ADMIN_ANALYTICS_SCREENSHOTS,{recursive:true});const size=(await send('Page.getLayoutMetrics')).cssContentSize;const shot=await send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:size.width,height:Math.min(3000,size.height),scale:1}});fs.writeFileSync(path.join(process.env.ADMIN_ANALYTICS_SCREENSHOTS,`${tab}-${theme}.png`),Buffer.from(shot.data,'base64'));}
    }

@@ -36,12 +36,12 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css?v=20261011-chat-app" />
-    <script src="./app.20260927.js?v=20261017-workspace" defer></script>
+    <script src="./app.20260927.js?v=20261017-quiet-analytics" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261017-operations" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
-    <script src="./provider-admin.js?v=20261017-workspace" defer></script>
+    <script src="./provider-admin.js?v=20261017-yearly" defer></script>
     <script src="./community-admin.js?v=20261017-reports" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
@@ -53,7 +53,7 @@
 <link rel="stylesheet" href="./admin-operations.css?v=20261017-analytics"/>
 <script src="./admin-operations.js?v=20261017-workspace" defer></script>
 <link rel="stylesheet" href="./admin-analytics.css?v=20261017" />
-<script src="./admin-analytics.js?v=20261017" defer></script>
+<script src="./admin-analytics.js?v=20261017-stable" defer></script>
 <link rel="stylesheet" href="./admin-workspace.css?v=20261017" />
 <script src="./admin-workspace.js?v=20261017" defer></script>
 </head>
@@ -372,13 +372,13 @@
             <details class="panel" id="providerBillingSection"><summary>Plan pricing and renewal controls</summary>
               <div class="section-head">
                 <div>
-                  <h2>Monthly Subscription Plans</h2>
+                  <h2>Provider subscription plans</h2>
                   <p class="muted">Manage provider access and the recurring price. Existing Flutterwave subscriptions keep their own billing terms until cancelled separately.</p>
                 </div>
                 <button type="button" id="reloadProviderPlansButton" class="secondary-button">Reload plans</button>
               </div>
               <p id="providerAccessStatus" class="muted">Free: one listing total across all provider categories. Document approval is required for publication.</p>
-              <p class="muted">Bronze (Basic), Silver (Growth), Gold (Business) and Diamond keep monthly billing. Link a matching Flutterwave plan for card renewals; prepaid bank transfers do not renew automatically.</p>
+              <p class="muted">Monthly cards renew automatically. Yearly subscriptions are prepaid by card or transfer; transfers also support 3 or 6 months. Yearly pricing includes a 10% discount.</p>
           <p id="providerPlansStatus" class="muted"></p>
               <div class="table-wrap"><table id="providerPlansTable"></table></div>
               <details class="panel">
@@ -468,7 +468,7 @@
               <div class="section-head">
                 <div>
                   <h2>Business Analytics</h2>
-                  <p class="muted">Subscription receipts and customer issues at a glance.</p><p class="muted" id="analyticsSummary" role="status">Select Analytics to load the last 30 days.</p>
+                  <p class="muted">Subscription receipts and customer issues at a glance. Use Refresh for the latest figures.</p><p class="muted" id="analyticsSummary" role="status">Select Analytics to load the last 30 days.</p>
                 </div>
                 <button type="button" id="reloadAnalyticsButton" class="secondary-button">Refresh</button>
               </div>
