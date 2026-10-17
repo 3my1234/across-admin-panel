@@ -1,4 +1,4 @@
-const CACHE="atl-provider-shell-20261016-v19";
+const CACHE="atl-provider-shell-20261017-v20";
 const root=new URL("./",self.location.href);
 function communityDestination(url,payload){for(const [field,param] of [['chat_room_id','shared'],['town_hall_room_id','hall']])if(/^[a-f0-9-]{36}$/i.test(payload[field]||''))url.searchParams.set(param,payload[field]);if(['chats','town-hall'].includes(payload.community))url.searchParams.set('community',payload.community);return url;}
 // Refresh an already-open chat on arrival without navigating or exposing its body.

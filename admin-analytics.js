@@ -1,6 +1,6 @@
 /* Private, role-filtered operational reporting. No financial data is persisted. */
 (() => {
-  let generation = 0;
+  let generation = 0, renderedActor = "", renderedSnapshot = "";
   const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
   const count = value => number(value).toLocaleString();
   const money = value => new Intl.NumberFormat('en-NG', {style:'currency',currency:'NGN'}).format(number(value));
@@ -11,15 +11,17 @@
   }
   async function load() {
     const token=state.token, seq=++generation, isSuper=state.role==='super_admin';
+    const actor=token+':'+state.role, sameActor=renderedActor===actor;
     const button=$('reloadAnalyticsButton');button.disabled=true;
     setText('analyticsSummary','Loading the last 30 days…');
     // Clear money from the previous actor immediately, including during an error.
-    for(const id of ['analyticsStats','salesChart','analyticsIssues','analyticsDaily']) $(id).replaceChildren();
+    if(!sameActor){for(const id of ['analyticsStats','salesChart','analyticsIssues','analyticsDaily']) $(id).replaceChildren();renderedActor=actor;renderedSnapshot='';}
     try {
       const data=await request('/api/v1/admin/analytics/overview',{timeoutMs:8000,retry:false});
-      if(token!==state.token||seq!==generation)return;
+      if(token!==state.token||actor!==state.token+':'+state.role||seq!==generation)return;
       const daily=Array.isArray(data.daily)?data.daily:[], receipts=number(data.receipts), gross=number(data.gross_receipts);
       setText('analyticsSummary',`${data.from} – ${data.through} · Last 30 days · Nigeria time · NGN subscriptions only`);
+      const snapshot=JSON.stringify(data);if(sameActor&&snapshot===renderedSnapshot)return;renderedSnapshot=snapshot;
       $('analyticsStats').innerHTML=(isSuper?card('Gross subscription receipts',money(gross),'Verified successful payments, before refunds and fees','₦'):'')+
         card('Successful subscription payments',count(receipts),'Payments received during this period','✓')+
         (isSuper?card('Average subscription payment',money(receipts?gross/receipts:0),'Gross receipts ÷ successful payments','↗'):card('Unresolved complaints',count(data.unresolved_complaints),'Created during this period','!'));
