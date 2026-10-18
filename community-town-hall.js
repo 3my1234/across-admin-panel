@@ -36,7 +36,7 @@
     loading=false;error='';
    }finally{if(listFlight===flight)listFlight=null;}
   }
-  async function detail(id){const seq=++sequence;const data=await request(`/chat/town-hall/${id}`);if(!live()||seq!==sequence)return;room=data;loading=false;pending=null;render();}
+  async function detail(id){const seq=++sequence;const data=await request(`/chat/town-hall/${id}`);if(!live()||seq!==sequence)return;room=data;loading=false;pending=null;if(room.admitted&&!room.is_owner&&room.state==='open'){destroy();await openChat(room.id);return;}render();}
   async function change(provider,value){await request(`/chat/town-hall/${room.id}/providers/${provider}`,{method:'POST',body:JSON.stringify({action:value})});await detail(room.id);}
   function renderQueue(){let target=element.querySelector('[data-hall-new]');if(!target)return;if(!pending){target.replaceChildren();return;}const count=pending.items.filter(item=>!items.some(old=>old.id===item.id)).length;target.innerHTML=button(count?`${count} new request${count===1?'':'s'} · Show latest`:'Feed updated · Show latest','data-hall-latest',true);target.querySelector('button').onclick=()=>{acceptHead(pending,true);render();element.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});};}
   function feedCard(item){return `<article class="hall-request${arrivalIDs.has(item.id)?' hall-request-new':''}" data-hall-request="${esc(item.id)}">${buyer(item)}<p class="hall-request-message">${esc(item.description)}</p>${metadata(item)}<footer><span>♧ ${item.offers.length} offer${item.offers.length===1?'':'s'} · ${item.seats>=10?'Full':'Places available'}</span><span class="hall-seat">${item.seats}/10</span>${button('Enter →',`data-hall-detail="${esc(item.id)}"`)}</footer></article>`;}
@@ -70,10 +70,10 @@
    element.querySelectorAll('[data-hall-choose]').forEach(b=>b.onclick=event=>{if(confirm('Open a private chat and close this Town Hall request?'))void act(async()=>{const data=await request(`/chat/town-hall/${room.id}/choose`,{method:'POST',body:JSON.stringify({offer_id:b.dataset.hallChoose,close_room:true})});await openChat(data.id);},event.currentTarget);});
    element.querySelector('[data-hall-offer]')?.addEventListener('submit',e=>{e.preventDefault();const form=e.currentTarget;void act(async()=>{await request(`/chat/town-hall/${room.id}/offers`,{method:'POST',body:JSON.stringify({unit_price:Number(form.elements.unit_price.value),terms:form.elements.terms.value})});offerReference=null;await detail(room.id);},e.submitter||form);});
   }
-  async function refresh(background=false){if(!live()){destroy();return;}if(busy||editing()||creating)return;try{if(room){if(!background)await detail(room.id);}else await list('',background);}catch(e){if(live()){error=e.message||'Please retry';const target=element.querySelector('[data-hall-error]');if(target)target.textContent=error;}}}
+  async function refresh(background=false){if(!live()){destroy();return;}if(busy||editing()||creating)return;try{if(room){if(!background||room.application_state==='pending')await detail(room.id);}else await list('',background);}catch(e){if(live()){error=e.message||'Please retry';const target=element.querySelector('[data-hall-error]');if(target)target.textContent=error;}}}
   function foreground(){if(!document.hidden)void refresh(true);}
   render();try{if(roomId)await detail(roomId);else await list();loading=false;if(live()&&!room)render();}catch(e){loading=false;error=e.message||'Please retry';if(live())render();}
-  if(live()){timer=setInterval(()=>{if(!live())return destroy();if(!document.hidden&&!room)void refresh(true);},30000);document.addEventListener('visibilitychange',foreground);observer=new MutationObserver(()=>{if(!live())destroy();});observer.observe(document.body,{childList:true,subtree:true});}
+  if(live()){timer=setInterval(()=>{if(!live())return destroy();if(!document.hidden&&(!room||room.application_state==='pending'))void refresh(true);},10000);document.addEventListener('visibilitychange',foreground);observer=new MutationObserver(()=>{if(!live())destroy();});observer.observe(document.body,{childList:true,subtree:true});}
   return {refresh,destroy};
  }
  root.CommunityTownHall={mount};

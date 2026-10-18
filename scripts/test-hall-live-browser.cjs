@@ -32,6 +32,9 @@ const fs=require('fs'),assert=require('node:assert/strict');
   for(const width of [320,390,768,1440]){await send('Emulation.setDeviceMetricsOverride',{width,height:844,deviceScaleFactor:1,mobile:width<768});assert.equal(await run(`__hallRoot.scrollWidth<=__hallRoot.clientWidth+1`),true,'responsive Hall '+width);}
   if(process.env.HALL_SCREENSHOT){await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});await run(`__hallPage.scrollTop=0;document.documentElement.dataset.theme='light'`);const capture=await send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(process.env.HALL_SCREENSHOT,Buffer.from(capture.data,'base64'));}
   await run(`__hallActor='different-account';window.__beforeCalls=__hallCalls.length;__hallControl.refresh(true)`);assert.equal(await run(`__hallCalls.length===__beforeCalls`),true,'retired actor makes no requests');
+  await run(`(async()=>{window.__admit=false;window.__opened=[];window.__providerHall=await CommunityTownHall.mount({element:__hallRoot,roomId:__makeHall(1).id,getActor:()=>__hallActor,openChat:async id=>__opened.push(id),request:async()=>({...__makeHall(1),is_owner:false,admitted:__admit,application_state:__admit?'admitted':'pending',offers:[]})});})()`);
+  assert.equal(await run(`__opened.length`),0,'pending provider waits for approval');
+  await run(`__admit=true;__providerHall.refresh(true)`);assert.equal(await run(`__opened[0]`),await run(`__makeHall(1).id`),'approval enters chat directly');
   console.log('Town Hall live browser passed: buffered arrivals, scroll anchor, reduced motion, draft preservation, expired-owner repost, responsive layout and actor cleanup.');
  }finally{await run(`window.__hallControl?.destroy();window.__hallPage?.remove()`).catch(()=>{});socket.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
