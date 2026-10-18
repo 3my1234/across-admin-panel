@@ -80,7 +80,7 @@
     const readOnly = !options.method || options.method === "GET";
     for (let attempt = 0; attempt < (readOnly ? 2 : 1); attempt++) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), path==='/providers/me/subscription-renewal'&&!readOnly?45000:15000);
+      const timeout = setTimeout(() => controller.abort(), path==='/providers/me/videos/complete'?90000:path==='/providers/me/subscription-renewal'&&!readOnly?45000:15000);
       try {
         response = await fetch(`${API}${path}`, { cache: "no-store", ...options, headers, signal: options.signal || controller.signal });
         raw = response.status === 204 ? "" : await response.text();
@@ -124,9 +124,13 @@
   }
 
   async function signup(event) {
+
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const defaultLabel = button.textContent; button.disabled = true; button.textContent = "Creating account…"; setMessage("", false, "signupMessage");
     const payload = { ...Object.fromEntries(new FormData(form)), registration_context: "provider" };
     try {
+      const password=String(payload.password||'');
+      if(new TextEncoder().encode(password).length>72)throw new Error('Password is too long. Choose a shorter password.');
+      if(password.length<8||!/[A-Z]/.test(password)||!/[a-z]/.test(password)||!/[\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/.test(password))throw new Error('Use at least 8 characters with an uppercase letter, a lowercase letter and a special character such as !@#$.');
       const data = await api("/auth/signup", { method: "POST", body: JSON.stringify(payload) });
       switchAuth("login");
       document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
@@ -179,7 +183,7 @@
     if ($("conversationDialog").open) $("conversationDialog").close();
     $("conversationMessages").textContent = ""; $("conversationRows").textContent = "";
     $("loadEarlierConversations").classList.add("hidden");
-    state.token = ""; state.account = null; state.provider = null; state.renewal = null; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
+    state.token = ""; state.account = null; state.provider = null; state.renewal = null;state.postPolicy=null;state.listingRetainedVideos=[];state.productRetainedVideos=[]; state.listings = []; state.requests = []; state.documents = []; state.products = []; state.merchantOrders = []; state.conversations = []; state.currentConversation = null;
     localStorage.removeItem("atlantic.provider.token"); $("portal").classList.add("hidden"); $("sessionRestorePanel").classList.add("hidden"); $("authPanel").classList.remove("hidden"); $("signOut").classList.add("hidden"); $("providerAlerts").classList.add("hidden");
     document.body.classList.add("auth-mode");
     document.body.classList.remove("session-restoring");
@@ -295,8 +299,8 @@
   async function onboard(event) {
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
-      const payload = Object.fromEntries(new FormData(form)); payload.country_code = String(payload.country_code || "").trim().toUpperCase();
-      await api("/providers/onboarding", { method: "POST", body: JSON.stringify(payload) }); setMessage("Provider profile submitted for verification.", true); await boot();
+      const payload = Object.fromEntries(new FormData(form)); payload.is_driver=form.elements.is_driver.checked;payload.country_code = String(payload.country_code || "").trim().toUpperCase();
+      await api("/providers/onboarding", { method: "POST", body: JSON.stringify(payload) }); setMessage("Provider profile submitted for verification.", true); await boot();if(payload.is_driver){switchView('overview');$('verificationForm').elements.document_type.value='drivers_license';$('verificationFile').accept='image/jpeg,image/png,image/webp';$('verificationDocuments').scrollIntoView({block:'start'});setMessage('Driver onboarding: upload clear licence, car and plate-number photos separately. All three must be approved before driving services go live.',true);}
     }
     catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
@@ -341,7 +345,10 @@
     try { const renewal=await api('/providers/me/subscription-renewal');if(actor===state.token)state.renewal=renewal; }
     catch(error){if(actor===state.token)state.renewal={error:error.message};}
   }
-  async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; state.transferMonths = (data.transfer_months || [1]).filter(months=>[1,3,6,12].includes(months)); if(state.provider)await loadRenewalStatus();renderPlans(); }
+  async function loadPostPolicy(){state.postPolicy=await api('/providers/me/post-policy');return state.postPolicy;}
+  function renderRetainedVideos(kind){const target=$(kind+'ExistingVideos');if(!target)return;const key=kind+'RetainedVideos';target.innerHTML=(state[key]||[]).map((url,index)=>`<div><video src="${escapeHtml(url)}" controls preload="metadata" playsinline style="max-width:100%;width:240px"></video><button type="button" data-remove-video="${index}">Remove video ${index+1}</button></div>`).join('');target.querySelectorAll('[data-remove-video]').forEach(button=>button.onclick=()=>{state[key].splice(Number(button.dataset.removeVideo),1);renderRetainedVideos(kind);});}
+  async function postVideos(kind){const files=[...$(kind+'Videos').files],retained=state[kind+'RetainedVideos']||[],cap=state.postPolicy?.max_videos||0;if(files.length+retained.length>cap)throw new Error(cap?'Your plan allows '+cap+' videos per post. Remove a video or upgrade.':'Upgrade to Gold or Diamond to upload videos.');const result=[...retained];for(const file of files){if(file.type!=='video/mp4'||file.size>50*1024*1024)throw new Error('Choose an MP4 video up to 50 MB and 60 seconds.');const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose:'post_video'})});await PortalStorageUpload.upload(file,signed);setMessage('Checking video duration. Please keep this screen open.',true,kind==='product'?'productUploadProgress':'uploadProgress');const verified=await api('/providers/me/videos/complete',{method:'POST',body:JSON.stringify({key:signed.key})});result.push(verified.url);}return result;}
+  async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; state.transferMonths = (data.transfer_months || [1]).filter(months=>[1,3,6,12].includes(months)); if(state.provider){await loadRenewalStatus();await loadPostPolicy();}renderPlans(); }
   async function loadBuyerMarkets() {
     try {
       const data = await api("/buyer-markets");
@@ -520,9 +527,9 @@
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
     $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free plan available.</strong> One listing total after document approval." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid access. Pay again when your paid period expires; it does not renew automatically." : state.renewal?.renewal_status === "stopped" ? "Automatic renewal has stopped; your paid access remains until expiry." : state.renewal?.renewal_status === "uncertain" ? "Renewal cancellation is not yet confirmed." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Free plan.</strong> You can create one listing total across all categories. Choose a paid plan for more listings and a coloured badge after payment confirmation." : "Your business must be approved before you can purchase a provider plan.";
-    $("plans").innerHTML = `<article class="plan plan-free"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One listing total across products, services and every other provider category. Documents must be approved before publication.</p></article>` + (state.plans.length ? state.plans.map(plan => {
+    $("plans").innerHTML = `<article class="plan plan-free"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One post total with one image and no videos. No Town Hall access; limited visibility. Upgrade to Bronze for more posts and images. Documents must be approved before publication.</p></article>` + (state.plans.length ? state.plans.map(plan => {
       const periods=planPeriodPrices(plan), yearly=periods.find(p=>p.duration_months===12);
-      return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${Number(plan.listing_limit)} product listings + ${Number(plan.listing_limit)} service/property listings</p><p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Use Renewal settings to choose your next tier; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
+      return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${Number(plan.listing_limit)} posts total across products and services</p><p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Use Renewal settings to choose your next tier; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
     }).join('') : '<p class="notice">No active plan is available.</p>');
     document.querySelectorAll("[data-subscribe]").forEach(button => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method,Number(document.querySelector(`[data-transfer-months="${button.dataset.subscribe}"]`)?.value || 1)));
     document.querySelectorAll('[data-transfer-months]').forEach(select => {
@@ -579,6 +586,7 @@
     const file = $("verificationFile").files[0];
     if (!file) return setMessage("Choose a document first.", false, "verificationMessage");
     const documentType = new FormData(form).get("document_type");
+    if(['drivers_license','driver_vehicle','driver_plate'].includes(documentType)&&(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024))return setMessage('Driver documents must be clear JPG, PNG or WebP photos up to 10 MB.',false,'verificationMessage');
     button.disabled = true;
     try {
       setMessage("Uploading document...", false, "verificationMessage");
@@ -617,7 +625,7 @@
     if(open&&!window.L)void window.ProviderMapLoader?.load().then(()=>{if(!$("listingForm").classList.contains('hidden')){const form=$("listingForm");renderListingLocationPreview(Number(form.elements.latitude.value)||9.082,Number(form.elements.longitude.value)||8.6753);}}).catch(error=>setListingLocationStatus(error.message,'error'));
     const form = $("listingForm"); const toggle = $("toggleListingForm");
     if (reset) {
-      form.reset(); state.editingListingID = ""; state.listingRetainedMediaUrls = []; state.listingLocationAccuracy = null; state.listingLocationSource = ""; renderExistingListingImages();
+      form.reset();state.listingRetainedVideos=[];renderRetainedVideos('listing'); state.editingListingID = ""; state.listingRetainedMediaUrls = []; state.listingLocationAccuracy = null; state.listingLocationSource = ""; renderExistingListingImages();
       $("confirmListingLocation").checked = false; $("openListingLocationMap").classList.add("hidden"); $("listingLocationSearchResults").classList.add("hidden"); $("listingLocationSearchResults").replaceChildren();
       if (state.listingMarker && state.listingMap) { state.listingMap.removeLayer(state.listingMarker); state.listingMarker = null; state.listingMap.setView([9.082, 8.6753], 6); }
       setListingLocationStatus("Search for the address or use this device's location, then verify the pin.");
@@ -666,7 +674,7 @@
   function setProductFormOpen(open, { reset = false } = {}) {
     const form = $("productForm"); const toggle = $("toggleProductForm");
     if (reset) {
-      form.reset(); state.editingProductID = "";
+      form.reset();state.productRetainedVideos=[];renderRetainedVideos('product'); state.editingProductID = "";
       const country = String(state.provider?.country_code || "NG").toUpperCase();
       const market = state.buyerMarkets.find(item => item.country_code === country);
       form.elements.inventory_country_code.value = country;
@@ -719,9 +727,10 @@
         $("listingLocationPreview").scrollIntoView({ behavior: "smooth", block: "center" });
         throw new Error("Confirm that the map pin is at the actual service or property location before saving.");
       }
+      await loadPostPolicy();if(files.length+retainedMedia.length>state.postPolicy.max_images)throw new Error('Your plan allows '+state.postPolicy.max_images+' image(s) per post. Remove images or upgrade.');const video_urls=await postVideos('listing');
       const uploadedMedia = files.length ? await uploadImages(files) : [];
       const media_urls = [...retainedMedia, ...uploadedMedia];
-      const attributes = { ...(existing?.attributes || {}), price_mode: values.price_mode, price_notes: String(values.price_notes || "").trim(), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
+      const attributes = { ...(existing?.attributes || {}), video_urls,price_mode: values.price_mode, price_notes: String(values.price_notes || "").trim(), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
       const payload = { ...values, price: values.price_mode === "quote" || values.price === "" ? null : Number(values.price), capacity: Number(values.capacity || 1), latitude, longitude, service_radius_km: values.service_radius_km === "" ? null : Number(values.service_radius_km), is_mobile_service: form.elements.is_mobile_service.checked, is_available_now: form.elements.is_available_now.checked, media_urls, attributes };
       const path = state.editingListingID ? "/providers/me/listings/" + state.editingListingID : "/providers/me/listings";
       await api(path, { method: state.editingListingID ? "PATCH" : "POST", body: JSON.stringify(payload) });
@@ -741,8 +750,9 @@
     try {
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
+      await loadPostPolicy();if((files.length||existing?.image_urls?.length||0)>state.postPolicy.max_images)throw new Error('Your plan allows '+state.postPolicy.max_images+' image(s) per post. Remove images or upgrade.');const video_urls=await postVideos('product');
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
-      const payload = { payment_mode:"contact", title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), currency_code: values.currency_code, compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), delivery_areas: values.delivery_areas, return_policy: values.return_policy };
+      const payload = { video_urls,payment_mode:"contact", title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), currency_code: values.currency_code, compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), delivery_areas: values.delivery_areas, return_policy: values.return_policy };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
       await api(path, { method: state.editingProductID ? "PATCH" : "POST", body: JSON.stringify(payload) }); setProductFormOpen(false, { reset: true }); setMessage("Product draft saved privately. Use Submit for review when it is complete.", true); setMessage("", false, "productUploadProgress"); await loadProducts({ reset: true });
     } catch (error) { showFormError(error.message); } finally { button.disabled = false; }
@@ -764,7 +774,7 @@
     const item = state.products.find(product => product.id === id);
     if (!item) return;
     const form = $("productForm");
-    state.editingProductID = id;
+    state.editingProductID = id;state.productRetainedVideos=[...(Array.isArray(item.video_urls)?item.video_urls:[])];renderRetainedVideos('product');
     form.elements.payment_mode.value = "contact";
     form.elements.fulfillment_mode.value = item.fulfillment_mode || "merchant_local";
     syncProductFulfillment(item.stock_state);
@@ -1029,7 +1039,7 @@
 
   function editListing(id) {
     const item = state.listings.find(listing => listing.id === id); if (!item) return;
-    const form = $("listingForm"); state.editingListingID = id; state.listingRetainedMediaUrls = [...(item.media_urls || [])]; renderExistingListingImages();
+    const form = $("listingForm"); state.editingListingID = id;state.listingRetainedVideos=[...(Array.isArray(item.attributes?.video_urls)?item.attributes.video_urls:[])];renderRetainedVideos('listing'); state.listingRetainedMediaUrls = [...(item.media_urls || [])]; renderExistingListingImages();
     ["listing_type", "title", "category", "city", "state", "address_line", "country_code", "currency_code", "price", "pricing_unit", "capacity", "contact_email", "contact_phone", "latitude", "longitude", "service_radius_km", "description"].forEach(name => {
       form.elements[name].value = item[name] ?? "";
     });
@@ -1038,7 +1048,7 @@
     form.elements.price_mode.value = item.attributes?.price_mode || (item.price == null ? "quote" : "fixed");
     form.elements.price_notes.value = item.attributes?.price_notes || "";
     setListingFormOpen(true);
-    state.editingListingID = id;
+    state.editingListingID = id;state.listingRetainedVideos=[...(Array.isArray(item.attributes?.video_urls)?item.attributes.video_urls:[])];renderRetainedVideos('listing');
     state.listingLocationAccuracy = Number.isFinite(item.attributes?.location_accuracy_m) ? Number(item.attributes.location_accuracy_m) : null;
     state.listingLocationSource = String(item.attributes?.location_source || "saved");
     setListingLocationStatus("Saved location loaded. Verify it on the map; search again, click, or drag the pin if it is not at the exact property.", "ready");
@@ -1426,6 +1436,8 @@
   $("closeConversation").addEventListener("click", () => $("conversationDialog").close());
   $("conversationDialog").addEventListener("close", () => { conversationGeneration++; state.currentConversation=null;if(history.state?.providerChat)history.back(); });
   $("conversationReplyForm").addEventListener("submit", sendConversationReply);
+  $('verificationForm').elements.document_type.addEventListener('change',event=>{$('verificationFile').accept=['drivers_license','driver_vehicle','driver_plate'].includes(event.target.value)?'image/jpeg,image/png,image/webp':'application/pdf,image/jpeg,image/png,image/webp';});
+  document.querySelectorAll('[data-password-toggle]').forEach(button=>button.onclick=()=>{const field=button.parentElement.querySelector('input');const showing=field.type==='password';field.type=showing?'text':'password';button.setAttribute('aria-label',showing?'Hide password':'Show password');button.setAttribute('aria-pressed',String(showing));});
   $("loginForm").addEventListener("submit", login); $("signupForm").addEventListener("submit", signup); $("resendVerification").addEventListener("click", resendVerification); $("signOut").addEventListener("click", signOut); $("onboardingForm").addEventListener("submit", onboard); $("payoutForm").addEventListener("submit", configurePayoutAccount); $("loadPayoutBanks").addEventListener("click", loadPayoutBanks); $("payoutCountry").addEventListener("change", () => { state.payoutBanks = []; void loadPayoutBanks(); }); $("verificationForm").addEventListener("submit", uploadVerificationDocument); $("listingForm").addEventListener("submit", saveListing); $("productForm").addEventListener("submit", saveProduct); $("availabilityForm").addEventListener("submit", saveAvailability); $("closeAvailability").addEventListener("click", () => $("availabilityDialog").close()); $("refreshSubscription").addEventListener("click", refreshSubscriptionStatus);
   $("toggleListingForm").addEventListener("click", () => {
     if (!requireSubscription("services")) return;

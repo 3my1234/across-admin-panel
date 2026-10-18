@@ -74,6 +74,7 @@ jobs:
           node scripts/test-admin-analytics-browser.cjs
           node scripts/test-admin-workspace-browser.cjs
           node scripts/test-yearly-plans-browser.cjs
+          node scripts/test-provider-launch-rules-browser.cjs
           node scripts/test-community-browser.cjs
           node scripts/test-launch-browser.cjs
           node scripts/test-hall-live-browser.cjs

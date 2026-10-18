@@ -17,7 +17,7 @@
   </script>
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
-  <link rel="stylesheet" href="./provider.css?v=20261017-renewal" />
+  <link rel="stylesheet" href="./provider.css?v=20261018-launch-rules" />
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./location-sharing.js?v=20261016-overview" defer></script>
   <script src="./driver-availability.js?v=20261016-overview" defer></script>
@@ -30,12 +30,12 @@
   <script src="./provider-map-loader.js?v=20261015" defer></script>
   <script src="./provider-native.js?v=20261016-overview" defer></script>
   <script src="./delivery-areas.js?v=20261006-simple-forms" defer></script>
-  <script src="./community-town-hall.js?v=20261016-overview" defer></script>
+  <script src="./community-town-hall.js?v=20261018-direct-entry" defer></script>
   <script src="./private-chat-store.js?v=20261015" defer></script>
-  <script src="./community-portal.js?v=20261016-overview" defer></script>
+  <script src="./community-portal.js?v=20261018-hall-icon" defer></script>
   <link rel="stylesheet" href="./community-portal.css?v=20261016-overview" />
   <link rel="stylesheet" href="./town-hall.css?v=20261016-overview" />
-  <script src="./provider.js?v=20261017-renewal" defer></script>
+  <script src="./provider.js?v=20261018-launch-rules" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
   <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
   <script src="./chat-photo-viewer.js?v=20261011-chat-app" defer></script>
@@ -62,12 +62,12 @@
       <div class="auth-switch"><button type="button" data-auth-view="login" class="active">Sign in</button><button type="button" data-auth-view="signup" class="secondary">Create account</button></div>
       <form id="loginForm" class="form-grid compact" data-auth-panel="login">
         <label>Email<input name="email" type="email" autocomplete="email" required /></label>
-        <label>Password<input name="password" type="password" autocomplete="current-password" required /></label>
+        <label>Password<span class="password-field"><input name="password" type="password" autocomplete="current-password" required /><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">&#128065;</button></span></label>
         <button type="submit">Sign in</button><button type="button" id="resendVerification" class="link-button">Resend verification email</button><p id="loginMessage" class="message" aria-live="polite"></p>
       </form>
       <form id="signupForm" class="form-grid compact hidden" data-auth-panel="signup">
         <label>Full name<input name="full_name" autocomplete="name" required /></label><label>Email<input name="email" type="email" autocomplete="email" required /></label>
-        <label>Phone<input name="phone" type="tel" autocomplete="tel" required /><small>Use a phone number that is not linked to another Atlantic Express account.</small></label><label>Password<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <label>Phone<input name="phone" type="tel" autocomplete="tel" required /><small>Use a phone number that is not linked to another Atlantic Express account.</small></label><label>Password<span class="password-field"><input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required aria-describedby="signupPasswordHelp" /><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">&#128065;</button></span><small id="signupPasswordHelp">At least 8 characters, with uppercase, lowercase and a special character such as !@#$.</small></label>
         <button type="submit">Create provider account</button><p id="signupMessage" class="message" aria-live="polite"></p>
       </form>
     </section>
@@ -101,7 +101,7 @@
             <label>Contact phone<input name="contact_phone" inputmode="tel" required /></label><label>Website<input name="website_url" type="url" /></label>
             <label>Address<input name="address_line" /></label><label>City<input name="city" required /></label><label>State / region<input name="state" required /></label>
             <label>Country code<input name="country_code" maxlength="2" pattern="[A-Za-z]{2}" value="NG" autocapitalize="characters" required /><small>Two-letter ISO code, for example NG, GB, US, or CA.</small></label>
-            <label class="wide">About your business or professional work<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
+            <label class="wide"><span><input type="checkbox" name="is_driver" /> I offer driver / ride services</span><small>Driver verification requires clear photos of your driver licence, your car and its plate number.</small></label><label class="wide">About your business or professional work<textarea name="description" rows="4"></textarea></label><button type="submit">Submit provider profile</button>
           </form>
         </section>
 
@@ -125,7 +125,7 @@
             <label class="wide">Delivery methods (comma separated)<input name="delivery_methods" value="delivery,pickup" required /></label><label class="wide">Returns policy<textarea name="return_policy" rows="3" required></textarea></label>
             <div class="wide"><h3>Where can you deliver?</h3><p>Add each area you deliver to, and the delivery charge. Your product price stays the same unless you choose a different price below.</p><div id="productDeliveryAreas"></div><button id="addProductDeliveryArea" class="secondary" type="button">Add another delivery area</button><small id="enabledBuyerMarkets">Checking available countries...</small></div>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
-            <label class="wide">Product images<input id="productImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Upload 1-20 accurate images. Existing images remain when editing unless replacements are selected.</small></label>
+            <label class="wide">Product videos (MP4)<input id="productVideos" type="file" accept="video/mp4" multiple /><small>Gold: 2 videos; Diamond: 5. Each up to 60 seconds and 50 MB.</small><div id="productExistingVideos"></div></label><label class="wide">Product images<input id="productImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>Image limits per post: Free 1; Bronze 2; Silver 4; Gold and Diamond 8. Existing images remain when editing unless replacements are selected.</small></label>
             <p class="wide form-note"><strong>Private draft:</strong> saving does not publish this product. Check the details, then submit it for Atlantic Express review.</p>
             <div id="productUploadProgress" class="wide message"></div><div class="wide form-actions"><button type="submit">Save product draft</button><button id="cancelProductForm" type="button" class="secondary">Cancel</button></div>
           </form>
@@ -164,11 +164,11 @@
             <div class="section-heading"><div><span class="eyebrow">Business verification</span><h3>Verification documents</h3></div></div>
             <p id="verificationDocumentGuidance">Upload clear documents that match your registered name and contact details. PDF, JPG, PNG, and WebP are accepted.</p>
             <form id="verificationForm" class="form-grid compact">
-              <label>Document type<select name="document_type" required><option value="government_id">Government ID</option><option value="business_registration">Business registration</option><option value="professional_license">Professional licence / qualification</option><option value="property_authority">Property ownership / authority</option><option value="address_proof">Proof of address</option></select></label>
+              <label>Document type<select name="document_type" required><option value="drivers_license">Driver licence photo</option><option value="driver_vehicle">Car / vehicle photo</option><option value="driver_plate">Plate-number photo</option><option value="government_id" selected>Government ID</option><option value="business_registration">Business registration</option><option value="professional_license">Professional licence / qualification</option><option value="property_authority">Property ownership / authority</option><option value="address_proof">Proof of address</option></select></label>
               <label>Document<input id="verificationFile" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required /></label>
               <button type="submit">Upload document</button><p id="verificationMessage" class="message"></p>
             </form>
-            <div id="verificationRows" class="stack-list"></div>
+            <p>Drivers: upload all three photos separately. The licence details, car and registration plate must be clear and readable. Each photo requires admin approval.</p><div id="verificationRows" class="stack-list"></div>
           </section>
         </section>
 
@@ -201,7 +201,7 @@
             <label>How far can nearby customers find you? (km)<input name="service_radius_km" type="number" min="1" max="500" value="25" /><small>Customers within this distance may see the service.</small></label><label class="check-option"><input name="is_mobile_service" type="checkbox" /><span>I can travel to the customer’s location</span></label>
             <label class="check-option"><input name="is_available_now" type="checkbox" /><span>Customers can contact me now</span></label>
             <label class="wide">Description<textarea name="description" rows="5" required></textarea></label>
-            <div id="listingExistingImages" class="wide existing-media hidden"></div><label class="wide">Add service images<input id="listingImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>New images are added to the current ones. You can remove current images above before saving.</small></label>
+            <label class="wide">Service videos (MP4)<input id="listingVideos" type="file" accept="video/mp4" multiple /><small>Gold: 2 videos; Diamond: 5. Each up to 60 seconds and 50 MB.</small><div id="listingExistingVideos"></div></label><div id="listingExistingImages" class="wide existing-media hidden"></div><label class="wide">Add service images<input id="listingImages" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>New images are added to the current ones. You can remove current images above before saving.</small></label>
             <p class="wide form-note"><strong>Private draft:</strong> saving does not publish this listing. Submit it for review when it is complete.</p>
             <div id="uploadProgress" class="wide message"></div><div class="wide form-actions"><button type="submit">Save service draft</button><button id="cancelListingForm" type="button" class="secondary">Cancel</button></div>
           </form>
