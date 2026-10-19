@@ -36,7 +36,7 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
  if(path.startsWith('/chat/statuses'))return {items:[]};
  if(path.startsWith('/chat/promotions'))return {items:[],pending:false};
  const preview={id:hall,title:'50 bags of rice',buyer_name:'Amina',created_at:new Date().toISOString(),message_only:true,description:'I need 50 bags of rice for an occasion in Abuja. My budget is ₦48,500 per bag. Who can help?',location:'',quantity:null,unit:'',target_unit_price:null,state:'open',is_owner:true,admitted:true,seats:0,offers:[],applications:[]};
- if(path.startsWith('/chat/town-hall?'))return {items:[preview]};
+ if(path.startsWith('/chat/town-hall?'))return {items:[preview],can_create:true};
  if(path==='/chat/town-hall/'+hall)return preview;
  return {};};
  window.__community=CommunityPortal.create({element:host,request,getActor:()=>__actor});await __community.activate();
