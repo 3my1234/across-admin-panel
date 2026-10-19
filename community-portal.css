@@ -33,3 +33,5 @@ body.community-chat-open .provider-mobile-nav{display:none!important}
 
 /* Match the panned visual viewport without scrolling the composer to centre. */
 .community-room-open{inset:auto 0 auto!important;top:var(--visible-viewport-top,0px)!important;height:var(--visible-viewport-height,100dvh);max-height:var(--visible-viewport-height,100dvh);padding-bottom:8px}.community-room-open .community-compose textarea{scroll-margin:0}
+
+.community-quote{border-left:3px solid #12805f;background:rgba(18,128,95,.12);padding:8px 10px;margin:4px 0 8px;border-radius:4px;font-size:12px;overflow-wrap:anywhere}.community-quote p{margin:3px 0}.community-reply-action{font-size:11px;padding:4px 8px;min-height:32px;margin-left:8px}.room-line{touch-action:pan-y}.community-reply-draft button{min-height:40px}
