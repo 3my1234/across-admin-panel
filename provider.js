@@ -247,8 +247,15 @@
     const body = meta.notes || meta.message || ({ request_created: "A buyer sent a new booking or enquiry.", listing_approved: "Your service listing is now visible to buyers.", listing_rejected: "Your service listing needs changes.", provider_approved: "Your provider account was approved.", provider_rejected: "Your provider verification was rejected." }[item.event_type] || "Your provider account has new activity.");
     return { title, body };
   }
+  let alertAudio=null;
+  function unlockProviderAudio(){
+    try {const Audio=window.AudioContext||window.webkitAudioContext;if(!Audio)return;if(!alertAudio||alertAudio.state==='closed')alertAudio=new Audio();if(alertAudio.state==='suspended')void alertAudio.resume().catch(()=>{});}catch(_){}
+  }
+  document.addEventListener('pointerdown',unlockProviderAudio,{passive:true});
+  document.addEventListener('keydown',unlockProviderAudio);
+  window.addEventListener('pagehide',()=>{if(alertAudio){void alertAudio.close().catch(()=>{});alertAudio=null;}});
   function playProviderAlert() {
-    try { const AudioContext = window.AudioContext || window.webkitAudioContext; if (!AudioContext) return; const audio = new AudioContext(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); oscillator.frequency.value = 880; gain.gain.value = .04; oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .12); oscillator.onended = () => audio.close(); } catch (_) {}
+    try {if(!alertAudio||alertAudio.state!=='running')return;const audio=alertAudio,oscillator=audio.createOscillator(),gain=audio.createGain();oscillator.frequency.value=880;gain.gain.value=.04;oscillator.connect(gain);gain.connect(audio.destination);oscillator.start();oscillator.stop(audio.currentTime+.12);oscillator.onended=()=>{oscillator.disconnect();gain.disconnect();};}catch(_){}
   }
   function renderProviderNotifications() {
     const count = $("providerAlertCount"); count.textContent = String(state.unreadNotifications); count.classList.toggle("hidden", state.unreadNotifications < 1);

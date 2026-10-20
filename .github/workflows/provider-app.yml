@@ -50,6 +50,7 @@ jobs:
           node scripts/test-moderation-feedback.cjs
           node scripts/test-subscription-periods.cjs
           node scripts/test-provider-pwa.cjs
+          node scripts/test-provider-push-recovery.cjs
           node scripts/test-provider-support.cjs
           node scripts/test-support-device-cache.cjs
           node scripts/test-chat-unread.cjs
