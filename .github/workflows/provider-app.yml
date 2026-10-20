@@ -28,6 +28,7 @@ jobs:
           node --check provider-pwa.js
           node --check provider-sw.js
           node --check provider-updates.js
+          node --check provider-install.js
           node --check provider-identity.js
           node --check community-portal.js
           node --check driver-availability.js
@@ -46,6 +47,7 @@ jobs:
           node scripts/test-theme.cjs
           node scripts/test-plan-link-and-keyboard.cjs
           node scripts/test-provider-updates.cjs
+          node scripts/test-provider-install.cjs
           node scripts/test-listing-review.cjs
           node scripts/test-moderation-feedback.cjs
           node scripts/test-subscription-periods.cjs
@@ -80,6 +82,7 @@ jobs:
           node scripts/test-launch-browser.cjs
           node scripts/test-hall-live-browser.cjs
           node scripts/test-provider-branding-browser.cjs
+          node scripts/test-provider-install-browser.cjs
           node scripts/test-message-receipts-browser.cjs
       - name: Build and check separate provider image
         run: |
@@ -91,6 +94,7 @@ jobs:
           curl --fail http://127.0.0.1:8080/provider.webmanifest
           curl --fail http://127.0.0.1:8080/provider-overview.css --output /tmp/provider-overview.css
           curl --fail http://127.0.0.1:8080/provider-updates.js --output /tmp/provider-updates.js
+          curl --fail http://127.0.0.1:8080/provider-install.js --output /tmp/provider-install.js
           curl --fail http://127.0.0.1:8080/community-portal.js --output /tmp/community-portal.js
           curl --fail http://127.0.0.1:8080/provider-native.js --output /tmp/provider-native.js
           curl --fail http://127.0.0.1:8080/location-sharing.js --output /tmp/location-sharing.js

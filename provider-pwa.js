@@ -1,5 +1,4 @@
 (() => {
- const install=document.getElementById("installProviderApp");let prompt=null;
  const embedded=window.ProviderNativeBridge?.embedded()===true;
  let registration;
  function registerWorker(){if(!registration)registration=!embedded&&"serviceWorker" in navigator?navigator.serviceWorker.register("./provider-sw.js",{updateViaCache:"none"}):Promise.resolve(null);return registration;}
@@ -35,9 +34,6 @@
  window.ProviderPWA={disconnect(actor){owner="";key="";lastAttempt=0;lastSuccess=0;notify.classList.add("hidden");notice.textContent="";void registerWorker().then(async worker=>{const subscription=await worker?.pushManager?.getSubscription();if(subscription){await pushAPI("",{method:"DELETE",body:JSON.stringify({endpoint:subscription.endpoint})},actor).catch(()=>{});await subscription.unsubscribe();}}).catch(()=>{});}};
  new MutationObserver(()=>void setup()).observe(document.body,{attributes:true,attributeFilter:["class"]});void setup();
  window.addEventListener("online",()=>void setup());document.addEventListener("visibilitychange",()=>{if(!document.hidden)void setup();});setInterval(()=>{if(!document.hidden&&navigator.onLine!==false)void setup();},30000);
- window.addEventListener("beforeinstallprompt",event=>{event.preventDefault();prompt=event;install.classList.remove("hidden");});
- install.addEventListener("click",async()=>{if(!prompt)return;await prompt.prompt();await prompt.userChoice;prompt=null;install.classList.add("hidden");});
- window.addEventListener("appinstalled",()=>{install.classList.add("hidden");prompt=null;});
  const nav=document.createElement("nav");nav.className="provider-mobile-nav";nav.setAttribute("aria-label","Provider app navigation");
  const source=document.querySelector(".side-card nav");
  const more=document.createElement("dialog");more.className="provider-more-menu";more.setAttribute("aria-label","Business tools");

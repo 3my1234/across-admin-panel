@@ -17,7 +17,7 @@
   </script>
   <link rel="icon" type="image/png" href="./favicon.png?v=20260928-atl" />
   <link rel="apple-touch-icon" href="./favicon.png?v=20260928-atl" />
-  <link rel="stylesheet" href="./provider.css?v=20261018-launch-rules" />
+  <link rel="stylesheet" href="./provider.css?v=20261020-install-dialog" />
   <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
   <script src="./location-sharing.js?v=20261016-overview" defer></script>
   <script src="./driver-availability.js?v=20261016-overview" defer></script>
@@ -39,8 +39,9 @@
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
   <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
   <script src="./chat-photo-viewer.js?v=20261011-chat-app" defer></script>
-  <script src="./provider-updates.js?v=20261012-app-update" defer></script>
-  <script src="./provider-pwa.js?v=20261019-reliability" defer></script>
+  <script src="./provider-updates.js?v=20261020-install-dialog" defer></script>
+  <script src="./provider-install.js?v=20261020-install-dialog" defer></script>
+  <script src="./provider-pwa.js?v=20261020-install-dialog" defer></script>
   <link rel="manifest" href="./provider.webmanifest" />
   <meta name="theme-color" content="#12221C" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -58,6 +59,11 @@
   </header>
   <main>
     <section id="authPanel" class="card auth-card">
+      <div id="providerInstallEntry" class="provider-install-entry" hidden>
+        <img src="./provider-icon-192.png" alt="" width="48" height="48" />
+        <div><strong>Take your business with you</strong><p>Install the provider app on your phone. No account needed to install.</p></div>
+        <button type="button" data-provider-install>Install app</button>
+      </div>
       <div><span class="eyebrow">For trusted providers</span><h2>Build your business on Atlantic Express</h2><p>Sell products, offer professional services, manage property or mobility listings, and connect with customers from one secure portal.</p></div>
       <div class="auth-switch"><button type="button" data-auth-view="login" class="active">Sign in</button><button type="button" data-auth-view="signup" class="secondary">Create account</button></div>
       <form id="loginForm" class="form-grid compact" data-auth-panel="login">
