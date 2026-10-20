@@ -19,6 +19,9 @@ async function request(url,{method="GET",auth=false,mode="cors"}={}){let respons
  context.fetch=async()=>{throw Error("offline")};assert.equal(await request("https://admin.example/provider.html",{mode:"navigate"}),true);
  let pending;handlers.push({data:{json:()=>({title:"New message",body:"Customer sent a message.",view:"messages",conversation_id:"00000000-0000-0000-0000-000000000001"})},waitUntil:p=>pending=p});await pending;assert.equal(shown.title,"New message");assert.ok(shown.options.data.url.includes("view=messages"));
  const messageURL=shown.options.data.url;
+ handlers.push({data:{json:()=>({title:'New message',sender_name:'Customer',sender_avatar_url:'https://api.atlxpres.com/api/v1/public/images/view/user-uploads/customer/photo.jpg?avatar=1',view:'messages'})},waitUntil:p=>pending=p});await pending;
+ assert.equal(shown.title,'Customer');assert.match(shown.options.icon,/avatar=1$/);assert.match(shown.options.badge,/provider-icon-192.png$/,'app badge remains identifiable');
+ handlers.push({data:{json:()=>({sender_avatar_url:'https://untrusted.example/photo.png'})},waitUntil:p=>pending=p});await pending;assert.match(shown.options.icon,/provider-icon-192.png$/,'unknown avatar host falls back to app icon');
  handlers.push({data:{json:()=>({view:"support",ticket_id:"00000000-0000-0000-0000-000000000002",notification_id:"00000000-0000-0000-0000-000000000003"})},waitUntil:p=>pending=p});await pending;assert.ok(shown.options.data.url.includes("ticket="));assert.ok(shown.options.data.url.includes("notification="));
  shown.options.data.url=messageURL;
  handlers.notificationclick({notification:{close:()=>{},data:shown.options.data},waitUntil:p=>pending=p});await pending;assert.equal(opened,shown.options.data.url);
