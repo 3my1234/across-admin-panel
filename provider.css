@@ -464,9 +464,19 @@ dialog.chat-photo-viewer { width:100vw; height:100dvh; max-width:none!important;
 .photo-status { position:absolute; top:45%; left:16px; right:16px; text-align:center; color:white; }
 .provider-mobile-nav { display:none; }
 .provider-offline-bar { background:#fff0d6; color:#402d00; padding:12px; margin:0; text-align:center; }
-.provider-update-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px; background:var(--theme-surface,#fff); color:var(--ink); border-bottom:1px solid var(--line); font-size:14px; }
-.provider-update-bar[hidden] { display:none; }
-.provider-update-bar button { flex-shrink:0; min-height:44px; }
+.provider-install-entry { display:grid; grid-template-columns:48px 1fr; gap:12px; align-items:center; padding:16px; margin-bottom:20px; border:1px solid var(--line); border-radius:14px; background:var(--theme-surface,#fff); color:var(--theme-text,#071c18); }
+.provider-install-entry[hidden] { display:none; }
+.provider-install-entry img { border-radius:12px; }
+.provider-install-entry p { margin:4px 0 0; font-size:14px; }
+.provider-install-entry button { grid-column:1 / -1; min-height:44px; background:#00865f; color:#fff; }
+.provider-update-dialog,.provider-install-dialog { width:min(440px,calc(100vw - 32px)); max-height:calc(100dvh - 40px); overflow:auto; margin:auto; padding:24px; border:1px solid var(--line); border-radius:18px; background:var(--theme-surface,#fff); color:var(--theme-text,#071c18); box-shadow:0 20px 70px #0005; }
+.provider-update-dialog::backdrop,.provider-install-dialog::backdrop { background:#071c18a6; }
+.provider-update-dialog[hidden] { display:none; }
+.provider-update-dialog h2,.provider-install-dialog h2 { margin:0 0 12px; font-size:24px; }
+.provider-update-dialog span { display:block; margin-bottom:20px; }
+.provider-update-dialog button,.provider-install-dialog button { min-height:44px; margin-top:8px; }
+.provider-update-dialog button:not(.secondary),.provider-install-dialog button { background:#00865f; color:#fff; }
+.provider-update-dialog .secondary { margin-left:8px; }
 .provider-more-menu { width:min(420px,calc(100vw - 24px)); }
 .provider-more-menu button { display:block; min-height:48px; width:100%; margin:8px 0; }
 @media(max-width:850px) {

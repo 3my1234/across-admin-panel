@@ -1,4 +1,4 @@
-const CACHE="atl-provider-shell-20261019-v24";
+const CACHE="atl-provider-shell-20261020-v25";
 const root=new URL("./",self.location.href);
 function communityDestination(url,payload){for(const [field,param] of [['chat_room_id','shared'],['town_hall_room_id','hall']])if(/^[a-f0-9-]{36}$/i.test(payload[field]||''))url.searchParams.set(param,payload[field]);if(['chats','town-hall'].includes(payload.community))url.searchParams.set('community',payload.community);return url;}
 // Refresh an already-open chat on arrival without navigating or exposing its body.
@@ -7,6 +7,7 @@ const shell=new Set(["provider.html","provider.js","provider.css","community-por
 // Activate a waiting update only after the person chooses Refresh app.
 shell.add('provider-overview.css');shell.add('message-receipts.js');shell.add('message-receipts.css');shell.add('location-sharing.js');shell.add('driver-availability.js');shell.add('town-hall.css');shell.add('community-town-hall.js');shell.add('listing-images.js');shell.add('settings.js');shell.add('provider-map-loader.js');shell.add('settings.css');shell.add('private-chat-store.js');
 for(const file of ['service-categories-data.js','service-categories.js','provider-form-defaults.js','hall-icon.js','provider-native.js'])shell.add(file);
+shell.add('provider-install.js');
 self.addEventListener("message",event=>{if(event.data?.type==="ACTIVATE_PROVIDER_UPDATE")event.waitUntil(self.skipWaiting());});
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add(new URL("provider-offline.html",root).href)));});
 self.addEventListener("activate",event=>{event.waitUntil((async()=>{for(const name of await caches.keys())if(name.startsWith("atl-provider-shell-")&&name!==CACHE)await caches.delete(name);await self.clients.claim();})());});
