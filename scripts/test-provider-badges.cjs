@@ -16,4 +16,7 @@ assert.equal(g.ProviderIdentity.banner({banner_url:'javascript:alert(1)'}),'');
 assert.equal(g.ProviderIdentity.banner({banner_url:'data:image/svg+xml,bad'}),'');
 assert.doesNotMatch(g.ProviderIdentity.banner({name:'<script>bad</script>',banner_url:'https://example.com/banner.jpg'}),/<script>/);
 assert.match(fs.readFileSync('provider-identity.css','utf8'),/prefers-reduced-motion/);
+const profile=g.ProviderIdentity.profile({name:'<script>Provider</script>',avatar_url:'https://example.com/a.jpg',banner_url:'https://example.com/b.jpg'});
+assert.match(profile,/provider-profile-cover/);assert.match(profile,/provider-profile-details/);assert.equal((profile.match(/class="provider-avatar"/g)||[]).length,1);assert.doesNotMatch(profile,/<script>/);
+assert.equal(g.ProviderIdentity.profile(null),'');assert.match(g.ProviderIdentity.profile({name:'Missing photos'},{compact:true}),/provider-profile-compact/);
 console.log('Provider badges passed: four tiers, free/expired, unverified, unique SVG IDs, escaping, static lists and reduced motion.');

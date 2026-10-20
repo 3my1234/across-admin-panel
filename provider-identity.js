@@ -18,5 +18,6 @@
   }
   if(typeof document!=="undefined")document.addEventListener("click",event=>{const badge=event.target.closest?.("[data-provider-badge]");if(badge)alert(`${badge.dataset.providerBadge}\nDocuments approved by Atlantic Express. Badge colour indicates subscription tier, not service quality or a payment guarantee.`);});
   function banner(identity){try{const url=new URL(identity?.banner_url,location.origin);if(identity?.banner_url&&(url.protocol==='https:'||(url.origin===location.origin&&url.pathname.startsWith('/api/v1/public/images/view/'))))return '<img class="provider-business-banner" src="'+escape(url.href)+'" alt="'+escape(identity.name||'Provider')+' business banner" loading="lazy" decoding="async"/>';}catch{}return '';}
-  root.ProviderIdentity={render,banner};
+  function profile(identity,{compact=false,animate=false}={}){if(!identity?.name)return '';return '<section class="provider-profile-header'+(compact?' provider-profile-compact':'')+'"><div class="provider-profile-cover">'+banner(identity)+'</div><div class="provider-profile-details">'+render(identity,{animate})+'</div></section>';}
+  root.ProviderIdentity={render,banner,profile};
 })(typeof window!=="undefined"?window:globalThis);
