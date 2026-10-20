@@ -3,7 +3,7 @@
 html.provider-session-pending .header-actions>.appearance-control,html.provider-session-pending .header-actions>#signOut,html.provider-session-pending .header-actions>#enableProviderNotifications,html.provider-session-pending .header-actions>#installProviderApp{display:none}
 :is(body:not(.auth-mode), html.provider-session-pending body){--brand:#087b58;--overview-soft:#e9f8f1;--overview-border:#dcece5;--overview-ink:#142a21;--overview-muted:#5b6d64;--overview-accent:#087b58;background:linear-gradient(145deg,#effaf5,#f8fcfa)}
 :root[data-theme=dark] :is(body:not(.auth-mode), html.provider-session-pending body){--overview-soft:#163c30;--overview-border:#304c40;--overview-ink:#f0f8f4;--overview-muted:#c1d0c8;--overview-accent:#72e4bb;background:linear-gradient(145deg,#0a2119,#10271f)}
-:is(body:not(.auth-mode), html.provider-session-pending body) .provider-header{background:transparent;border:0;padding-bottom:4px;gap:10px}
+:is(body:not(.auth-mode), html.provider-session-pending body) .provider-header{background:var(--theme-background,#effaf5);border:0;border-bottom:1px solid var(--overview-border);padding-bottom:12px;gap:10px;isolation:isolate}
 :is(body:not(.auth-mode), html.provider-session-pending body) .provider-header .eyebrow{color:var(--overview-accent);font-weight:700;letter-spacing:1.5px}
 :is(body:not(.auth-mode), html.provider-session-pending body) .provider-header h1{font-size:27px;font-weight:800;letter-spacing:-.7px}
 :is(body:not(.auth-mode), html.provider-session-pending body) #providerStatus{display:none}

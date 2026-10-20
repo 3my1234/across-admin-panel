@@ -7,9 +7,10 @@
 @keyframes provider-metal-flow{from{transform:translateX(-28px)}to{transform:translateX(36px)}}
 @media(prefers-reduced-motion:reduce){.provider-seal-shimmer{animation:none;display:none}}
 
-.provider-business-banner{display:block;width:100%;height:96px;max-height:18vh;object-fit:cover;border-radius:12px;margin:6px 0;flex-shrink:0} #providerBrandPreview .provider-avatar{width:56px;height:56px;border-radius:50%}
+.provider-business-banner{display:block;width:100%;height:96px;max-height:18vh;object-fit:cover;border-radius:12px;margin:6px 0;flex-shrink:0}
 
 .chat-header-avatar{overflow:hidden}.chat-header-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.provider-profile-header{width:100%;min-width:0;margin:8px 0 12px;flex-shrink:0}.provider-profile-cover{height:112px;overflow:hidden;border-radius:14px;background:var(--overview-soft,var(--theme-soft,#dcece5))}.provider-profile-cover .provider-business-banner{height:100%;max-height:none;margin:0;border-radius:0}.provider-profile-details{position:relative;padding:38px 12px 4px;min-height:72px}.provider-profile-details .provider-identity{display:flex;font-size:16px;gap:8px;margin:0}.provider-profile-details .provider-avatar{position:absolute;left:12px;top:-34px;width:68px;height:68px;border:4px solid var(--dashboard-surface,var(--theme-surface,#fff));background:var(--overview-soft,#e8eeeb);box-sizing:border-box;font-size:24px}.provider-profile-details .provider-name{white-space:normal;overflow-wrap:anywhere;line-height:1.35}.provider-profile-compact .provider-profile-cover{height:64px}.provider-profile-compact .provider-profile-details{padding-top:25px;min-height:50px}.provider-profile-compact .provider-profile-details .provider-avatar{width:48px;height:48px;top:-26px;font-size:18px}.provider-profile-compact .provider-profile-details .provider-name{font-size:13px}
 
 .chat-location-pin{display:block;border-radius:10px;padding:10px;background:#12805f18;color:inherit;font-weight:700;text-decoration:none}.chat-location-pin small{display:block;font-size:11px;font-weight:400}
 .chat-location-directions{display:inline-flex;align-items:center;min-height:44px;padding:0 10px;color:inherit;font-weight:700;text-decoration:underline}

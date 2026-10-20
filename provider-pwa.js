@@ -46,7 +46,7 @@
  const navIcons={overview:'<path d="m3 10 9-7 9 7v11H3Z M9 21v-8h6v8"/>',listings:'<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>',messages:'<path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z"/>',support:'<path d="M3 14v-3a9 9 0 0 1 18 0v3M3 12h4v8H3Zm14 0h4v8h-4Zm4 7c0 3-4 3-7 3"/>',more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'};
  for(const [view,label] of [["overview","Home"],["listings","Listings"],["messages","Chats"],["support","Support"],["more","More"]]) {
   const button=document.createElement("button");button.type="button";button.dataset.mobileView=view;button.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'+navIcons[view]+'</svg><span>'+label+'</span>';
-  button.onclick=()=>{if(view==="more"){more.showModal();history.pushState({...history.state,providerMore:true},"",location.href);}else source.querySelector(`[data-view="${button.dataset.mobileView}"]`)?.click();};nav.append(button);
+  button.onclick=()=>{if(view==="more"){sync();more.showModal();history.pushState({...history.state,providerMore:true},"",location.href);}else source.querySelector(`[data-view="${button.dataset.mobileView}"]`)?.click();};nav.append(button);
  }
  function sync(){
   for(const button of nav.querySelectorAll("button")) {
@@ -56,7 +56,7 @@
   more.querySelectorAll("[data-tool]").forEach(button=>button.remove());
   for(const original of source.querySelectorAll("[data-view]")){if(original.classList.contains("hidden"))continue;const button=document.createElement("button");button.type="button";button.dataset.tool=original.dataset.view;button.textContent=original.textContent;button.onclick=()=>{original.click();more.close();};more.append(button);}
  }
- document.body.append(nav,more);new MutationObserver(sync).observe(source,{subtree:true,attributes:true,attributeFilter:["class"]});sync();
+ document.body.append(nav,more);new MutationObserver(sync).observe(source,{subtree:true,childList:true,attributes:true,attributeFilter:["class"]});sync();
  more.addEventListener("close",()=>{if(history.state?.providerMore)history.back();});window.addEventListener("popstate",()=>{if(more.open)more.close();});
  const offline=document.createElement("p");offline.className="provider-offline-bar";offline.setAttribute("role","status");offline.textContent="You are offline. Reconnect to send messages or save changes.";document.body.prepend(offline);
  function connection(){offline.hidden=navigator.onLine;}

@@ -1239,7 +1239,7 @@
     const p = state.provider, verification = p?.verification_status || "Not submitted", subscription = p?.subscription?.status || "None";
     $('providerBranding').classList.toggle('hidden',!p);
     $('driverAvailability').classList.toggle('hidden',!p?.can_offer_services);
-    $('providerBrandPreview').innerHTML=(window.ProviderIdentity?.banner(p?.provider_identity)||'')+ (window.ProviderIdentity?.render(p?.provider_identity)||'');
+    $('providerBrandPreview').innerHTML=window.ProviderIdentity?.profile(p?.provider_identity)||'';
     const subscriptionActive = hasProviderAccess();
     const freeLaunch = !hasActiveSubscription();
     const subscriptionLabel = hasActiveSubscription() ? "Active paid plan" : "Free · one listing";
