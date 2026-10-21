@@ -134,7 +134,7 @@
       const data = await api("/auth/signup", { method: "POST", body: JSON.stringify(payload) });
       switchAuth("login");
       document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
-      setMessage(data.message || "Account created. Check your email to verify it, then sign in here.", true, "loginMessage");
+      setMessage(data.message || "Account created. Check your inbox and Spam/Junk folder to verify your email, then sign in here.", true, "loginMessage");
     } catch (error) {
       if (error.status === 409) {
         const conflict = String(error.message || "").toLowerCase();
@@ -147,7 +147,7 @@
         } else if (conflict.includes("email")) {
           switchAuth("login");
           document.querySelector("#loginForm [name=email]").value = String(payload.email || "");
-          setMessage("An account already uses this email. Verify the email we sent, then sign in. If the message is missing, select Resend verification email.", false, "loginMessage");
+          setMessage("An account already uses this email. Verify the email we sent, then sign in. Check your inbox and Spam/Junk folder. If the message is missing, select Resend verification email.", false, "loginMessage");
         } else {
           setMessage(error.message || "That account information is already in use.", false, "signupMessage");
         }
@@ -163,7 +163,7 @@
     const email = document.querySelector("#loginForm [name=email]").value.trim();
     if (!email) return setMessage("Enter your email first.", false, "loginMessage");
     button.disabled = true;
-    try { const data = await api("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }); setMessage(data.message || "Verification email queued.", true, "loginMessage"); }
+    try { const data = await api("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }); setMessage(data.message || "Verification email queued. Check your inbox and Spam/Junk folder.", true, "loginMessage"); }
     catch (error) { setMessage(error.message, false, "loginMessage"); }
     finally { button.disabled = false; }
   }
