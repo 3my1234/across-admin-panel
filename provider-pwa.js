@@ -6,6 +6,8 @@
  registration.catch(()=>{});
  window.ProviderAppUpdates?.watch(registration);
  const notify=document.getElementById("enableProviderNotifications"),notice=document.getElementById("providerPushStatus");
+ const test=document.createElement('button');test.id='testProviderNotifications';test.type='button';test.className='secondary hidden';test.textContent='Send a test to this phone';notice.after(test);
+ test.onclick=async()=>{const actor=token();test.disabled=true;try{const worker=await bounded(registerWorker()),subscription=await bounded(worker.pushManager.getSubscription());if(!subscription)throw Error('Reconnect phone notifications before testing.');const result=await pushAPI('/test',{method:'POST',body:JSON.stringify({endpoint:subscription.endpoint})},actor);if(actor!==token())return;notice.textContent='Test queued. Watch your phone notifications; you can close the PWA.';for(let attempt=0;attempt<10;attempt++){await new Promise(resolve=>setTimeout(resolve,3000));if(actor!==token())return;const delivery=await pushAPI('/test/'+encodeURIComponent(result.id),{},actor);if(delivery.status==='sent'){notice.textContent='The push service accepted this test. If no phone alert appeared, check this browser’s Android notification categories, Do Not Disturb and battery restrictions. Acceptance does not confirm display.';break;}if(['failed','expired','cancelled'].includes(delivery.status))throw Error('Test delivery failed. Reconnect notifications and retry.');if(attempt===9)notice.textContent='Test is still queued or retrying. The delivery worker needs checking.';}}catch(error){if(actor===token())notice.textContent=error.message||'Notification test failed. Please retry.';}finally{test.disabled=false;}};
  const token=()=>localStorage.getItem("atlantic.provider.token") || "";let key="",owner="",syncing=false,lastAttempt=0,lastSuccess=0,attemptActor="";
  async function bounded(work){let timer;try{return await Promise.race([work,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Phone notifications could not connect. Tap Retry phone notifications.')),12000);})]);}finally{clearTimeout(timer);}}
  const API="https://api.atlxpres.com/api/v1";
@@ -20,7 +22,7 @@
   if(actor!==token()){await subscription.unsubscribe();return;}
   await pushAPI("",{method:"POST",body:JSON.stringify(subscription)},actor);
   if(actor!==token())return;
-  owner=actor;lastSuccess=Date.now();notify.textContent="Check phone notifications";notice.textContent="Phone notifications are connected. Your browser and phone notification settings control banners and sound.";
+  owner=actor;lastSuccess=Date.now();test.classList.remove('hidden');notify.textContent="Reconnect phone notifications";notice.textContent="Phone notifications are registered. Send a test to check this device; registration alone does not confirm phone alerts.";
  }
  async function setup(force=false) {
   if(embedded){notice.textContent='You are using the provider workspace inside Atl.';return;}
@@ -31,7 +33,7 @@
   finally{syncing=false;if(actor!==token() && token())void setup();}
  }
  notify.addEventListener("click",async()=>{const actor=token();if(!actor||syncing)return;notify.disabled=true;try{const permission=Notification.permission==="granted"?"granted":await Notification.requestPermission();if(actor!==token())return;if(permission!=="granted"){notice.textContent="Allow notifications in your phone/browser settings to receive new messages.";return;}await setup(true);}catch{if(actor===token())notice.textContent="Phone notifications could not connect. Check your browser notification settings and retry.";}finally{notify.disabled=false;}});
- window.ProviderPWA={disconnect(actor){owner="";key="";lastAttempt=0;lastSuccess=0;notify.classList.add("hidden");notice.textContent="";void registerWorker().then(async worker=>{const subscription=await worker?.pushManager?.getSubscription();if(subscription){await pushAPI("",{method:"DELETE",body:JSON.stringify({endpoint:subscription.endpoint})},actor).catch(()=>{});await subscription.unsubscribe();}}).catch(()=>{});}};
+ window.ProviderPWA={disconnect(actor){test.classList.add("hidden");owner="";key="";lastAttempt=0;lastSuccess=0;notify.classList.add("hidden");notice.textContent="";void registerWorker().then(async worker=>{const subscription=await worker?.pushManager?.getSubscription();if(subscription){await pushAPI("",{method:"DELETE",body:JSON.stringify({endpoint:subscription.endpoint})},actor).catch(()=>{});await subscription.unsubscribe();}}).catch(()=>{});}};
  new MutationObserver(()=>void setup()).observe(document.body,{attributes:true,attributeFilter:["class"]});void setup();
  window.addEventListener("online",()=>void setup());document.addEventListener("visibilitychange",()=>{if(!document.hidden)void setup();});setInterval(()=>{if(!document.hidden&&navigator.onLine!==false)void setup();},30000);
  const nav=document.createElement("nav");nav.className="provider-mobile-nav";nav.setAttribute("aria-label","Provider app navigation");
