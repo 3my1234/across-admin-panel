@@ -4,7 +4,7 @@
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
-  const PROVIDER_VIEWS = new Set(["overview", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
+  const PROVIDER_VIEWS = new Set(["overview", "profile", "verification", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
   const $ = (id) => document.getElementById(id);
   function providerViewURL(view,params={}) {const url=new URL(location.href);for(const key of ['conversation','shared','hall','ticket','event','notification','community','friend'])url.searchParams.delete(key);url.searchParams.set('view',view);for(const [key,value]of Object.entries(params))url.searchParams.set(key,value);return url.pathname+url.search;}
   const chatCache=PortalChatHistory.create();
@@ -307,7 +307,7 @@
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); button.disabled = true;
     try {
       const payload = Object.fromEntries(new FormData(form)); payload.is_driver=form.elements.is_driver.checked;payload.country_code = String(payload.country_code || "").trim().toUpperCase();
-      await api("/providers/onboarding", { method: "POST", body: JSON.stringify(payload) }); setMessage("Provider profile submitted for verification.", true); await boot();if(payload.is_driver){switchView('overview');$('verificationForm').elements.document_type.value='drivers_license';$('verificationFile').accept='image/jpeg,image/png,image/webp';$('verificationDocuments').scrollIntoView({block:'start'});setMessage('Driver onboarding: upload clear licence, car and plate-number photos separately. All three must be approved before driving services go live.',true);}
+      await api("/providers/onboarding", { method: "POST", body: JSON.stringify(payload) }); setMessage("Provider profile submitted for verification.", true); await boot();if(payload.is_driver){switchView('verification');$('verificationForm').elements.document_type.value='drivers_license';$('verificationFile').accept='image/jpeg,image/png,image/webp';$('verificationDocuments').scrollIntoView({block:'start'});setMessage('Driver onboarding: upload clear licence, car and plate-number photos separately. All three must be approved before driving services go live.',true);}
     }
     catch (error) { setMessage(error.message); } finally { button.disabled = false; }
   }
@@ -1378,6 +1378,8 @@
       else if (state.activeView === "messages") { if(community)await community.refresh();else await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
       else if (state.activeView === "subscription") {state.provider=await api("/providers/me");if(!state.plans.length)await loadPlans();else await loadRenewalStatus();renderOverview();}
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
+      else if (state.activeView === "verification") await loadVerificationDocuments();
+      else if (state.activeView === "profile") {state.provider=await api("/providers/me");renderOverview();}
       else if (state.activeView === "products" && $("productForm").classList.contains("hidden")) await loadProducts({reset:true});
       else if (state.activeView === "listings" && $("listingForm").classList.contains("hidden")) await loadListings({reset:true});
     } catch(error) {setMessage(error.message || "This page could not refresh. Retry when connected.");}
