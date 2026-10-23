@@ -4,7 +4,7 @@
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
-  const PROVIDER_VIEWS = new Set(["overview", "profile", "verification", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
+  const PROVIDER_VIEWS = new Set(["overview", "profile", "verification", "subscription", "promotions", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
   const $ = (id) => document.getElementById(id);
   function providerViewURL(view,params={}) {const url=new URL(location.href);for(const key of ['conversation','shared','hall','ticket','event','notification','community','friend'])url.searchParams.delete(key);url.searchParams.set('view',view);for(const [key,value]of Object.entries(params))url.searchParams.set(key,value);return url.pathname+url.search;}
   const chatCache=PortalChatHistory.create();
@@ -18,6 +18,7 @@
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
   window.MessageReceiptSession=window.AtlMessageReceipts?.create({request:api,getActor:()=>state.token,provider:true});
+  const promotions=window.ProviderPromotions?.create({element:$("providerPromotions"),request:api,getActor:()=>state.token});
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token,offline:actor=>fetch(API+'/providers/me/driver-availability',{method:'DELETE',headers:{Authorization:'Bearer '+actor},keepalive:true})});
   const hallShortcut=document.createElement('button');
@@ -173,6 +174,7 @@
     window.ProviderNativeBridge?.signedOut();
     if(state.token)void window.PrivateChatStore?.clear(state.token);
     community?.reset();
+    promotions?.reset();
     window.ProviderPWA?.disconnect(state.token);
     resetProviderSupport();
     state.booting = false;
@@ -1397,6 +1399,7 @@
     if(view==='requests')view='messages';
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
+    if(nextView==='promotions' && state.provider)void promotions?.activate();
     nextVisiblePageRefresh = 0;
     void refreshHallShortcut();
     if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",providerViewURL(nextView));}
