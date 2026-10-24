@@ -35,6 +35,7 @@
   <script src="./community-portal.js?v=20261021-plain-chats" defer></script>
   <link rel="stylesheet" href="./community-portal.css?v=20261019-replies" />
   <link rel="stylesheet" href="./town-hall.css?v=20261016-overview" />
+  <script src="./provider-promotions.js?v=20261023-discovery" defer></script>
   <script src="./provider.js?v=20261021-plain-chats" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
   <link rel="stylesheet" href="./dashboard.css?v=20261009-plans-wallet" />
@@ -86,7 +87,7 @@
     <section id="portal" class="hidden dashboard-grid">
       <aside class="card side-card">
         <h2 id="businessName">Provider setup</h2><p id="verificationState" class="badge">Pending</p>
-        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="verification" data-provider-profile>Verification documents</button><button data-view="profile" data-provider-profile>Business profile</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="messages" data-provider-profile>Chats</button><button data-view="support">Support</button></nav>
+        <nav><button data-view="overview" data-provider-profile class="active">Overview</button><button data-view="verification" data-provider-profile>Verification documents</button><button data-view="profile" data-provider-profile>Business profile</button><button data-view="subscription" data-provider-profile>Subscription</button><button data-view="promotions" data-provider-profile>Promotions and performance</button><button data-view="products" data-product-tool>Products</button><button data-view="merchant-orders" data-product-tool>Product orders</button><button data-view="listings" data-service-tool>Services</button><button data-view="messages" data-provider-profile>Chats</button><button data-view="support">Support</button></nav>
       </aside>
       <div class="workspace">
         <p id="providerPushStatus" class="provider-push-status" role="status"></p>
@@ -154,6 +155,7 @@
           <div class="overview-guidance"><span class="overview-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg></span><div id="accountGuidance" class="notice"></div></div>
           <div class="form-actions"><button type="button" data-view="verification" data-provider-profile>Upload verification documents</button><button type="button" data-view="profile" data-provider-profile>Edit business profile</button></div>
         </section>
+        <section data-view-panel="promotions" id="providerPromotions" class="card hidden"></section>
         <section data-view-panel="profile" class="card hidden">
           <h2>Business profile</h2>
           <section id="providerBranding" class="verification-box hidden"><h3>Public profile</h3><p>Your photo and banner appear with your products, services and customer chats.</p><div id="providerBrandPreview"></div><form id="providerMediaForm" class="form-grid compact"><label>Profile photo<input name="photo" type="file" accept="image/jpeg,image/png,image/webp"/><small>A square photo works best. Maximum 5 MB.</small></label><label>Business banner<input name="banner" type="file" accept="image/jpeg,image/png,image/webp"/><small>A wide image works best. Maximum 5 MB.</small></label><button type="submit">Save profile images</button><button type="button" class="secondary" id="removeProviderPhoto">Remove photo</button><button type="button" class="secondary" id="removeProviderBanner">Remove banner</button><p id="providerMediaMessage" class="message" role="status"></p></form></section>
