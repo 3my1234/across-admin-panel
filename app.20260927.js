@@ -276,7 +276,9 @@ $("productForm").addEventListener("submit", async (event) => {
 
 $("adminForm").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if(!isSuperAdmin())return;
   const formElement = event.currentTarget;
+  const submit=formElement.querySelector("button:not([type=button])");if(submit?.disabled)return;if(submit)submit.disabled=true;
   const form = new FormData(formElement);
   setText("adminStatus", "");
   try {
@@ -290,20 +292,22 @@ $("adminForm").addEventListener("submit", async (event) => {
       }
     });
     formElement.reset();
+    formElement.elements.role.dispatchEvent(new Event("change"));
     clearFormDraft(formElement);
+    await loadAdminDirectory();
     $("adminStatus").className = "success";
-    setText("adminStatus", "Admin created.");
+    setText("adminStatus", "Admin created. They can sign in with their email and password.");
   } catch (error) {
     $("adminStatus").className = "error";
     setText("adminStatus", error.message);
-  }
+  } finally { if(submit)submit.disabled=false; }
 });
 
 async function loadDashboard({ force = false } = {}) {
   await adminWorkspaceReady;
   if (!window.AtlAdminWorkspace) throw new Error("The admin interface could not load. Reload this page to retry.");
   const results = await Promise.allSettled([
-    loadOverview({force}),
+    allowedTabsForRole().includes("overview") ? loadOverview({force}) : Promise.resolve(),
     loadTabData(state.activeTab, { force })
   ]);
   const failure = results.find((result) => result.status === "rejected");
@@ -336,7 +340,7 @@ function stopAdminActivityPolling() {
 }
 
 async function pollAdminActivity() {
-  if (!state.token) return;
+  if (!state.token || !["super_admin","catalog_admin","support_admin"].includes(state.role)) return;
   const isInitialLoad = !state.activityCursor;
   const query = state.activityCursor ? `?limit=25&cursor=${encodeURIComponent(state.activityCursor)}` : "?limit=25";
   try {
@@ -354,7 +358,7 @@ async function pollAdminActivity() {
     }
     renderAdminNotifications();
     if (!isInitialLoad && events.length) {
-      await Promise.allSettled([loadOverview(), state.activeTab === "analytics" ? Promise.resolve() : loadTabData(state.activeTab, { force: true })]);
+      await Promise.allSettled([allowedTabsForRole().includes("overview")?loadOverview():Promise.resolve(), state.activeTab === "analytics" ? Promise.resolve() : loadTabData(state.activeTab, { force: true })]);
     }
   } catch (error) {
     if (error.status === 401) logout();
@@ -602,7 +606,7 @@ function renderAdminsTable() {
       <td>${format(admin.created_at)}</td>
       ${canManageAdmins ? `<td class="table-actions">
         <button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button>
-        <button type="button" class="danger-button" data-action="delete-admin" data-id="${admin.id}">Delete admin</button>
+        <button type="button" class="danger-button" data-action="delete-admin" data-id="${admin.id}">Disable admin</button>
       </td>` : ""}
     `;
     tbody.appendChild(row);
@@ -685,7 +689,7 @@ function renderAdminCards(rows) {
         <p class="mobile-card-meta">${admin.is_active ? "Active" : "Inactive"} · ${format(admin.created_at)}</p>
         ${canManageAdmins ? `<div class="mobile-card-actions">
           <button type="button" class="secondary-button" data-action="reset-admin-password" data-id="${admin.id}">Reset password</button>
-          <button type="button" class="danger-button" data-action="delete-admin" data-id="${admin.id}">Delete admin</button>
+          <button type="button" class="danger-button" data-action="delete-admin" data-id="${admin.id}">Disable admin</button>
         </div>` : ""}
       </article>
     `)
@@ -1127,7 +1131,7 @@ async function deleteAdmin(adminId) {
     return;
   }
   const confirmed = window.confirm(
-    `Delete admin "${admin.full_name}"? Super admins only can remove admin accounts. This cannot be undone.`
+    `Disable admin "${admin.full_name}"? Their access will be revoked. You can enable the account again through Manage access.`
   );
   if (!confirmed) {
     return;
@@ -1137,7 +1141,7 @@ async function deleteAdmin(adminId) {
     await request(`/api/v1/admin/admins/${adminId}`, { method: "DELETE" });
     await loadAdminDirectory();
     $("adminStatus").className = "success";
-    setText("adminStatus", `Deleted ${admin.full_name}.`);
+    setText("adminStatus", `Disabled ${admin.full_name}. Their account history is retained.`);
   } catch (error) {
     $("adminStatus").className = "error";
     setText("adminStatus", error.message);
@@ -1164,8 +1168,11 @@ function roleLabel(value) {
   switch (String(value || "").toLowerCase()) {
     case "super_admin":
       return "Super Admin";
-    case "catalog_admin":
-      return "Marketplace Admin";
+    case "catalog_admin": return "Marketplace Admin";
+    case "support_admin": return "Support";
+    case "moderation_admin": return "Moderation";
+    case "finance_admin": return "Finance";
+    case "ads_admin": return "Advertising";
     default:
       return String(value || "")
         .replaceAll("_", " ")
@@ -1179,19 +1186,11 @@ function sessionRoleLabel(value) {
   return `${roleLabel(role)} · ${role}`;
 }
 
-function allowedTabsForRole(role = state.role) {
-  switch (role) {
-    case "super_admin":
-      return ["overview", "providers", "service-moderation", "product-moderation", "subscriptions", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
-    case "catalog_admin":
-      return ["overview", "providers", "service-moderation", "product-moderation", "subscriptions", "merchant-fulfillments", "orders", "transactions", "admins", "support", "analytics", "complaints"];
-    default:
-      return ["overview"];
-  }
-}
+function allowedTabsForRole(role = state.role) { return window.AtlAdminRoles.tabs(role); }
 
 function configureRoleUi() {
   const allowedTabs = new Set(allowedTabsForRole());
+  $("adminNotificationButton")?.classList.toggle("hidden",!["super_admin","catalog_admin","support_admin"].includes(state.role));
   document.querySelectorAll(".nav-item, .mobile-nav-item").forEach((button) => {
     button.classList.toggle("hidden", !allowedTabs.has(button.dataset.tab));
   });

@@ -1,6 +1,6 @@
 (() => {
     const oldAllowed = allowedTabsForRole;
-    allowedTabsForRole = (role = state.role) => ['super_admin', 'catalog_admin'].includes(role) ? [...oldAllowed(role), 'community'] : oldAllowed(role);
+    allowedTabsForRole = (role = state.role) => ['super_admin', 'catalog_admin','moderation_admin'].includes(role) ? [...oldAllowed(role), 'community'] : oldAllowed(role);
     const oldLoad = loadTabData;
     loadTabData = (tab, options = {}) => tab === 'community' ? loadReports() : oldLoad(tab, options);
     let generation = 0, loaded = [], loadedToken = null;
