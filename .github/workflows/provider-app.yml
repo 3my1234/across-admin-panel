@@ -16,6 +16,8 @@ jobs:
           node-version: '22'
       - name: Check provider regressions
         run: |
+          node scripts/test-provider-tier-benefits.cjs
+          node --check provider-tier-benefits.js
           node --check settings.js
           node --check admin-workspace.js
           node --check admin-analytics.js

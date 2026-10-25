@@ -509,3 +509,5 @@ dialog.chat-photo-viewer { width:100vw; height:100dvh; max-width:none!important;
 @media(max-width:760px){#plans > .plan-free{display:block}.plan-free > strong{margin:10px 0}.plan-free > p{margin-top:10px}}
 
 .password-field{display:flex;align-items:center;gap:8px}.password-field input{flex:1;min-width:0}.password-field button{flex:0 0 44px;width:44px;padding:8px}
+
+.plan-benefits{padding-left:1.25rem;line-height:1.6}.plan-benefits li{margin-bottom:.35rem}
