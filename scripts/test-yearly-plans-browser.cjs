@@ -12,7 +12,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
  try{
   await send('Page.enable');await send('Network.enable');await send('Network.setCacheDisabled',{cacheDisabled:true});
   const providerSource=fs.readFileSync(path.join(__dirname,'../provider.js'),'utf8');
-  const start=providerSource.indexOf('  let subscriptionFlight=false;');
+  const start=providerSource.indexOf('  async function cancelUnpaidSubscriptionCheckout()');
   const planSource=providerSource.slice(start,providerSource.indexOf('  function renderSubscriptionGates(',start));
   const renewalSource=providerSource.slice(providerSource.indexOf('  async function loadRenewalStatus()'),providerSource.indexOf('  async function loadPlans()'));
   for(const width of [390,853,1440])for(const theme of ['light','dark']){
@@ -21,9 +21,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
    await run(`new Promise((resolve,reject)=>{let n=0;const poll=()=>{if(document.readyState==='complete'&&document.querySelector('.provider-mobile-nav'))return resolve();if(++n>150)return reject(Error('Portal not ready'));setTimeout(poll,40)};poll()})`);
    await run(`(()=>{localStorage.setItem('atl.appearance.v1',${JSON.stringify(theme)});window.dispatchEvent(new StorageEvent('storage',{key:'atl.appearance.v1',newValue:${JSON.stringify(theme)}}));document.documentElement.dataset.theme=${JSON.stringify(theme)};document.body.classList.remove('auth-mode');document.getElementById('authPanel').classList.add('hidden');document.getElementById('portal').classList.remove('hidden');document.querySelectorAll('[data-view-panel]').forEach(p=>p.classList.add('hidden'));document.querySelector('[data-view-panel=subscription]').classList.remove('hidden');window.ProviderNativeBridge={embedded:()=>false};window.__checkout=[];window.__messages=[];
     const prices=[500,1000,2000,5000],limits=[3,10,25,60];const state={provider:{verification_status:'approved',subscription:{}},transferMonths:[1,3,6,12],plans:prices.map((price,i)=>({id:'plan-'+i,name:['Bronze','Silver','Diamond','Gold'][i],amount_ngn:price,listing_limit:limits[i],post_policy:{max_images:[3,5,8,12][i],max_videos:0,max_video_seconds:60,town_hall:true,town_hall_room_limit:[3,5,8,10][i],town_hall_search:true,direct_messaging:true,recommended:true,visibility:['basic','standard','enhanced','premium'][i],promotional_weight:[1,2,3,5][i]},card_available:i===0,period_prices:[1,3,6,12].map(months=>({duration_months:months,amount_ngn:price*months*(months===12?.9:1),savings_ngn:months===12?price*12*.1:0,discount_percent:months===12?10:0,card_available:months===12||(months===1&&i===0),banktransfer_available:true}))}))};
-    const factory=new Function('state','$','hasActiveSubscription','hasPendingSubscription','clearPendingSubscription','renderSubscriptionGates','escapeHtml','money','setMessage','api','savePendingSubscription',${JSON.stringify(renewalSource+planSource)}+';return {renderPlans,subscribe,manageRenewal};');
-    window.__active=false;window.__state=state;window.__renewals=[];window.confirm=()=>true;
-    window.__plans=factory(state,id=>document.getElementById(id),()=>__active,()=>false,()=>{},()=>{},v=>String(v),v=>'NGN '+Number(v).toLocaleString('en-NG'),v=>__messages.push(v),async(url,options)=>{if(url.endsWith('subscription-renewal')){if(options?.method==='POST'){__renewals.push(JSON.parse(options.body));if(window.__renewalFail)throw Error('Gateway cancellation unconfirmed');return {};}return window.__renewalResponse;}__checkout.push(JSON.parse(options.body));throw Error('Synthetic checkout stopped before navigation');},()=>{});__plans.renderPlans();
+    const factory=new Function('state','$','hasActiveSubscription','hasPendingSubscription','clearPendingSubscription','renderSubscriptionGates','escapeHtml','money','setMessage','api','savePendingSubscription','readPendingSubscription','renderOverview',${JSON.stringify(renewalSource+planSource)}+';return {renderPlans,subscribe,manageRenewal,cancelUnpaidSubscriptionCheckout};');
+    window.__active=false;window.__pending=false;window.__state=state;window.__renewals=[];window.confirm=()=>true;
+    window.__plans=factory(state,id=>document.getElementById(id),()=>__active,()=>__pending,()=>{__pending=false},()=>{},v=>String(v),v=>'NGN '+Number(v).toLocaleString('en-NG'),v=>__messages.push(v),async(url,options)=>{if(url.endsWith('subscription-checkout/cancel')){if(window.__cancelFail)throw Error('Cancellation not confirmed');return {payment_state:'cancelled'}}if(url.endsWith('/providers/me'))return {...state.provider,subscription:{status:'none'}};if(url.endsWith('subscription-renewal')){if(options?.method==='POST'){__renewals.push(JSON.parse(options.body));if(window.__renewalFail)throw Error('Gateway cancellation unconfirmed');return {};}return window.__renewalResponse;}__checkout.push(JSON.parse(options.body));throw Error('Synthetic checkout stopped before navigation');},()=>{},()=>({tx_ref:'PROVIDER-owned'}),()=>__plans.renderPlans());__plans.renderPlans();
    })()`);
    assert.equal(await run(`document.documentElement.dataset.theme`),theme);
    assert.equal(await run(`document.querySelectorAll('[data-plan-card]').length`),4);
@@ -60,6 +60,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
    await run(`__active=false;__state.renewal={can_manage:true,renewal_status:'stopped',next_plan_id:'plan-1',next_plan_name:'Growth',change_at:new Date(Date.now()-1000).toISOString()};__plans.renderPlans()`);
    assert.ok(await run(`document.querySelector('.renewal-controls').textContent.includes('ready for checkout')`),'expiry requires a new verified purchase');
    assert.equal(await run(`document.querySelector('[data-plan-card="plan-1"] [data-method=banktransfer]').disabled`),false);
+   await run(`__pending=true;__state.provider.subscription={status:'pending'};__state.renewal={can_manage:true};__plans.renderPlans()`);
+   assert.equal(await run(`document.querySelector('#cancelUnpaidCheckout').textContent`),'Cancel unpaid checkout');
+   await run(`window.__cancelFail=true;__plans.cancelUnpaidSubscriptionCheckout()`);
+   assert.equal(await run(`__pending`),true,'uncertain cancellation keeps payment blocked');
+   await run(`window.__cancelFail=false;__plans.cancelUnpaidSubscriptionCheckout()`);
+   assert.equal(await run(`__pending`),false,'confirmed cancellation releases plan selection');
+   assert.equal(await run(`document.querySelector('[data-plan-card="plan-1"] [data-method=banktransfer]').disabled`),false,'transfer available after cancelled checkout');
    await run(`__active=true;__state.renewal={can_manage:true,renewal_status:''};window.ProviderNativeBridge={embedded:()=>true};__plans.renderPlans()`);
    assert.equal(await run(`Boolean(document.querySelector('[data-stop-renewal]'))`),true,'native workspace can stop renewal');
    assert.equal(await run(`Boolean(document.querySelector('[data-schedule-renewal]'))`),false,'native workspace does not offer purchase direction');

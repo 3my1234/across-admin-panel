@@ -405,10 +405,7 @@
     openSubscription();
     const checkoutStatus = String(params.get("status") || "").toLowerCase();
     if (["cancelled", "canceled", "failed"].includes(checkoutStatus)) {
-      setMessage("Subscription checkout was not completed. No plan was activated; you can try again when ready.");
-      clearPendingSubscription();
-      clearSubscriptionReturn();
-      return;
+      setMessage("Checkout closed. Checking payment status; if you have not paid, use Cancel unpaid checkout to choose another payment method.");
     }
     const returnData = {
       tx_ref: params.get("tx_ref") || stored?.tx_ref || "",
@@ -462,6 +459,22 @@
       return false;
     }
     return true;
+  }
+  async function cancelUnpaidSubscriptionCheckout() {
+    if(subscriptionFlight || window.ProviderNativeBridge?.embedded())return;
+    if(!window.confirm('Only continue if you have not paid or sent a bank transfer. Close your pending unpaid checkout links and verify their status so you can choose another payment method? If you have paid, use Check payment status instead.'))return;
+    subscriptionFlight=true;
+    const actor=state.token;
+    try {
+      const result=await api('/providers/me/subscription-checkout/cancel',{method:'POST',body:JSON.stringify({})});
+      if(actor!==state.token)return;
+      if(['cancelled','settled'].includes(result.payment_state))clearPendingSubscription();
+      const provider=await api('/providers/me');
+      if(actor!==state.token)return;
+      state.provider=provider;renderOverview();
+      setMessage(result.payment_state==='cancelled'?'Unpaid checkout cancelled. Choose your plan and preferred payment method.':result.payment_state==='settled'?'Payment verified. Your paid access is active.':'Another payment is pending. Check payment status before paying again.',true);
+    }catch(error){if(actor===state.token)setMessage(error.message);}
+    finally{subscriptionFlight=false;}
   }
   let subscriptionFlight=false;
   async function subscribe(planId, paymentMethod = "card", durationMonths = 1) {
@@ -537,6 +550,7 @@
     if (active) clearPendingSubscription();
     $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free plan available.</strong> One listing total after document approval." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid access. Pay again when your paid period expires; it does not renew automatically." : state.renewal?.renewal_status === "stopped" ? "Automatic renewal has stopped; your paid access remains until expiry." : state.renewal?.renewal_status === "uncertain" ? "Renewal cancellation is not yet confirmed." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Free plan.</strong> You can create one listing total across all categories. Choose a paid plan for more listings and a coloured badge after payment confirmation." : "Your business must be approved before you can purchase a provider plan.";
     $("subscriptionGuidance").innerHTML += `<p>${(window.ProviderTierBenefits?.usage(state.postPolicy?.usage)||[]).map(escapeHtml).join('<br>')}</p><p>Products and services share one allowance. Unarchived drafts reserve a place. Each request has its own provider capacity.</p><h3>Compare all plans</h3><p>${escapeHtml(window.ProviderTierBenefits?.explanation||'')}</p>`;
+    if(pending && state.renewal?.can_manage){$("subscriptionGuidance").innerHTML+='<p>Closed checkout without paying? Cancel the unpaid checkout to select another payment method.</p><button id="cancelUnpaidCheckout" type="button" class="secondary">Cancel unpaid checkout</button>';$("cancelUnpaidCheckout").onclick=cancelUnpaidSubscriptionCheckout;}
     $("plans").innerHTML = `<article class="plan plan-free"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One post total with one image and no videos. No Town Hall access; limited visibility. Upgrade to Bronze for more posts and images. Documents must be approved before publication.</p></article>` + (state.plans.length ? state.plans.map(plan => {
       const periods=planPeriodPrices(plan), yearly=periods.find(p=>p.duration_months===12);
       return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><ul class="plan-benefits">${(window.ProviderTierBenefits?.lines(plan)||[]).map(line=>`<li>${escapeHtml(line)}</li>`).join('')}</ul>${active&&plan.id===state.renewal?.current_plan_id?'<strong>Current plan</strong>':''}<p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Use Renewal settings to choose your next tier; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
