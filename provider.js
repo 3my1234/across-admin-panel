@@ -462,11 +462,11 @@
   }
   async function cancelUnpaidSubscriptionCheckout() {
     if(subscriptionFlight || window.ProviderNativeBridge?.embedded())return;
-    if(!window.confirm('Only continue if you have not paid or sent a bank transfer. Close the old checkout and verify its status so you can choose another payment method? If you have paid, use Check payment status instead.'))return;
+    if(!window.confirm('Only continue if you have not paid or sent a bank transfer. Close your pending unpaid checkout links and verify their status so you can choose another payment method? If you have paid, use Check payment status instead.'))return;
     subscriptionFlight=true;
     const actor=state.token;
     try {
-      const result=await api('/providers/me/subscription-checkout/cancel',{method:'POST',body:JSON.stringify({tx_ref:readPendingSubscription()?.tx_ref || ''})});
+      const result=await api('/providers/me/subscription-checkout/cancel',{method:'POST',body:JSON.stringify({})});
       if(actor!==state.token)return;
       if(['cancelled','settled'].includes(result.payment_state))clearPendingSubscription();
       const provider=await api('/providers/me');

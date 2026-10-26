@@ -11,7 +11,7 @@ async function main(){
  fail=false;result='pending';await g.cancelUnpaidSubscriptionCheckout();assert.ok(pending,'other pending checkouts stay protected');
  result='cancelled';let release;held=new Promise(resolve=>release=resolve);const before=calls.length;
  const one=g.cancelUnpaidSubscriptionCheckout(),two=g.cancelUnpaidSubscriptionCheckout();release();await Promise.all([one,two]);held=null;
- assert.equal(calls.length,before+2,'one cancellation and one profile refresh only');assert.equal(pending,null);assert.ok(notices.at(-1).includes('preferred payment method'));
+ assert.equal(calls.length,before+2,'one cancellation and one profile refresh only');assert.deepEqual(JSON.parse(calls[before].options.body),{},'clear all owned legacy attempts, not just an obsolete local reference');assert.equal(pending,null);assert.ok(notices.at(-1).includes('preferred payment method'));
  pending={tx_ref:'PROVIDER-paid'};result='settled';await g.cancelUnpaidSubscriptionCheckout();assert.equal(pending,null);assert.ok(notices.at(-1).includes('Payment verified'));
  pending={tx_ref:'PROVIDER-owned'};const previous=state.provider;held=new Promise(resolve=>release=resolve);const stale=g.cancelUnpaidSubscriptionCheckout();state.token='other';release();await stale;held=null;assert.equal(state.provider,previous,'stale owner response cannot update next account');assert.ok(pending);
  // A cancelled/failed URL is untrusted. It must not unlock checkout locally.
