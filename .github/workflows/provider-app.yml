@@ -17,6 +17,7 @@ jobs:
       - name: Check provider regressions
         run: |
           node scripts/test-provider-tier-benefits.cjs
+          node scripts/test-provider-image-assets.cjs
           node --check provider-tier-benefits.js
           node --check settings.js
           node --check admin-workspace.js
@@ -92,6 +93,7 @@ jobs:
           docker run --rm provider-app:ci nginx -t
           docker run -d --name provider-app-ci -p 8080:8080 provider-app:ci
           sleep 2
+          PROVIDER_IMAGE_ASSET_ORIGIN=http://127.0.0.1:8080 node scripts/test-provider-image-assets.cjs
           curl --fail http://127.0.0.1:8080/provider.html
           curl --fail http://127.0.0.1:8080/provider.webmanifest
           curl --fail http://127.0.0.1:8080/provider-overview.css --output /tmp/provider-overview.css
