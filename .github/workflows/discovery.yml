@@ -1,0 +1,23 @@
+name: Provider promotion dashboard checks
+on:
+  pull_request:
+    branches: [main, fix/plain-chat-presentation]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  promotions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check provider.js
+      - run: node --check provider-sw.js
+      - run: node --check provider-promotions.js
+      - run: node test-provider-promotions.cjs
+      - run: node scripts/test-provider-access.cjs
+      - run: node scripts/test-provider-native.cjs
+      - run: node scripts/test-provider-pwa.cjs
+      - run: node scripts/test-provider-updates.cjs

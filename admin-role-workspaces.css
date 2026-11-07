@@ -1,0 +1,6 @@
+#adminAccessDialog { width:min(32rem,calc(100vw - 2rem)); max-height:90dvh; overflow:auto; color:var(--text,#e8f5ef); background:var(--panel,#102b22); border:1px solid #497b68; border-radius:16px; padding:24px; }
+#adminAccessDialog::backdrop { background:rgba(0,0,0,.6); }
+#adminAccessDialog label { display:grid; gap:8px; margin:12px 0; }
+#adminAccessDialog label:has(input[type=checkbox]) { display:flex; align-items:center; }
+#adminAccessError { color:#ef6464; }
+#adminAccessAuditRows p { overflow-wrap:anywhere; padding:12px 0; border-bottom:1px solid #497b6844; }

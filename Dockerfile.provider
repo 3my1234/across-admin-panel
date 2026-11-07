@@ -1,6 +1,7 @@
 FROM nginx:stable-alpine
 COPY provider-nginx.conf /etc/nginx/conf.d/default.conf
 COPY provider.html /usr/share/nginx/html/index.html
+COPY provider-tier-benefits.js provider-promotions.js /usr/share/nginx/html/
 COPY provider-background.png /usr/share/nginx/html/
 COPY provider-updates.js provider-install.js provider-identity.js provider-identity.css /usr/share/nginx/html/
 COPY town-hall.css community-portal.js community-portal.css community-town-hall.js /usr/share/nginx/html/

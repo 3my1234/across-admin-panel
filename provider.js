@@ -4,7 +4,7 @@
   const PAGE_SIZE = 25;
   const PENDING_SUBSCRIPTION_KEY = "atlantic.provider.pending_subscription";
   const ACTIVE_VIEW_KEY = "atlantic.provider.active_view";
-  const PROVIDER_VIEWS = new Set(["overview", "profile", "verification", "subscription", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
+  const PROVIDER_VIEWS = new Set(["overview", "profile", "verification", "subscription", "promotions", "products", "merchant-orders", "listings", "requests", "messages", "support"]);
   const $ = (id) => document.getElementById(id);
   function providerViewURL(view,params={}) {const url=new URL(location.href);for(const key of ['conversation','shared','hall','ticket','event','notification','community','friend'])url.searchParams.delete(key);url.searchParams.set('view',view);for(const [key,value]of Object.entries(params))url.searchParams.set(key,value);return url.pathname+url.search;}
   const chatCache=PortalChatHistory.create();
@@ -18,6 +18,7 @@
     activeView: PROVIDER_VIEWS.has(localStorage.getItem(ACTIVE_VIEW_KEY)) ? localStorage.getItem(ACTIVE_VIEW_KEY) : "overview"
   };
   window.MessageReceiptSession=window.AtlMessageReceipts?.create({request:api,getActor:()=>state.token,provider:true});
+  const promotions=window.ProviderPromotions?.create({element:$("providerPromotions"),request:api,getActor:()=>state.token});
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const community=window.CommunityPortal?.create({element:$("communityRoot"),request:api,getActor:()=>state.token,offline:actor=>fetch(API+'/providers/me/driver-availability',{method:'DELETE',headers:{Authorization:'Bearer '+actor},keepalive:true})});
   const hallShortcut=document.createElement('button');
@@ -173,6 +174,7 @@
     window.ProviderNativeBridge?.signedOut();
     if(state.token)void window.PrivateChatStore?.clear(state.token);
     community?.reset();
+    promotions?.reset();
     window.ProviderPWA?.disconnect(state.token);
     resetProviderSupport();
     state.booting = false;
@@ -354,13 +356,14 @@
   }
   async function loadPostPolicy(){state.postPolicy=await api('/providers/me/post-policy');return state.postPolicy;}
   function renderRetainedVideos(kind){const target=$(kind+'ExistingVideos');if(!target)return;const key=kind+'RetainedVideos';target.innerHTML=(state[key]||[]).map((url,index)=>`<div><video src="${escapeHtml(url)}" controls preload="metadata" playsinline style="max-width:100%;width:240px"></video><button type="button" data-remove-video="${index}">Remove video ${index+1}</button></div>`).join('');target.querySelectorAll('[data-remove-video]').forEach(button=>button.onclick=()=>{state[key].splice(Number(button.dataset.removeVideo),1);renderRetainedVideos(kind);});}
-  async function postVideos(kind){const files=[...$(kind+'Videos').files],retained=state[kind+'RetainedVideos']||[],cap=state.postPolicy?.max_videos||0;if(!files.length)return [...retained];if(state.postPolicy?.video_uploads_paused)throw new Error('New video uploads are temporarily paused. Your published videos remain available.');if(files.length+retained.length>cap)throw new Error(cap?'Your plan allows '+cap+' videos per post. Remove a video or upgrade.':'Upgrade to Gold to upload videos.');const result=[...retained];for(const file of files){if(file.type!=='video/mp4'||file.size>50*1024*1024)throw new Error('Choose an MP4 within your current plan duration and 50 MB limit.');const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose:'post_video',file_size:file.size})});await PortalStorageUpload.upload(file,signed);setMessage('Checking video duration. Please keep this screen open.',true,kind==='product'?'productUploadProgress':'uploadProgress');let verified=await api('/providers/me/videos/complete',{method:'POST',body:JSON.stringify({key:signed.key})});for(let attempt=0;!verified.url&&attempt<60;attempt++){if(verified.status==='failed')throw new Error('This video could not be processed. Please upload it again.');await new Promise(resolve=>setTimeout(resolve,Math.min(2000+attempt*500,6000)));verified=await api('/providers/me/videos/status?key='+encodeURIComponent(signed.key));}if(!verified.url)throw new Error('Your video is still processing. Check its status before uploading again.');result.push(verified.url);}return result;}
+  async function postVideos(kind){const files=[...$(kind+'Videos').files],retained=state[kind+'RetainedVideos']||[],cap=state.postPolicy?.max_videos||0;if(!files.length)return [...retained];if(state.postPolicy?.video_uploads_paused)throw new Error('New video uploads are temporarily paused. Your published videos remain available.');if(files.length+retained.length>cap)throw new Error(cap?'Your plan allows '+cap+' videos per post. Remove a video or upgrade.':'Upgrade to Gold to upload videos.');const result=[...retained];for(const file of files){if(file.type!=='video/mp4'||file.size>50*1024*1024)throw new Error('Choose an MP4 within your current plan duration and 50 MB limit.');const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose:'post_video',file_size:file.size,post_id:kind==='product'?state.editingProductID:state.editingListingID,post_kind:kind==='product'?'products':'listings'})});await PortalStorageUpload.upload(file,signed);setMessage('Checking video duration. Please keep this screen open.',true,kind==='product'?'productUploadProgress':'uploadProgress');let verified=await api('/providers/me/videos/complete',{method:'POST',body:JSON.stringify({key:signed.key})});for(let attempt=0;!verified.url&&attempt<60;attempt++){if(verified.status==='failed')throw new Error('This video could not be processed. Please upload it again.');await new Promise(resolve=>setTimeout(resolve,Math.min(2000+attempt*500,6000)));verified=await api('/providers/me/videos/status?key='+encodeURIComponent(signed.key));}if(!verified.url)throw new Error('Your video is still processing. Check its status before uploading again.');result.push(verified.url);}return result;}
   async function refreshVideoJobs(kind){
     const result=await api('/providers/me/videos'),target=$(kind+'VideoJobs');target.replaceChildren();
     for(const job of result.items||[]){const row=document.createElement('div'),label=document.createElement('span');label.textContent=job.status==='complete'?'Video ready':job.status==='failed'?'Video could not be prepared':'Preparing video';row.append(label);
       if(job.status==='complete'&&typeof job.url==='string'&&job.url.startsWith('https://')){const button=document.createElement('button');button.type='button';button.textContent='Use video';const retained=state[kind+'RetainedVideos']||[];button.disabled=retained.includes(job.url)||retained.length>=(state.postPolicy?.max_videos||0)||state.postPolicy?.video_uploads_paused===true;button.onclick=()=>{state[kind+'RetainedVideos']=[...retained,job.url];renderRetainedVideos(kind);void refreshVideoJobs(kind);};row.append(button);}target.append(row);
     }
   }
+
   async function loadPlans() { const data = await api("/marketplace/subscription-plans"); state.plans = data.items || []; state.transferMonths = (data.transfer_months || [1]).filter(months=>[1,3,6,12].includes(months)); if(state.provider){await loadRenewalStatus();await loadPostPolicy();}renderPlans(); }
   async function loadBuyerMarkets() {
     try {
@@ -409,10 +412,7 @@
     openSubscription();
     const checkoutStatus = String(params.get("status") || "").toLowerCase();
     if (["cancelled", "canceled", "failed"].includes(checkoutStatus)) {
-      setMessage("Subscription checkout was not completed. No plan was activated; you can try again when ready.");
-      clearPendingSubscription();
-      clearSubscriptionReturn();
-      return;
+      setMessage("Checkout closed. Checking payment status; if you have not paid, use Cancel unpaid checkout to choose another payment method.");
     }
     const returnData = {
       tx_ref: params.get("tx_ref") || stored?.tx_ref || "",
@@ -466,6 +466,22 @@
       return false;
     }
     return true;
+  }
+  async function cancelUnpaidSubscriptionCheckout() {
+    if(subscriptionFlight || window.ProviderNativeBridge?.embedded())return;
+    if(!window.confirm('Only continue if you have not paid or sent a bank transfer. Close your pending unpaid checkout links and verify their status so you can choose another payment method? If you have paid, use Check payment status instead.'))return;
+    subscriptionFlight=true;
+    const actor=state.token;
+    try {
+      const result=await api('/providers/me/subscription-checkout/cancel',{method:'POST',body:JSON.stringify({})});
+      if(actor!==state.token)return;
+      if(['cancelled','settled'].includes(result.payment_state))clearPendingSubscription();
+      const provider=await api('/providers/me');
+      if(actor!==state.token)return;
+      state.provider=provider;renderOverview();
+      setMessage(result.payment_state==='cancelled'?'Unpaid checkout cancelled. Choose your plan and preferred payment method.':result.payment_state==='settled'?'Payment verified. Your paid access is active.':'Another payment is pending. Check payment status before paying again.',true);
+    }catch(error){if(actor===state.token)setMessage(error.message);}
+    finally{subscriptionFlight=false;}
   }
   let subscriptionFlight=false;
   async function subscribe(planId, paymentMethod = "card", durationMonths = 1) {
@@ -540,9 +556,11 @@
     const pending = !active && hasPendingSubscription();
     if (active) clearPendingSubscription();
     $("subscriptionGuidance").innerHTML = freeLaunch ? "<strong>Free plan available.</strong> One listing total after document approval." : active ? `<strong>Subscription active.</strong> ${state.provider.subscription.billing_mode === "one_time" ? "Prepaid access. Pay again when your paid period expires; it does not renew automatically." : state.renewal?.renewal_status === "stopped" ? "Automatic renewal has stopped; your paid access remains until expiry." : state.renewal?.renewal_status === "uncertain" ? "Renewal cancellation is not yet confirmed." : "Card subscription renews automatically."} You can create private drafts and submit them for review.${state.provider.subscription.current_period_end ? ` Current period ends ${new Date(state.provider.subscription.current_period_end).toLocaleDateString()}.` : ""}` : pending ? "<strong>Payment confirmation pending.</strong> Do not pay again. Use Check payment status while Atlantic Express securely reconciles this payment with Flutterwave." : approved ? "<strong>Free plan.</strong> You can create one listing total across all categories. Choose a paid plan for more listings and a coloured badge after payment confirmation." : "Your business must be approved before you can purchase a provider plan.";
+    $("subscriptionGuidance").innerHTML += `<p>${(window.ProviderTierBenefits?.usage(state.postPolicy?.usage)||[]).map(escapeHtml).join('<br>')}</p><p>Products and services share one allowance. Unarchived drafts reserve a place. Each request has its own provider capacity.</p><h3>Compare all plans</h3><p>${escapeHtml(window.ProviderTierBenefits?.explanation||'')}</p>`;
+    if(pending && state.renewal?.can_manage){$("subscriptionGuidance").innerHTML+='<p>Closed checkout without paying? Cancel the unpaid checkout to select another payment method.</p><button id="cancelUnpaidCheckout" type="button" class="secondary">Cancel unpaid checkout</button>';$("cancelUnpaidCheckout").onclick=cancelUnpaidSubscriptionCheckout;}
     $("plans").innerHTML = `<article class="plan plan-free"><span class="eyebrow">Permanent free tier</span><h3>Free</h3><strong>NGN 0</strong><p>One post total with one image and no videos. No Town Hall access; limited visibility. Upgrade to Bronze for more posts and images. Documents must be approved before publication.</p></article>` + (state.plans.length ? state.plans.map(plan => {
       const periods=planPeriodPrices(plan), yearly=periods.find(p=>p.duration_months===12);
-      return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><p class="plan-benefits">${Number(plan.listing_limit)} posts total across products and services</p><p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Use Renewal settings to choose your next tier; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
+      return `<article class="plan" data-plan-card="${escapeHtml(plan.id)}"><span class="eyebrow">${escapeHtml(plan.badge_label || 'Paid plan')}</span><h3>${escapeHtml(plan.name)}</h3><strong data-plan-price>${money(plan.amount_ngn)}/month</strong><ul class="plan-benefits">${(window.ProviderTierBenefits?.lines(plan)||[]).map(line=>`<li>${escapeHtml(line)}</li>`).join('')}</ul>${active&&plan.id===state.renewal?.current_plan_id?'<strong>Current plan</strong>':''}<p>${escapeHtml(plan.description || '')}</p>${yearly&&yearly.discount_percent>0?`<p class="yearly-plan-saving">Yearly: ${money(yearly.amount_ngn)} total - Save ${yearly.discount_percent}% (${money(yearly.savings_ngn)})</p>`:''}<label>Billing period<select data-transfer-months="${escapeHtml(plan.id)}" ${pending||active?'disabled':''}>${periods.map(p=>`<option value="${p.duration_months}">${p.duration_months===12?'Yearly (12 months)':p.duration_months+' month'+(p.duration_months===1?'':'s')} - ${money(p.amount_ngn)} total${p.discount_percent>0?' - save '+p.discount_percent+'%':''}</option>`).join('')}</select></label><p data-plan-summary class="muted"></p><button data-subscribe="${escapeHtml(plan.id)}" data-method="card">Pay by card</button><button data-subscribe="${escapeHtml(plan.id)}" data-method="banktransfer">Pay by transfer</button><p>${active?'Your paid plan is active. Use Renewal settings to choose your next tier; do not pay for a second subscription. ':''}Monthly card payments renew automatically. Yearly payments and all bank transfers are prepaid and do not renew automatically. Flutterwave shows any applicable fee before payment confirmation. Access starts after payment is verified.</p></article>`;
     }).join('') : '<p class="notice">No active plan is available.</p>');
     document.querySelectorAll("[data-subscribe]").forEach(button => button.onclick = () => subscribe(button.dataset.subscribe,button.dataset.method,Number(document.querySelector(`[data-transfer-months="${button.dataset.subscribe}"]`)?.value || 1)));
     document.querySelectorAll('[data-transfer-months]').forEach(select => {
@@ -577,7 +595,7 @@
     const urls = [];
     for (let index = 0; index < files.length; index += 1) {
       const file = await ListingImages.prepare(files[index]); setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
-      const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing" }) });
+      const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing", post_id: progressTarget === "productUploadProgress" ? state.editingProductID : state.editingListingID, post_kind: progressTarget === "productUploadProgress" ? "products" : "listings" }) });
       urls.push(await PortalStorageUpload.upload(file, signed));
     }
     return urls;
@@ -740,7 +758,7 @@
         $("listingLocationPreview").scrollIntoView({ behavior: "smooth", block: "center" });
         throw new Error("Confirm that the map pin is at the actual service or property location before saving.");
       }
-      await loadPostPolicy();if(files.length+retainedMedia.length>state.postPolicy.max_images)throw new Error('Your plan allows '+state.postPolicy.max_images+' image(s) per post. Remove images or upgrade.');const video_urls=await postVideos('listing');
+      await loadPostPolicy();if(files.length && files.length+retainedMedia.length>state.postPolicy.max_images)throw new Error('Your plan allows '+state.postPolicy.max_images+' image(s) per post. Remove images or upgrade.');const video_urls=await postVideos('listing');
       const uploadedMedia = files.length ? await uploadImages(files) : [];
       const media_urls = [...retainedMedia, ...uploadedMedia];
       const attributes = { ...(existing?.attributes || {}), video_urls,price_mode: values.price_mode, price_notes: String(values.price_notes || "").trim(), location_source: state.listingLocationSource || "manual", location_accuracy_m: state.listingLocationAccuracy, location_captured_at: new Date().toISOString() };
@@ -763,7 +781,7 @@
     try {
       const existing = state.products.find(item => item.id === state.editingProductID);
       if (!files.length && !existing?.image_urls?.length) throw new Error("Add at least one clear product image.");
-      await loadPostPolicy();if((files.length||existing?.image_urls?.length||0)>state.postPolicy.max_images)throw new Error('Your plan allows '+state.postPolicy.max_images+' image(s) per post. Remove images or upgrade.');const video_urls=await postVideos('product');
+      await loadPostPolicy();if(files.length>state.postPolicy.max_images)throw new Error('Your plan allows '+state.postPolicy.max_images+' image(s) per post. Remove images or upgrade.');const video_urls=await postVideos('product');
       const image_urls = files.length ? await uploadImages(files, "productUploadProgress") : existing.image_urls;
       const payload = { video_urls,payment_mode:"contact", title: values.title, sku: values.sku, description: values.description, category_path: [values.category], image_urls, local_selling_price: Number(values.local_selling_price), currency_code: values.currency_code, compare_at_price: values.compare_at_price ? Number(values.compare_at_price) : null, inventory_count: Number(values.inventory_count), is_flash_sale: form.elements.is_flash_sale.checked, flash_sale_price: values.flash_sale_price ? Number(values.flash_sale_price) : null, fulfillment_mode: values.fulfillment_mode, inventory_country_code: values.inventory_country_code, inventory_city: values.inventory_city, inventory_location: values.inventory_location, inventory_latitude: values.inventory_latitude === "" ? null : Number(values.inventory_latitude), inventory_longitude: values.inventory_longitude === "" ? null : Number(values.inventory_longitude), stock_state: values.stock_state, handling_time_hours: Number(values.handling_time_hours), delivery_min_days: Number(values.delivery_min_days), delivery_max_days: Number(values.delivery_max_days), delivery_methods: String(values.delivery_methods).split(",").map(value => value.trim()).filter(Boolean), delivery_areas: values.delivery_areas, return_policy: values.return_policy };
       const path = state.editingProductID ? `/providers/me/products/${state.editingProductID}` : "/providers/me/products";
@@ -1382,7 +1400,7 @@
       else if (state.activeView === "requests") await loadRequests({reset:true});
       else if (state.activeView === "merchant-orders") await Promise.all([loadMerchantOrders({reset:true}),loadManifests({reset:true})]);
       else if (state.activeView === "messages") { if(community)await community.refresh();else await Promise.all([loadConversations(), $("conversationDialog").open && state.currentConversation ? openConversation(state.currentConversation.id) : Promise.resolve()]); }
-      else if (state.activeView === "subscription") {state.provider=await api("/providers/me");if(!state.plans.length)await loadPlans();else await loadRenewalStatus();renderOverview();}
+      else if (state.activeView === "subscription") {state.provider=await api("/providers/me");if(!state.plans.length)await loadPlans();else {await loadRenewalStatus();await loadPostPolicy();}renderOverview();}
       else if (state.activeView === "overview") {state.provider=await api("/providers/me"); renderOverview();}
       else if (state.activeView === "verification") await loadVerificationDocuments();
       else if (state.activeView === "profile") {state.provider=await api("/providers/me");renderOverview();}
@@ -1403,6 +1421,7 @@
     if(view==='requests')view='messages';
     const nextView = PROVIDER_VIEWS.has(view) ? view : "overview";
     state.activeView = nextView;
+    if(nextView==='promotions' && state.provider)void promotions?.activate();
     nextVisiblePageRefresh = 0;
     void refreshHallShortcut();
     if (persist) {localStorage.setItem(ACTIVE_VIEW_KEY,nextView);if(history.state?.providerView!==nextView)history.pushState({providerView:nextView},"",providerViewURL(nextView));}
