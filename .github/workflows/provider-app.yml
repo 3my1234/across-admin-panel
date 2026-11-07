@@ -16,6 +16,7 @@ jobs:
           node-version: '22'
       - name: Check provider regressions
         run: |
+          node scripts/test-launch-video-policy.cjs
           node scripts/test-provider-tier-benefits.cjs
           node scripts/test-provider-image-assets.cjs
           node --check provider-tier-benefits.js

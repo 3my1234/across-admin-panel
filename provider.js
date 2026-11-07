@@ -359,7 +359,7 @@
   async function postVideos(kind){const files=[...$(kind+'Videos').files],retained=state[kind+'RetainedVideos']||[],cap=state.postPolicy?.max_videos||0;if(!files.length)return [...retained];if(state.postPolicy?.video_uploads_paused)throw new Error('New video uploads are temporarily paused. Your published videos remain available.');if(files.length+retained.length>cap)throw new Error(cap?'Your plan allows '+cap+' videos per post. Remove a video or upgrade.':'Upgrade to Gold to upload videos.');const result=[...retained];for(const file of files){if(file.type!=='video/mp4'||file.size>50*1024*1024)throw new Error('Choose an MP4 within your current plan duration and 50 MB limit.');const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose:'post_video',file_size:file.size,post_id:kind==='product'?state.editingProductID:state.editingListingID,post_kind:kind==='product'?'products':'listings'})});await PortalStorageUpload.upload(file,signed);setMessage('Checking video duration. Please keep this screen open.',true,kind==='product'?'productUploadProgress':'uploadProgress');let verified=await api('/providers/me/videos/complete',{method:'POST',body:JSON.stringify({key:signed.key})});for(let attempt=0;!verified.url&&attempt<60;attempt++){if(verified.status==='failed')throw new Error('This video could not be processed. Please upload it again.');await new Promise(resolve=>setTimeout(resolve,Math.min(2000+attempt*500,6000)));verified=await api('/providers/me/videos/status?key='+encodeURIComponent(signed.key));}if(!verified.url)throw new Error('Your video is still processing. Check its status before uploading again.');result.push(verified.url);}return result;}
   async function refreshVideoJobs(kind){
     const result=await api('/providers/me/videos'),target=$(kind+'VideoJobs');target.replaceChildren();
-    for(const job of result.items||[]){const row=document.createElement('div'),label=document.createElement('span');label.textContent=job.status==='complete'?'Video ready':job.status==='failed'?'Video could not be prepared':'Preparing video';row.append(label);
+    for(const job of result.items||[]){const row=document.createElement('div'),label=document.createElement('span');label.textContent=job.status==='complete'?'Video ready':job.status==='failed'?'Video could not be prepared':'Preparing video';row.append(label);if(typeof job.thumbnail_url==='string'&&job.thumbnail_url.startsWith('https://')){const preview=document.createElement('img');preview.src=job.thumbnail_url;preview.alt='Prepared video preview';preview.width=96;preview.loading='lazy';row.append(preview);}
       if(job.status==='complete'&&typeof job.url==='string'&&job.url.startsWith('https://')){const button=document.createElement('button');button.type='button';button.textContent='Use video';const retained=state[kind+'RetainedVideos']||[];button.disabled=retained.includes(job.url)||retained.length>=(state.postPolicy?.max_videos||0)||state.postPolicy?.video_uploads_paused===true;button.onclick=()=>{state[kind+'RetainedVideos']=[...retained,job.url];renderRetainedVideos(kind);void refreshVideoJobs(kind);};row.append(button);}target.append(row);
     }
   }
@@ -590,13 +590,19 @@
     document.querySelectorAll("[data-open-subscription]").forEach((button) => button.onclick = openSubscription);
   }
 
+  async function uploadProviderImage(file,signed){
+    const actor=state.token;const original=await PortalStorageUpload.upload(file,signed);if(actor!==state.token)throw new Error('Account changed. Reopen your account before continuing.');if(!signed.processing_required)return original;
+    let result=await api('/providers/me/images/complete',{method:'POST',body:JSON.stringify({key:signed.key})});
+    for(let attempt=0;!result.url&&attempt<60;attempt++){await new Promise(resolve=>setTimeout(resolve,Math.min(2000+attempt*500,6000)));if(actor!==state.token)throw new Error('Account changed. Image processing continues for its owner.');result=await api('/providers/me/images/status?key='+encodeURIComponent(signed.key));}
+    if(!result.url)throw new Error('Your image is still processing. Check its status before uploading again.');return result.url;
+  }
   async function uploadImages(files, progressTarget = "uploadProgress") {
     if (files.length > 20) throw new Error("A listing can have at most 20 images.");
     const urls = [];
     for (let index = 0; index < files.length; index += 1) {
       const file = await ListingImages.prepare(files[index]); setMessage(`Uploading image ${index + 1} of ${files.length}...`, false, progressTarget);
-      const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type, purpose: "listing", post_id: progressTarget === "productUploadProgress" ? state.editingProductID : state.editingListingID, post_kind: progressTarget === "productUploadProgress" ? "products" : "listings" }) });
-      urls.push(await PortalStorageUpload.upload(file, signed));
+      const signed = await api("/providers/me/uploads/presign", { method: "POST", body: JSON.stringify({ filename: file.name, mime_type: file.type,file_size:file.size, purpose: "listing", post_id: progressTarget === "productUploadProgress" ? state.editingProductID : state.editingListingID, post_kind: progressTarget === "productUploadProgress" ? "products" : "listings" }) });
+      urls.push(await uploadProviderImage(file, signed));
     }
     return urls;
   }
@@ -1243,8 +1249,8 @@
       const source=form.elements[name].files[0];if(!source)continue;
       if(!['image/jpeg','image/png','image/webp'].includes(source.type)||source.size>5*1024*1024)throw new Error('Choose a JPG, PNG or WebP image no larger than 5 MB.');
       const file=await ListingImages.prepare(source,{maxDimension:purpose==='logo'?512:1600});if(actor!==state.token)return;
-      const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose})});
-      payload[field]=await PortalStorageUpload.upload(file,signed);if(actor!==state.token)return;
+      const signed=await api('/providers/me/uploads/presign',{method:'POST',body:JSON.stringify({filename:file.name,mime_type:file.type,purpose,file_size:file.size})});
+      payload[field]=await uploadProviderImage(file,signed);if(actor!==state.token)return;
     }
     if(!Object.keys(payload).length)throw new Error('Choose a photo or banner first.');
     await api('/providers/me/media',{method:'PUT',body:JSON.stringify(payload)});if(actor!==state.token)return;
