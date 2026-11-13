@@ -167,14 +167,19 @@
     const row = $(`provider-docs-${providerID}`); const cell = row.querySelector("td"); row.classList.remove("hidden"); cell.textContent = "Loading documents...";
     try {
       const data = await request(`/api/v1/admin/providers/${providerID}/verification-documents`);
-      cell.innerHTML = (data.items || []).map((doc) => `<article class="mobile-card"><strong>${escapeHtml(doc.document_type.replaceAll("_", " "))}</strong> - ${escapeHtml(doc.status)} <a href="${escapeHtml(doc.document_url)}" target="_blank" rel="noopener">Open</a><div class="table-actions"><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="approved" class="secondary-button">Approve document</button><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="rejected" class="danger-button">Reject document</button></div>${doc.review_notes ? `<p>${escapeHtml(doc.review_notes)}</p>` : ""}</article>`).join("") || "No documents uploaded.";
+      cell.innerHTML = `<p>Account owner / driver name: ${escapeHtml(data.driver_name || "Unavailable — refresh before approving driver evidence")}. Driver/rider face and licence must belong to this person. Only approved face, vehicle and plate photos are shown to customers; other documents stay private.</p>` + ((data.items || []).map((doc) => `<article class="mobile-card"><strong>${escapeHtml(doc.document_type.replaceAll("_", " "))}</strong> - ${escapeHtml(doc.status)} <a href="${escapeHtml(doc.document_url)}" target="_blank" rel="noopener noreferrer">Open</a>
+        <p>Expiry entered by applicant: ${escapeHtml(doc.expires_on || "Not supplied")}. Check against the original document; reject mismatched or expired details.</p>
+        ${["drivers_license","driver_face","driver_vehicle","driver_plate","vehicle_registration","vehicle_insurance","roadworthiness","driver_lasrra","driver_lasdri"].includes(doc.document_type) ? `<label><input type="checkbox" data-driver-evidence="${escapeHtml(doc.id)}"> I reviewed the original evidence: the face matches the licence, the vehicle/plate match the registration, and any expiry date matches the document. Check applicable transport permits.</label>` : ""}
+        <div class="table-actions"><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="approved" class="secondary-button">Approve document</button><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="rejected" class="danger-button">Reject document</button></div>${doc.review_notes ? `<p>${escapeHtml(doc.review_notes)}</p>` : ""}</article>`).join("") || "No documents uploaded.");
       cell.querySelectorAll("[data-review-doc]").forEach((button) => button.onclick = () => reviewDocument(button.dataset.provider, button.dataset.reviewDoc, button.dataset.status));
     } catch (error) { cell.textContent = error.message; }
   }
 
   async function reviewDocument(providerID, documentID, status) {
+    const evidence = document.querySelector(`[data-driver-evidence="${documentID}"]`);
+    if (status === "approved" && evidence && !evidence.checked) { providerFeedback("providerStatus", "Review the driver evidence and confirm the matching expiry date before approval.", "error"); return; }
     const notes = prompt(`${status} document. Add a note (optional):`, ""); if (notes === null) return;
-    try { await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`, { method: "PATCH", body: { status, notes } }); await loadProviderDocuments(providerID); }
+    try { await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`, { method: "PATCH", body: { status, notes, evidence_confirmed: !!evidence?.checked } }); await loadProviderDocuments(providerID); }
     catch (error) { providerFeedback("providerStatus", error.message,"error"); }
   }
   async function moderateProvider(id, status) {

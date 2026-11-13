@@ -54,6 +54,8 @@ jobs:
           node scripts/test-provider-install.cjs
           node scripts/test-listing-review.cjs
           node scripts/test-moderation-feedback.cjs
+          node scripts/test-driver-evidence-review.cjs
+          node --check provider-admin.js
           node scripts/test-subscription-periods.cjs
           node scripts/test-subscription-recovery.cjs
           node scripts/test-provider-pwa.cjs
