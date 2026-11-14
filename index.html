@@ -43,7 +43,7 @@
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261025-roles-20261017-operations" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
-    <script src="./provider-admin.js?v=review-d1bb13e14922" defer></script>
+    <script src="./provider-admin.js?v=review-ede28cae8a4e" defer></script>
     <script src="./community-admin.js?v=20261025-roles-20261017-reports" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
@@ -51,7 +51,7 @@
 <script src="provider-identity.js?v=1" defer></script>
 <link rel="stylesheet" href="./settings.css?v=20261015" />
 <script src="./settings.js?v=20261025-roles" defer></script>
-<link rel="stylesheet" href="./admin-providers.css?v=20261016"/>
+<link rel="stylesheet" href="./admin-providers.css?v=review-d1b085247c2c"/>
 <link rel="stylesheet" href="./admin-operations.css?v=20261017-analytics"/>
 <script src="./admin-operations.js?v=20261017-workspace" defer></script>
 <link rel="stylesheet" href="./admin-analytics.css?v=20261017" />
@@ -350,10 +350,20 @@
                 <div><h2>Providers</h2><p class="muted">Verify provider documents before any storefront listing can be published.</p></div>
                 <button type="button" id="reloadProvidersButton" class="secondary-button">Reload providers</button>
               </div>
-              <div class="filter-grid"><label>Search providers <input id="providerSearch" type="search" placeholder="Business, email, city, or status" autocomplete="off" /></label><label>Verification <select id="providerVerificationStatus"><option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
-              <p class="error" id="providerStatus"></p>
-              <div class="table-wrap"><table id="providersTable"></table></div>
-              <button type="button" id="loadMoreProvidersButton" class="secondary-button hidden">Load more providers</button>
+              <div class="provider-review-layout">
+                <aside class="provider-queue-panel" aria-label="Provider review queue">
+                  <label>Search providers <input id="providerSearch" type="search" placeholder="Business, name, or location" autocomplete="off" /></label>
+                  <label>Status <select id="providerVerificationStatus"><option value="">All statuses</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
+                  <h3 id="providerQueueTitle">Provider queue</h3>
+                  <p id="providerStatus" role="status"></p>
+                  <table id="providersTable" aria-labelledby="providerQueueTitle"></table>
+                  <button type="button" id="loadMoreProvidersButton" class="secondary-button hidden">Load more providers</button>
+                </aside>
+                <section id="providerReviewPanel" class="provider-review-panel" aria-label="Document review">
+                  <div id="providerReviewEmpty" class="provider-review-empty"><h3>Document review</h3><p>Select a provider to review their documents.</p></div>
+                  <table class="provider-review-host"><tbody id="providerReviewBody"></tbody></table>
+                </section>
+              </div>
             </section>
           </section>
           <section class="tab-panel hidden" data-panel="service-moderation">
