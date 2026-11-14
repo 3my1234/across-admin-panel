@@ -37,6 +37,7 @@
   let billingLoadedAt = 0;
   let billingLoadPromise = null;
   let productLoadRevision = 0, listingLoadRevision = 0;
+  const providerReviewOwners = new WeakMap();
 
   function loadProviderBilling() {
     if (billingLoadPromise) return billingLoadPromise;
@@ -47,6 +48,8 @@
     });
     return billingLoadPromise;
   }
+
+  window.AtlProviderDocumentReview={isOpen:()=>state.activeTab === "providers" && Boolean(document.querySelector("#providersTable tr[data-provider-review-open]"))};
 
   window.AtlProviderBilling={load:()=>Promise.all([loadProviderBilling(),loadProviderAccess()])};
 
@@ -152,21 +155,44 @@
   }
 
   function renderProviders() {
-    $("providersTable").innerHTML = `<thead><tr><th>Business</th><th>Contact</th><th>Location</th><th>Verification</th><th>Action</th></tr></thead><tbody>${state.providers.map((item) => `<tr>
+    const table = $("providersTable");
+    const openReviews = Array.from(table.querySelectorAll("tr[data-provider-review-open]")).filter(row => providerReviewOwners.get(row) === state.token);
+    table.innerHTML = `<thead><tr><th>Business</th><th>Contact</th><th>Location</th><th>Verification</th><th>Action</th></tr></thead><tbody>${state.providers.map((item) => `<tr>
       <td>${window.ProviderIdentity?.render(item.provider_identity) || `<strong>${escapeHtml(item.business_name)}</strong>`}<br><span class="muted">${escapeHtml((item.provider_type || "mixed").replaceAll("_", " "))}${item.provider_type_other ? ` — ${escapeHtml(item.provider_type_other)}` : ""}</span><br><span class="muted">${format(item.created_at)}</span></td>
       <td>${escapeHtml(item.contact_email)}<br>${escapeHtml(item.contact_phone)}</td><td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td>
       <td><span class="status-pill ${item.verification_status === "approved" ? "active" : item.verification_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.verification_status)}</span></td>
       <td class="table-actions"><button data-provider-docs="${item.id}" class="secondary-button">Review documents</button><button data-provider-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-provider-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-provider-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
-    </tr><tr id="provider-docs-${item.id}" class="hidden"><td colspan="5"></td></tr>`).join("") || `<tr><td colspan="5">No matching providers.</td></tr>`}</tbody>`;
+    </tr><tr id="provider-docs-${item.id}" class="hidden"><td colspan="5"><button type="button" data-close-provider-review="${item.id}" class="secondary-button">Close document review</button><div data-provider-documents></div></td></tr>`).join("") || `<tr><td colspan="5">No matching providers.</td></tr>`}</tbody>`;
+    // Retain the actual nodes: checked evidence and the in-progress review must
+    // survive manual reloads and responses that started before the panel opened.
+    for (const row of openReviews) {
+      const placeholder = $(row.id);
+      if (placeholder && table.contains(placeholder)) placeholder.replaceWith(row);
+    }
+    table.querySelectorAll("[data-close-provider-review]").forEach(button => button.onclick = () => {
+      const row = $(`provider-docs-${button.dataset.closeProviderReview}`);
+      if (!row) return;
+      delete row.dataset.providerReviewOpen;
+      row.classList.add("hidden");
+      row.querySelector("[data-provider-documents]").textContent = "";
+    });
     $("loadMoreProvidersButton")?.classList.toggle("hidden", !state.providerHasMore);
     $("providersTable").querySelectorAll("[data-provider-status]").forEach((button) => button.addEventListener("click", () => moderateProvider(button.dataset.id, button.dataset.providerStatus)));
     $("providersTable").querySelectorAll("[data-provider-docs]").forEach((button) => button.addEventListener("click", () => loadProviderDocuments(button.dataset.providerDocs)));
   }
 
   async function loadProviderDocuments(providerID) {
-    const row = $(`provider-docs-${providerID}`); const cell = row.querySelector("td"); row.classList.remove("hidden"); cell.textContent = "Loading documents...";
+    const row = $(`provider-docs-${providerID}`);
+    if (!row) return;
+    const cell = row.querySelector("[data-provider-documents]"), actor = state.token;
+    const revision = String(Number(row.dataset.documentRevision || 0) + 1);
+    providerReviewOwners.set(row, actor);
+    row.dataset.documentRevision = revision;
+    row.dataset.providerReviewOpen = providerID;
+    row.classList.remove("hidden"); cell.textContent = "Loading documents...";
     try {
       const data = await request(`/api/v1/admin/providers/${providerID}/verification-documents`);
+      if (actor !== state.token || row.isConnected === false || row.dataset.providerReviewOpen !== providerID || row.dataset.documentRevision !== revision) return;
       const names={government_id:"Government-issued ID",drivers_license:"Driver licence (also counts as ID)",driver_face:"Clear face photo",driver_vehicle:"Vehicle photo",driver_plate:"Plate photo",vehicle_registration:"Vehicle registration"};
       const requirements=(data.required_documents || []).map(kind=>escapeHtml(names[kind] || kind)).join(", ");
       cell.innerHTML = (requirements ? `<p><strong>Required for this provider:</strong> ${requirements}. A driver licence counts as ID; do not request a duplicate ID. Previous optional documents remain in history.</p>` : "") + `<p>Account owner / driver name: ${escapeHtml(data.driver_name || "Unavailable — refresh before approving driver evidence")}. Driver/rider face and licence must belong to this person. Only approved face, vehicle and plate photos are shown to customers; other documents stay private.</p>` + ((data.items || []).map((doc) => `<article class="mobile-card"><strong>${escapeHtml(doc.document_type.replaceAll("_", " "))}</strong> - ${escapeHtml(doc.status)} <a href="${escapeHtml(doc.document_url)}" target="_blank" rel="noopener noreferrer">Open</a>
@@ -174,15 +200,19 @@
         ${["drivers_license","driver_face","driver_vehicle","driver_plate","vehicle_registration","vehicle_insurance","roadworthiness","driver_lasrra","driver_lasdri"].includes(doc.document_type) ? `<label><input type="checkbox" data-driver-evidence="${escapeHtml(doc.id)}"> I reviewed the original evidence: the face matches the licence, the vehicle/plate match the registration, and any expiry date matches the document. The required driver checklist is licence/ID, face, vehicle, plate and registration.</label>` : ""}
         <div class="table-actions"><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="approved" class="secondary-button">Approve document</button><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="rejected" class="danger-button">Reject document</button></div>${doc.review_notes ? `<p>${escapeHtml(doc.review_notes)}</p>` : ""}</article>`).join("") || "No documents uploaded.");
       cell.querySelectorAll("[data-review-doc]").forEach((button) => button.onclick = () => reviewDocument(button.dataset.provider, button.dataset.reviewDoc, button.dataset.status));
-    } catch (error) { cell.textContent = error.message; }
+    } catch (error) { if (actor === state.token && row.isConnected !== false && row.dataset.providerReviewOpen === providerID && row.dataset.documentRevision === revision) cell.textContent = error.message; }
   }
 
   async function reviewDocument(providerID, documentID, status) {
+    const row = $(`provider-docs-${providerID}`);
+    if (row?.dataset.reviewBusy === "true") return;
     const evidence = document.querySelector(`[data-driver-evidence="${documentID}"]`);
     if (status === "approved" && evidence && !evidence.checked) { providerFeedback("providerStatus", "Review the driver evidence and confirm the matching expiry date before approval.", "error"); return; }
     const notes = prompt(`${status} document. Add a note (optional):`, ""); if (notes === null) return;
-    try { await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`, { method: "PATCH", body: { status, notes, evidence_confirmed: !!evidence?.checked } }); await loadProviderDocuments(providerID); }
+    if (row) {row.dataset.reviewBusy = "true"; row.querySelectorAll("[data-review-doc]").forEach(button => button.disabled = true);}
+    try { await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`, { method: "PATCH", body: { status, notes, evidence_confirmed: !!evidence?.checked } }); if (row?.dataset.providerReviewOpen === providerID) await loadProviderDocuments(providerID); }
     catch (error) { providerFeedback("providerStatus", error.message,"error"); }
+    finally {if (row) {delete row.dataset.reviewBusy; row.querySelectorAll("[data-review-doc]").forEach(button => button.disabled = false);}}
   }
   async function moderateProvider(id, status) {
     const notes = prompt(`${status} provider. Add an internal note (optional):`, ""); if (notes === null) return;
