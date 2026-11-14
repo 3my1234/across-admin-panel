@@ -43,7 +43,7 @@
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261025-roles-20261017-operations" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
-    <script src="./provider-admin.js?v=review-ede28cae8a4e" defer></script>
+    <script src="./provider-admin.js?v=review-ee77dd8e5d81" defer></script>
     <script src="./community-admin.js?v=20261025-roles-20261017-reports" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
@@ -51,7 +51,7 @@
 <script src="provider-identity.js?v=1" defer></script>
 <link rel="stylesheet" href="./settings.css?v=20261015" />
 <script src="./settings.js?v=20261025-roles" defer></script>
-<link rel="stylesheet" href="./admin-providers.css?v=review-d1b085247c2c"/>
+<link rel="stylesheet" href="./admin-providers.css?v=review-f8eea3d9c3dd"/>
 <link rel="stylesheet" href="./admin-operations.css?v=20261017-analytics"/>
 <script src="./admin-operations.js?v=20261017-workspace" defer></script>
 <link rel="stylesheet" href="./admin-analytics.css?v=20261017" />
@@ -369,17 +369,31 @@
           <section class="tab-panel hidden" data-panel="service-moderation">
             <section class="panel">
               <div class="section-head"><div><h2>Service moderation</h2><p class="muted">Approve only accurate, safe listings from verified providers.</p></div><button type="button" id="reloadProviderListingsButton" class="secondary-button">Reload listings</button></div>
-              <div class="filter-grid"><label>Search listings <input id="providerListingSearch" type="search" placeholder="Title, location, provider, or service" autocomplete="off" /></label><label>Status <select id="providerListingModerationStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
-              <p class="error" id="providerListingStatus"></p>
-              <div class="table-wrap"><table id="providerListingsTable"></table></div>
-              <button type="button" id="loadMoreProviderListingsButton" class="secondary-button hidden">Load more listings</button>
+              <div class="provider-review-layout listing-review-layout">
+                <aside class="provider-queue-panel" aria-label="Services review queue">
+                  <label>Search services<input id="providerListingSearch" type="search" placeholder="Title, provider, or location" autocomplete="off" /></label>
+                  <label>Status<select id="providerListingModerationStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
+                  <h3>Services queue</h3><p id="providerListingStatus" role="status"></p>
+                  <table id="providerListingsTable" class="listing-queue-table" aria-label="Services queue"></table>
+                  <button type="button" id="loadMoreProviderListingsButton" class="secondary-button hidden">Load more services</button>
+                </aside>
+                <section id="serviceReviewPanel" class="provider-review-panel listing-detail-panel" aria-label="Services review"><div class="provider-review-empty"><h3>Services review</h3><p>Select an item from the queue to inspect its details.</p></div></section>
+              </div>
             </section>
           </section>
           <section class="tab-panel hidden" data-panel="product-moderation">
             <section class="panel">
               <div class="section-head"><div><h2>Product moderation</h2><p class="muted">Review physical products, images, prices, discounts, and inventory before publication.</p></div><button type="button" id="reloadMerchantProductsButton" class="secondary-button">Reload products</button></div>
-              <div class="filter-grid"><label>Search products <input id="merchantProductSearch" type="search" placeholder="Product, SKU, or merchant" autocomplete="off" /></label><label>Status <select id="merchantProductStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label></div>
-              <p class="error" id="merchantProductModerationStatus"></p><div class="table-wrap"><table id="merchantProductsTable"></table></div><button type="button" id="loadMoreMerchantProductsButton" class="secondary-button hidden">Load more products</button>
+              <div class="provider-review-layout listing-review-layout">
+                <aside class="provider-queue-panel" aria-label="Products review queue">
+                  <label>Search products<input id="merchantProductSearch" type="search" placeholder="Product, SKU, or provider" autocomplete="off" /></label>
+                  <label>Status<select id="merchantProductStatus"><option value="">All statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="suspended">Suspended</option></select></label>
+                  <h3>Products queue</h3><p id="merchantProductModerationStatus" role="status"></p>
+                  <table id="merchantProductsTable" class="listing-queue-table" aria-label="Products queue"></table>
+                  <button type="button" id="loadMoreMerchantProductsButton" class="secondary-button hidden">Load more products</button>
+                </aside>
+                <section id="productReviewPanel" class="provider-review-panel listing-detail-panel" aria-label="Products review"><div class="provider-review-empty"><h3>Products review</h3><p>Select an item from the queue to inspect its details.</p></div></section>
+              </div>
             </section>
           </section>
           <section class="tab-panel hidden" data-panel="subscriptions">
