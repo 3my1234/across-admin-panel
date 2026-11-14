@@ -37,6 +37,7 @@
   let billingLoadedAt = 0;
   let billingLoadPromise = null;
   let productLoadRevision = 0, listingLoadRevision = 0;
+  const listingReviewState={listing:null,product:null};
   const providerReviewOwners = new WeakMap(), providerReviewData = new WeakMap();
   let providerLoadRevision = 0;
 
@@ -50,7 +51,7 @@
     return billingLoadPromise;
   }
 
-  window.AtlProviderDocumentReview={isOpen:()=>state.activeTab === "providers" && Boolean(document.querySelector("#providerReviewPanel tr[data-provider-review-open]"))};
+  window.AtlProviderDocumentReview={isOpen:()=>state.activeTab === "providers" && Boolean(document.querySelector("#providerReviewPanel tr[data-provider-review-open]")) || state.activeTab === "service-moderation" && listingReviewState.listing?.actor===state.token || state.activeTab === "product-moderation" && listingReviewState.product?.actor===state.token};
 
   window.AtlProviderBilling={load:()=>Promise.all([loadProviderBilling(),loadProviderAccess()])};
 
@@ -132,29 +133,29 @@
   }
 
   async function loadProviderListings({ reset = false } = {}) {
-    const revision = ++listingLoadRevision;
+    const revision = ++listingLoadRevision, actor=state.token;
     providerFeedback("providerListingStatus", "Loading listings...");
     try {
       const data = await request(`/api/v1/admin/provider-listings?${queryParams("providerListingSearch", "providerListingModerationStatus", reset ? "" : state.providerListingCursor)}`);
-      if (revision !== listingLoadRevision) return false;
+      if (revision !== listingLoadRevision || actor!==state.token) return false;
       state.providerListings = reset ? (data.items || []) : [...state.providerListings, ...(data.items || [])];
       state.providerListingCursor = data.next_cursor || ""; state.providerListingHasMore = Boolean(data.has_more);
       renderProviderListings(); providerFeedback("providerListingStatus", `${state.providerListings.length} listings loaded.`,"success");
       return true;
-    } catch (error) { if (revision === listingLoadRevision) providerFeedback("providerListingStatus", error.message,"error"); return false; }
+    } catch (error) { if (revision === listingLoadRevision && actor===state.token) providerFeedback("providerListingStatus", error.message,"error"); return false; }
   }
 
   async function loadMerchantProducts({ reset = false } = {}) {
-    const revision = ++productLoadRevision;
+    const revision = ++productLoadRevision, actor=state.token;
     providerFeedback("merchantProductModerationStatus", "Loading merchant products...");
     try {
       const data = await request(`/api/v1/admin/merchant-products?${queryParams("merchantProductSearch", "merchantProductStatus", reset ? "" : state.merchantProductCursor)}`);
-      if (revision !== productLoadRevision) return false;
+      if (revision !== productLoadRevision || actor!==state.token) return false;
       state.merchantProducts = reset ? (data.items || []) : [...state.merchantProducts, ...(data.items || [])];
       state.merchantProductCursor = data.page?.next_cursor || ""; state.merchantProductHasMore = Boolean(data.page?.has_more);
       renderMerchantProducts(); providerFeedback("merchantProductModerationStatus", `${state.merchantProducts.length} merchant products loaded.`,"success");
       return true;
-    } catch (error) { if (revision === productLoadRevision) providerFeedback("merchantProductModerationStatus", error.message,"error"); return false; }
+    } catch (error) { if (revision === productLoadRevision && actor===state.token) providerFeedback("merchantProductModerationStatus", error.message,"error"); return false; }
   }
 
   const documentNames={government_id:'Government-issued ID',drivers_license:'Driver licence',driver_face:'Clear face photo',driver_vehicle:'Vehicle photo',driver_plate:'Plate photo',vehicle_registration:'Vehicle registration'};
@@ -263,34 +264,84 @@
     finally{delete row.dataset.reviewBusy;if(actor===state.token&&row.isConnected)controls.forEach(([button,disabled])=>{if(button.isConnected)button.disabled=disabled;});}
   }
 
-  function renderProviderListings() {
-    $("providerListingsTable").innerHTML = `<thead><tr><th>Images</th><th>Listing</th><th>Provider</th><th>Service</th><th>Location</th><th>Price</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.providerListings.map((item) => `<tr>
-      <td><div class="moderation-media">${(item.media_urls || []).slice(0, 8).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td>
-      <td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml((item.description || "").slice(0, 150))}</span>${window.ListingReview?.render(item) || ""}</td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.listing_type.replaceAll("_", " "))}</td>
-      <td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td><td>${item.price == null || item.attributes?.price_mode === "quote" ? "Ask for a quote" : `${item.attributes?.price_mode === "from" ? "From " : ""}${escapeHtml(item.currency_code)} ${format(item.price)} / ${escapeHtml(item.pricing_unit || "unit")}`}</td>
-      <td><span class="status-pill ${item.status === "approved" ? "active" : item.status === "rejected" ? "inactive" : ""}">${escapeHtml(item.status)}</span></td><td class="table-actions"><button data-listing-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-listing-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-listing-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
-    </tr>`).join("") || `<tr><td colspan="8">No matching listings.</td></tr>`}</tbody>`;
-    $("loadMoreProviderListingsButton")?.classList.toggle("hidden", !state.providerListingHasMore);
-    $("providerListingsTable").querySelectorAll("[data-listing-status]").forEach((button) => button.addEventListener("click", () => moderateListingVerified(button)));
+  function listingWorkspace(kind) {
+    return kind==='listing'?{items:state.providerListings,table:'providerListingsTable',panel:'serviceReviewPanel',more:'loadMoreProviderListingsButton',hasMore:state.providerListingHasMore,feedback:'providerListingStatus',label:'Service'}:{items:state.merchantProducts,table:'merchantProductsTable',panel:'productReviewPanel',more:'loadMoreMerchantProductsButton',hasMore:state.merchantProductHasMore,feedback:'merchantProductModerationStatus',label:'Product'};
   }
-  async function moderateListing(id, status) {
-    const notes = prompt(`${status} listing. Add an internal note (optional):`, ""); if (notes === null) return;
-    try { await request(`/api/v1/admin/provider-listings/${id}/moderation`, { method: "PATCH", body: { status, notes } }); await loadProviderListings({ reset: true }); }
-    catch (error) { providerFeedback("providerListingStatus", error.message,"error"); }
+  function listingVersion(item) {
+    if(item.content_revision!=null)return JSON.stringify([item.content_revision,item.status||item.moderation_status]);
+    // Products without a server content revision still detect changed queue data.
+    const copy={...item};delete copy.provider_identity;
+    return JSON.stringify(copy);
   }
+  function listingImages(kind,item) {
+    return (kind==='listing'?item.media_urls||[]:item.image_urls||[]).filter(url=>typeof url==='string'&&/^https?:\/\//i.test(url));
+  }
+  function renderListingQueue(kind) {
+    const config=listingWorkspace(kind);let review=listingReviewState[kind];
+    if(review&&review.actor!==state.token){listingReviewState[kind]=review=null;$(config.panel).innerHTML='<div class="provider-review-empty">Select an item to review.</div>';}
+    $(config.table).innerHTML=`<tbody>${config.items.map(item=>{const image=listingImages(kind,item)[0];return `<tr><td><button type="button" class="provider-queue-item listing-queue-item" data-open-listing-review="${escapeHtml(item.id)}" aria-pressed="${review?.item.id===item.id}">${image?`<img class="queue-listing-image" src="${escapeHtml(image)}" alt="" loading="lazy">`:'<span class="review-avatar" aria-hidden="true">▧</span>'}<span class="provider-queue-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.provider_name||item.provider_identity?.name||'Provider')}</span><span>${escapeHtml([item.city,item.state].filter(Boolean).join(', ')||item.sku||'Location not supplied')}</span></span>${reviewBadge(item.status||item.moderation_status||'draft')}<span aria-hidden="true">›</span></button></td></tr>`;}).join('')||`<tr><td>No matching ${config.label.toLowerCase()}s.</td></tr>`}</tbody>`;
+    $(config.more)?.classList.toggle('hidden',!config.hasMore);
+    $(config.table).querySelectorAll('[data-open-listing-review]').forEach(button=>button.onclick=()=>openListingReview(kind,button.dataset.openListingReview));
+    if(review){const current=config.items.find(item=>item.id===review.item.id);
+      review.stale=!current||listingVersion(current)!==review.version;
+      const notice=$(config.panel).querySelector('[data-listing-stale]');if(notice){notice.classList.toggle('hidden',!review.stale);notice.textContent=review.stale?'The queue changed or this item is outside the current filter. Reload this review from the current queue before moderating.':'';}
+      $(config.panel).querySelectorAll('[data-listing-status],[data-product-status]').forEach(button=>button.disabled=review.stale||moderationFlights.has(kind+':'+review.item.id));
+    }
+  }
+  function openListingReview(kind,id) {
+    const config=listingWorkspace(kind),existing=listingReviewState[kind];
+    if(existing&&moderationFlights.has(kind+':'+existing.item.id))return;
+    const item=config.items.find(item=>item.id===id);if(!item)return;
+    listingReviewState[kind]={actor:state.token,item:JSON.parse(JSON.stringify(item)),version:listingVersion(item),image:0,stale:false};
+    renderListingDetail(kind);renderListingQueue(kind);
+  }
+  function renderListingDetail(kind) {
+    const config=listingWorkspace(kind),review=listingReviewState[kind];if(!review||review.actor!==state.token)return;
+    const item=review.item,images=listingImages(kind,item),product=kind==='product',status=item.status||item.moderation_status||'draft';
+    const field=(label,value)=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value==null||value===''?'Not supplied':String(value))}</dd></div>`;
+    const price=product?`${item.currency_code||''} ${format(item.local_selling_price)}`:item.price==null||item.attributes?.price_mode==='quote'?'Ask for a quote':`${item.attributes?.price_mode==='from'?'From ':''}${item.currency_code||''} ${format(item.price)} / ${item.pricing_unit||'unit'}`;
+    $(config.panel).innerHTML=`<div class="review-heading"><div><h3>${config.label} review</h3><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.provider_name||item.provider_identity?.name||'Provider')}</p></div><button type="button" class="secondary-button" data-close-listing-review>Close</button></div>
+      <div class="listing-review-identity">${window.ProviderIdentity?.render(item.provider_identity)||''}${reviewBadge(status)}</div>
+      <p data-listing-stale class="listing-review-notice hidden" role="status"></p>
+      <div class="listing-review-gallery">${images.length?`<a class="listing-main-photo" href="${escapeHtml(images[review.image]||images[0])}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(images[review.image]||images[0])}" alt="${escapeHtml(item.title)} — selected photo"></a><div class="listing-review-thumbnails" aria-label="Listing photos">${images.map((url,index)=>`<button type="button" data-listing-photo="${index}" aria-label="View photo ${index+1}" aria-pressed="${index===review.image}"><img src="${escapeHtml(url)}" alt="" loading="lazy"></button>`).join('')}</div>`:'<div class="listing-no-photo">No photos supplied</div>'}</div>
+      <dl class="listing-review-facts">${field('Price',price)}${product?field('Stock',item.inventory_count)+field('SKU',item.sku)+field('Payment options',item.payment_mode):field('Service type',(item.listing_type||'').replaceAll('_',' '))+field('Category',item.category)}${field('Location',[item.city,item.state,item.country_code].filter(Boolean).join(', '))}${product&&item.compare_at_price?field('Previous price',`${item.currency_code||''} ${format(item.compare_at_price)}`):''}${field('Review status',status)}</dl>
+      <section class="listing-review-description"><h4>Description</h4><p>${escapeHtml(item.description||'No description supplied.')}</p></section>
+      ${product?`<section class="listing-review-description"><h4>Delivery and buyer prices</h4>${merchantBuyerPriceSummary(item)||'<p>No delivery areas supplied.</p>'}</section>`:`<section class="listing-review-description"><h4>Changes since last approval</h4>${window.ListingReview?.render(item)||'<p>Change history unavailable.</p>'}</section>`}
+      ${item.moderation_notes?`<section class="listing-review-description"><h4>Moderation notes</h4><p>${escapeHtml(item.moderation_notes)}</p></section>`:''}
+      <div class="review-document-actions listing-review-actions">${[['approved','Approve '+config.label.toLowerCase()],['rejected','Request changes'],['suspended','Suspend']].map(([value,label])=>`<button type="button" data-${product?'product':'listing'}-status="${value}" data-id="${escapeHtml(item.id)}" class="${value==='approved'?'':'danger-button'}">${label}</button>`).join('')}</div>
+      <p class="muted review-privacy">Approval checks provider eligibility and publication rules on the server. No moderation action changes the provider's subscription.</p>`;
+    const panel=$(config.panel);
+    panel.querySelector('[data-close-listing-review]').onclick=()=>{if(moderationFlights.has(kind+':'+item.id))return;listingReviewState[kind]=null;panel.innerHTML='<div class="provider-review-empty">Select an item from the queue to review.</div>';renderListingQueue(kind);};
+    panel.querySelectorAll('[data-listing-photo]').forEach(button=>button.onclick=()=>{review.image=Number(button.dataset.listingPhoto);const image=images[review.image],anchor=panel.querySelector('.listing-main-photo');anchor.href=image;anchor.querySelector('img').src=image;panel.querySelectorAll('[data-listing-photo]').forEach(photo=>photo.setAttribute('aria-pressed',String(photo===button)));});
+    panel.querySelectorAll('[data-listing-status],[data-product-status]').forEach(button=>{button.reviewItem=review.item;button.reviewActor=review.actor;button.onclick=()=>product?moderateMerchantProductVerified(button):moderateListingVerified(button);button.disabled=review.stale||moderationFlights.has(kind+':'+item.id);});
+  }
+  function validateListingReview(kind,button) {
+    const review=listingReviewState[kind],config=listingWorkspace(kind),current=config.items.find(item=>item.id===button.dataset.id);
+    if(!review||review.actor!==state.token||button.reviewActor!==state.token||review.item!==button.reviewItem||review.stale||!current||listingVersion(current)!==review.version){providerFeedback(config.feedback,'Reload the latest listing review before moderating.','error');return false;}
+    return true;
+  }
+  function confirmListingReview(kind,id,result,actor) {
+    const review=listingReviewState[kind];if(!review||review.actor!==actor||state.token!==actor||review.item.id!==id)return;
+    review.item[kind==='listing'?'status':'moderation_status']=result.status;
+    review.version=listingVersion(review.item);renderListingDetail(kind);
+  }
+  function renderProviderListings(){renderListingQueue('listing');}
   const moderationFlights = new Set();
   async function moderateListingVerified(button) {
     const id = button.dataset.id; const status = button.dataset.listingStatus;
+    if(moderationFlights.has('listing:'+id)||!validateListingReview('listing',button))return;
+    const actor=state.token;
     const notes = prompt(status + " listing. Add an internal note (optional):", ""); if (notes === null) return;
     if(moderationFlights.has('listing:'+id))return; moderationFlights.add('listing:'+id); button.disabled=true; button.setAttribute('aria-busy','true');
     try {
-      const item=state.providerListings.find(listing=>listing.id===id);
+      const item=button.reviewItem||state.providerListings.find(listing=>listing.id===id);
       const result = await request("/api/v1/admin/provider-listings/" + id + "/moderation", { method: "PATCH", body: { status, notes,expected_content_revision:item?.content_revision } });
       if (result.id !== id || result.status !== status) throw new Error("The server did not confirm this moderation change.");
+      if(actor!==state.token)return;confirmListingReview('listing',id,result,actor);
       await loadProviderListings({ reset: true });
-      setText("providerListingStatus", result.title + " (listing " + id.slice(0, 8) + ") is confirmed " + status + ".");
-    } catch (error) { providerFeedback("providerListingStatus", error.message,"error"); }
-    finally { moderationFlights.delete('listing:'+id); button.disabled=false; button.removeAttribute('aria-busy'); }
+      if(actor!==state.token)return;setText("providerListingStatus", result.title + " (listing " + id.slice(0, 8) + ") is confirmed " + status + ".");
+    } catch (error) { if(actor===state.token)providerFeedback("providerListingStatus", error.message,"error"); }
+    finally { moderationFlights.delete('listing:'+id); button.disabled=false; button.removeAttribute('aria-busy');if(actor===state.token)renderListingQueue('listing'); }
   }
   function merchantBuyerPriceSummary(item) {
     return (item.delivery_areas || []).map(area => {
@@ -299,14 +350,11 @@
       return `<br><span class="${mismatch ? "error" : "muted"}">Buyer ${escapeHtml([area.country_code, area.state, area.city].filter(Boolean).join(" / "))}: ${escapeHtml(area.currency_code)} ${itemPrice.toFixed(2)} + ${Number(area.delivery_fee || 0).toFixed(2)} delivery${mismatch ? " — separate from main price" : ""}</span>`;
     }).join("");
   }
-  function renderMerchantProducts() {
-    $("merchantProductsTable").innerHTML = `<thead><tr><th>Images</th><th>Product</th><th>Merchant</th><th>Price</th><th>Stock</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.merchantProducts.map((item) => `<tr><td><div class="moderation-media">${(item.image_urls || []).slice(0, 8).map((url, index) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"><img class="product-image" src="${escapeHtml(url)}" alt="${escapeHtml(item.title)} image ${index + 1}" loading="lazy"></a>`).join("") || '<span class="muted">No image</span>'}</div></td><td><strong>${escapeHtml(item.title)}</strong><br><span class="muted">${escapeHtml(item.sku)}</span><br><span class="muted">${escapeHtml((item.description || "").slice(0, 150))}</span></td><td>${window.ProviderIdentity?.render(item.provider_identity) || escapeHtml(item.provider_name)}</td><td>${escapeHtml(item.currency_code)} ${format(item.local_selling_price)}${item.compare_at_price ? `<br><span class="muted">Was NGN ${format(item.compare_at_price)}</span>` : ""}${merchantBuyerPriceSummary(item)}</td><td>${item.inventory_count}</td><td><span class="status-pill ${item.moderation_status === "approved" ? "active" : item.moderation_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.moderation_status)}</span></td><td class="table-actions"><button data-product-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-product-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-product-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td></tr>`).join("") || `<tr><td colspan="7">No matching merchant products.</td></tr>`}</tbody>`;
-    $("loadMoreMerchantProductsButton")?.classList.toggle("hidden", !state.merchantProductHasMore);
-    $("merchantProductsTable").querySelectorAll("[data-product-status]").forEach(button => button.onclick = () => moderateMerchantProductVerified(button));
-  }
+  function renderMerchantProducts(){renderListingQueue('product');}
   async function moderateMerchantProductVerified(button) {
     const id = button.dataset.id; const status = button.dataset.productStatus;
-    const product = state.merchantProducts.find(item => item.id === id);
+    if(moderationFlights.has('product:'+id)||!validateListingReview('product',button))return;
+    const actor=state.token,product=button.reviewItem||state.merchantProducts.find(item => item.id === id);
     const separate = (product?.delivery_areas || []).filter(area => area.currency_code === product.currency_code && Number(area.delivered_price) - Number(area.delivery_fee || 0) !== Number(product.local_selling_price));
     if (status === "approved" && separate.length && !confirm(`Buyers will pay separate destination item prices (${separate.map(area => `${area.country_code}: ${area.currency_code} ${(Number(area.delivered_price) - Number(area.delivery_fee || 0)).toFixed(2)}`).join(", ")}), rather than the main price ${product.currency_code} ${product.local_selling_price}. Approve those exact buyer prices? Cancel and ask the provider to use the main price if this is unintended.`)) return;
     const notes = prompt(`${status} product. Add a moderation note (optional):`, ""); if (notes === null) return;
@@ -314,11 +362,12 @@
     try {
       const result = await request(`/api/v1/admin/merchant-products/${id}/moderation`, { method: "PATCH", body: { status, notes } });
       if (result.id !== id || result.status !== status) throw new Error("The server did not confirm this product moderation change.");
+      if(actor!==state.token)return;confirmListingReview('product',id,result,actor);
       await loadMerchantProducts({ reset: true });
-      setText("merchantProductModerationStatus", result.title + " (product " + id.slice(0, 8) + ") is confirmed " + status + ".");
+      if(actor!==state.token)return;setText("merchantProductModerationStatus", result.title + " (product " + id.slice(0, 8) + ") is confirmed " + status + ".");
     }
-    catch (error) { providerFeedback("merchantProductModerationStatus", error.message,"error"); }
-    finally { moderationFlights.delete('product:'+id); button.disabled=false; button.removeAttribute('aria-busy'); }
+    catch (error) { if(actor===state.token)providerFeedback("merchantProductModerationStatus", error.message,"error"); }
+    finally { moderationFlights.delete('product:'+id); button.disabled=false; button.removeAttribute('aria-busy');if(actor===state.token)renderListingQueue('product'); }
   }
 
   async function loadMerchantFulfillments({ reset = false } = {}) {
