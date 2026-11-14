@@ -37,7 +37,8 @@
   let billingLoadedAt = 0;
   let billingLoadPromise = null;
   let productLoadRevision = 0, listingLoadRevision = 0;
-  const providerReviewOwners = new WeakMap();
+  const providerReviewOwners = new WeakMap(), providerReviewData = new WeakMap();
+  let providerLoadRevision = 0;
 
   function loadProviderBilling() {
     if (billingLoadPromise) return billingLoadPromise;
@@ -49,7 +50,7 @@
     return billingLoadPromise;
   }
 
-  window.AtlProviderDocumentReview={isOpen:()=>state.activeTab === "providers" && Boolean(document.querySelector("#providersTable tr[data-provider-review-open]"))};
+  window.AtlProviderDocumentReview={isOpen:()=>state.activeTab === "providers" && Boolean(document.querySelector("#providerReviewPanel tr[data-provider-review-open]"))};
 
   window.AtlProviderBilling={load:()=>Promise.all([loadProviderBilling(),loadProviderAccess()])};
 
@@ -119,13 +120,15 @@
   }
 
   async function loadProviders({ reset = false } = {}) {
+    const revision = ++providerLoadRevision, actor = state.token;
     providerFeedback("providerStatus", "Loading providers...");
     try {
       const data = await request(`/api/v1/admin/providers?${queryParams("providerSearch", "providerVerificationStatus", reset ? "" : state.providerCursor)}`);
+      if (revision !== providerLoadRevision || actor !== state.token) return;
       state.providers = reset ? (data.items || []) : [...state.providers, ...(data.items || [])];
       state.providerCursor = data.next_cursor || ""; state.providerHasMore = Boolean(data.has_more);
       renderProviders(); providerFeedback("providerStatus", `${state.providers.length} providers loaded.`,"success");
-    } catch (error) { providerFeedback("providerStatus", error.message,"error"); }
+    } catch (error) { if(revision === providerLoadRevision && actor === state.token) providerFeedback("providerStatus", error.message,"error"); }
   }
 
   async function loadProviderListings({ reset = false } = {}) {
@@ -154,70 +157,110 @@
     } catch (error) { if (revision === productLoadRevision) providerFeedback("merchantProductModerationStatus", error.message,"error"); return false; }
   }
 
-  function renderProviders() {
-    const table = $("providersTable");
-    const openReviews = Array.from(table.querySelectorAll("tr[data-provider-review-open]")).filter(row => providerReviewOwners.get(row) === state.token);
-    table.innerHTML = `<thead><tr><th>Business</th><th>Contact</th><th>Location</th><th>Verification</th><th>Action</th></tr></thead><tbody>${state.providers.map((item) => `<tr>
-      <td>${window.ProviderIdentity?.render(item.provider_identity) || `<strong>${escapeHtml(item.business_name)}</strong>`}<br><span class="muted">${escapeHtml((item.provider_type || "mixed").replaceAll("_", " "))}${item.provider_type_other ? ` — ${escapeHtml(item.provider_type_other)}` : ""}</span><br><span class="muted">${format(item.created_at)}</span></td>
-      <td>${escapeHtml(item.contact_email)}<br>${escapeHtml(item.contact_phone)}</td><td>${escapeHtml([item.city, item.state].filter(Boolean).join(", ") || "-")}</td>
-      <td><span class="status-pill ${item.verification_status === "approved" ? "active" : item.verification_status === "rejected" ? "inactive" : ""}">${escapeHtml(item.verification_status)}</span></td>
-      <td class="table-actions"><button data-provider-docs="${item.id}" class="secondary-button">Review documents</button><button data-provider-status="approved" data-id="${item.id}" class="secondary-button">Approve</button><button data-provider-status="rejected" data-id="${item.id}" class="danger-button">Reject</button><button data-provider-status="suspended" data-id="${item.id}" class="danger-button">Suspend</button></td>
-    </tr><tr id="provider-docs-${item.id}" class="hidden"><td colspan="5"><button type="button" data-close-provider-review="${item.id}" class="secondary-button">Close document review</button><div data-provider-documents></div></td></tr>`).join("") || `<tr><td colspan="5">No matching providers.</td></tr>`}</tbody>`;
-    // Retain the actual nodes: checked evidence and the in-progress review must
-    // survive manual reloads and responses that started before the panel opened.
-    for (const row of openReviews) {
-      const placeholder = $(row.id);
-      if (placeholder && table.contains(placeholder)) placeholder.replaceWith(row);
-    }
-    table.querySelectorAll("[data-close-provider-review]").forEach(button => button.onclick = () => {
-      const row = $(`provider-docs-${button.dataset.closeProviderReview}`);
-      if (!row) return;
-      delete row.dataset.providerReviewOpen;
-      row.classList.add("hidden");
-      row.querySelector("[data-provider-documents]").textContent = "";
+  const documentNames={government_id:'Government-issued ID',drivers_license:'Driver licence',driver_face:'Clear face photo',driver_vehicle:'Vehicle photo',driver_plate:'Plate photo',vehicle_registration:'Vehicle registration'};
+  function reviewBadge(status) {
+    const labels={pending:'Needs review',approved:'Approved',rejected:'Needs replacement',suspended:'Suspended',missing:'Missing',expired:'Expired'};
+    return `<span class="review-badge review-${escapeHtml(status)}">${escapeHtml(labels[status]||status)}</span>`;
+  }
+  function documentReviewModel(data) {
+    const latest=new Map();
+    for(const doc of data.items||[]) if(!latest.has(doc.document_type)) latest.set(doc.document_type,doc);
+    const today=new Date().toISOString().slice(0,10);
+    const current=doc=>!!doc&&doc.status==='approved'&&(!doc.expires_on||doc.expires_on.slice(0,10)>=today)&&(doc.document_type!=='drivers_license'||!!doc.expires_on);
+    const rows=(data.required_documents||[]).map(kind=>{
+      let doc=latest.get(kind);
+      if(kind==='government_id'&&!current(doc)&&current(latest.get('drivers_license')))doc=latest.get('drivers_license');
+      const expired=doc&&((doc.expires_on&&doc.expires_on.slice(0,10)<today)||(doc.document_type==='drivers_license'&&doc.status==='approved'&&!doc.expires_on));
+      return {kind,doc,status:!doc?'missing':expired?'expired':doc.status,approved:current(doc)};
     });
-    $("loadMoreProvidersButton")?.classList.toggle("hidden", !state.providerHasMore);
-    $("providersTable").querySelectorAll("[data-provider-status]").forEach((button) => button.addEventListener("click", () => moderateProvider(button.dataset.id, button.dataset.providerStatus)));
-    $("providersTable").querySelectorAll("[data-provider-docs]").forEach((button) => button.addEventListener("click", () => loadProviderDocuments(button.dataset.providerDocs)));
+    return {rows,approved:rows.filter(row=>row.approved).length,ready:rows.length>0&&rows.every(row=>row.approved)};
   }
-
+  function renderProviderQueue() {
+    const selected=document.querySelector('#providerReviewBody tr[data-provider-review-open]')?.dataset.providerReviewOpen;
+    $('providersTable').innerHTML=`<tbody>${state.providers.map(item=>`<tr><td><button type="button" class="provider-queue-item" data-provider-docs="${escapeHtml(item.id)}" aria-pressed="${selected===item.id}"><span class="review-avatar" aria-hidden="true">${escapeHtml((item.business_name||'P').trim().slice(0,1))}</span><span class="provider-queue-copy"><strong>${escapeHtml(item.business_name)}</strong><span>${escapeHtml(item.is_driver?'Driver / rider':(item.provider_type||'Provider').replaceAll('_',' '))}</span><span>${escapeHtml([item.city,item.state].filter(Boolean).join(', ')||'Location not supplied')}</span></span>${reviewBadge(item.verification_status)}<span aria-hidden="true">›</span></button></td></tr>`).join('')||'<tr><td>No matching providers.</td></tr>'}</tbody>`;
+    setText('providerQueueTitle',`Provider queue (${state.providers.length}${state.providerHasMore?'+':''})`);
+    $('loadMoreProvidersButton')?.classList.toggle('hidden',!state.providerHasMore);
+    $('providersTable').querySelectorAll('[data-provider-docs]').forEach(button=>button.onclick=()=>loadProviderDocuments(button.dataset.providerDocs));
+  }
+  function renderProviders() {
+    const row=document.querySelector('#providerReviewBody tr[data-provider-review-open]');
+    if(row&&providerReviewOwners.get(row)!==state.token){$('providerReviewBody').textContent='';$('providerReviewEmpty').classList.remove('hidden');}
+    // The review lives outside the queue. Reloads retain its actual DOM, selection
+    // and checked evidence even if the selected provider is not in this filter.
+    renderProviderQueue();
+  }
+  function closeProviderReview(row) {
+    if(row.dataset.reviewBusy==='true')return;
+    delete row.dataset.providerReviewOpen;row.classList.add('hidden');
+    row.querySelector('[data-provider-documents]').textContent='';providerReviewData.delete(row);
+    $('providerReviewEmpty').classList.remove('hidden');renderProviderQueue();
+  }
   async function loadProviderDocuments(providerID) {
-    const row = $(`provider-docs-${providerID}`);
-    if (!row) return;
-    const cell = row.querySelector("[data-provider-documents]"), actor = state.token;
-    const revision = String(Number(row.dataset.documentRevision || 0) + 1);
-    providerReviewOwners.set(row, actor);
-    row.dataset.documentRevision = revision;
-    row.dataset.providerReviewOpen = providerID;
-    row.classList.remove("hidden"); cell.textContent = "Loading documents...";
+    let row=document.querySelector('#providerReviewBody tr[data-provider-review-open]');
+    if(row?.dataset.reviewBusy==='true')return;
+    if(!row||row.dataset.providerReviewOpen!==providerID){
+      $('providerReviewBody').innerHTML=`<tr id="provider-docs-${escapeHtml(providerID)}"><td><div data-provider-documents></div></td></tr>`;
+      row=$(`provider-docs-${providerID}`);
+    }
+    const cell=row.querySelector('[data-provider-documents]'),actor=state.token;
+    const revision=String(Number(row.dataset.documentRevision||0)+1);
+    providerReviewOwners.set(row,actor);row.dataset.documentRevision=revision;row.dataset.providerReviewOpen=providerID;
+    row.classList.remove('hidden');$('providerReviewEmpty').classList.add('hidden');renderProviderQueue();
+    cell.innerHTML='<button type="button" class="secondary-button" data-close-provider-review>Close document review</button><p role="status">Loading documents…</p>';
+    cell.querySelector('[data-close-provider-review]').onclick=()=>closeProviderReview(row);
     try {
-      const data = await request(`/api/v1/admin/providers/${providerID}/verification-documents`);
-      if (actor !== state.token || row.isConnected === false || row.dataset.providerReviewOpen !== providerID || row.dataset.documentRevision !== revision) return;
-      const names={government_id:"Government-issued ID",drivers_license:"Driver licence (also counts as ID)",driver_face:"Clear face photo",driver_vehicle:"Vehicle photo",driver_plate:"Plate photo",vehicle_registration:"Vehicle registration"};
-      const requirements=(data.required_documents || []).map(kind=>escapeHtml(names[kind] || kind)).join(", ");
-      cell.innerHTML = (requirements ? `<p><strong>Required for this provider:</strong> ${requirements}. A driver licence counts as ID; do not request a duplicate ID. Previous optional documents remain in history.</p>` : "") + `<p>Account owner / driver name: ${escapeHtml(data.driver_name || "Unavailable — refresh before approving driver evidence")}. Driver/rider face and licence must belong to this person. Only approved face, vehicle and plate photos are shown to customers; other documents stay private.</p>` + ((data.items || []).map((doc) => `<article class="mobile-card"><strong>${escapeHtml(doc.document_type.replaceAll("_", " "))}</strong> - ${escapeHtml(doc.status)} <a href="${escapeHtml(doc.document_url)}" target="_blank" rel="noopener noreferrer">Open</a>
-        <p>Expiry entered by applicant: ${escapeHtml(doc.expires_on || "Not supplied")}. Check against the original document; reject mismatched or expired details.</p>
-        ${["drivers_license","driver_face","driver_vehicle","driver_plate","vehicle_registration","vehicle_insurance","roadworthiness","driver_lasrra","driver_lasdri"].includes(doc.document_type) ? `<label><input type="checkbox" data-driver-evidence="${escapeHtml(doc.id)}"> I reviewed the original evidence: the face matches the licence, the vehicle/plate match the registration, and any expiry date matches the document. The required driver checklist is licence/ID, face, vehicle, plate and registration.</label>` : ""}
-        <div class="table-actions"><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="approved" class="secondary-button">Approve document</button><button data-review-doc="${doc.id}" data-provider="${providerID}" data-status="rejected" class="danger-button">Reject document</button></div>${doc.review_notes ? `<p>${escapeHtml(doc.review_notes)}</p>` : ""}</article>`).join("") || "No documents uploaded.");
-      cell.querySelectorAll("[data-review-doc]").forEach((button) => button.onclick = () => reviewDocument(button.dataset.provider, button.dataset.reviewDoc, button.dataset.status));
-    } catch (error) { if (actor === state.token && row.isConnected !== false && row.dataset.providerReviewOpen === providerID && row.dataset.documentRevision === revision) cell.textContent = error.message; }
+      const data=await request(`/api/v1/admin/providers/${providerID}/verification-documents`);
+      if(actor!==state.token||!row.isConnected||row.dataset.providerReviewOpen!==providerID||row.dataset.documentRevision!==revision)return;
+      providerReviewData.set(row,data);renderDocumentWorkspace(row,data);
+    }catch(error){if(actor===state.token&&row.isConnected&&row.dataset.providerReviewOpen===providerID&&row.dataset.documentRevision===revision){cell.textContent=error.message;const close=document.createElement('button');close.textContent='Close document review';close.className='secondary-button';close.onclick=()=>closeProviderReview(row);cell.append(close);}}
   }
-
-  async function reviewDocument(providerID, documentID, status) {
-    const row = $(`provider-docs-${providerID}`);
-    if (row?.dataset.reviewBusy === "true") return;
-    const evidence = document.querySelector(`[data-driver-evidence="${documentID}"]`);
-    if (status === "approved" && evidence && !evidence.checked) { providerFeedback("providerStatus", "Review the driver evidence and confirm the matching expiry date before approval.", "error"); return; }
-    const notes = prompt(`${status} document. Add a note (optional):`, ""); if (notes === null) return;
-    if (row) {row.dataset.reviewBusy = "true"; row.querySelectorAll("[data-review-doc]").forEach(button => button.disabled = true);}
-    try { await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`, { method: "PATCH", body: { status, notes, evidence_confirmed: !!evidence?.checked } }); if (row?.dataset.providerReviewOpen === providerID) await loadProviderDocuments(providerID); }
-    catch (error) { providerFeedback("providerStatus", error.message,"error"); }
-    finally {if (row) {delete row.dataset.reviewBusy; row.querySelectorAll("[data-review-doc]").forEach(button => button.disabled = false);}}
+  function renderDocumentWorkspace(row,data) {
+    const providerID=row.dataset.providerReviewOpen,item=state.providers.find(item=>item.id===providerID)||{},model=documentReviewModel(data);
+    const docs=data.items||[],selected=docs.find(doc=>doc.id===row.dataset.selectedDocument)||model.rows.find(entry=>entry.doc&&entry.status!=='approved')?.doc||model.rows.find(entry=>entry.doc)?.doc||docs[0];
+    row.dataset.selectedDocument=selected?.id||'';row.dataset.requiredApproved=String(model.ready);
+    const name=escapeHtml(data.driver_name||item.business_name||'Provider'),cell=row.querySelector('[data-provider-documents]');
+    const documentLabel=doc=>documentNames[doc.document_type]||doc.document_type.replaceAll('_',' ');
+    const safeURL=doc=>{try{const url=new URL(doc.document_url);return url.protocol==='https:'?escapeHtml(url.href):'';}catch{return '';}};
+    const evidence=selected&&['drivers_license','driver_face','driver_vehicle','driver_plate','vehicle_registration','vehicle_insurance','roadworthiness','driver_lasrra','driver_lasdri'].includes(selected.document_type);
+    cell.innerHTML=`<div class="review-heading"><div><h3>Document review</h3><h2>${escapeHtml(item.business_name||data.driver_name||'Provider')}</h2><p>${escapeHtml(data.is_driver?'Driver / rider':(item.provider_type||'Provider').replaceAll('_',' '))} · ${escapeHtml([item.city,item.state].filter(Boolean).join(', ')||'Location not supplied')}</p></div><button type="button" data-close-provider-review="${escapeHtml(providerID)}" class="secondary-button" aria-label="Close document review">Close</button></div>
+      <div class="review-progress"><strong>${model.approved} of ${model.rows.length} required documents approved</strong><progress aria-label="Required documents approved" value="${model.approved}" max="${Math.max(1,model.rows.length)}"></progress></div>
+      <div class="review-document-list"><table><thead><tr><th>Document</th><th>Status</th><th>Action</th></tr></thead><tbody>${model.rows.map(entry=>`<tr class="${selected?.id===entry.doc?.id&&entry.doc?'selected-document':''}"><td><strong>${escapeHtml(documentNames[entry.kind]||entry.kind)}</strong>${entry.kind==='drivers_license'?'<small>Also serves as ID</small>':''}</td><td>${reviewBadge(entry.status)}</td><td>${entry.doc?`<button type="button" class="secondary-button" data-select-document="${escapeHtml(entry.doc.id)}" aria-pressed="${selected?.id===entry.doc.id}">${entry.approved?'View':'Review'}</button>`:'<span class="muted">Not submitted</span>'}</td></tr>`).join('')}</tbody></table></div>
+      ${selected?`<section class="review-document-preview" aria-label="Selected verification document"><div class="review-original"><a ${safeURL(selected)?`href="${safeURL(selected)}"`:''} target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">${safeURL(selected)&&!new URL(selected.document_url).pathname.toLowerCase().endsWith('.pdf')?`<img src="${safeURL(selected)}" alt="Selected document preview" referrerpolicy="no-referrer">`:'<span aria-hidden="true">▤</span>'}</a></div><div class="review-preview-copy"><h4>${escapeHtml(documentLabel(selected))}</h4><p>Expiry entered by applicant: ${escapeHtml(selected.expires_on||'Not supplied')}</p><p>Account owner / driver name: ${name}</p>${safeURL(selected)?`<a href="${safeURL(selected)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open original ↗</a>`:'<p>Original unavailable. Reload the review to request a fresh authorized link.</p>'}${selected.review_notes?`<p>${escapeHtml(selected.review_notes)}</p>`:''}</div>
+      ${evidence?`<label class="review-evidence"><input type="checkbox" data-driver-evidence="${escapeHtml(selected.id)}"> I reviewed the original evidence: the face matches the licence, the vehicle/plate match the registration, and any expiry date matches the document.</label>`:''}
+      <div class="review-document-actions"><button type="button" data-review-doc="${escapeHtml(selected.id)}" data-provider="${escapeHtml(providerID)}" data-status="approved">Approve document</button><button type="button" data-review-doc="${escapeHtml(selected.id)}" data-provider="${escapeHtml(providerID)}" data-status="rejected" class="danger-button">Request resubmission</button></div></section>`:'<div class="provider-review-empty">No documents uploaded yet.</div>'}
+      <details class="review-history"><summary>Submission history (${docs.length})</summary>${docs.map(doc=>`<div><span><strong>${escapeHtml(documentLabel(doc))}</strong><small>${escapeHtml(doc.created_at?format(doc.created_at):'Submission date unavailable')}</small></span>${reviewBadge(doc.status)}<button type="button" class="secondary-button" data-select-document="${escapeHtml(doc.id)}">View submission</button></div>`).join('')||'<p>No submissions yet.</p>'}</details>
+      <div class="review-provider-actions"><button type="button" data-provider-status="approved" data-id="${escapeHtml(providerID)}" ${model.ready?'':'disabled'}>Approve provider</button><p>${model.ready?'Required documents approved. Provider approval does not automatically approve suspended services.':'Approve all required documents first. A current approved driver licence also counts as ID.'}</p></div>
+      <details class="review-other-actions"><summary>Other provider actions</summary><div class="table-actions"><button type="button" class="danger-button" data-provider-status="rejected" data-id="${escapeHtml(providerID)}">Reject provider</button><button type="button" class="danger-button" data-provider-status="suspended" data-id="${escapeHtml(providerID)}">Suspend provider</button></div></details>
+      <p class="muted review-privacy">Only authorized reviewers can open identity documents. Only approved face, vehicle and plate photos are shown to customers.</p>`;
+    cell.querySelector('[data-close-provider-review]').onclick=()=>closeProviderReview(row);
+    cell.querySelectorAll('[data-select-document]').forEach(button=>button.onclick=()=>{if(row.dataset.reviewBusy==='true')return;row.dataset.selectedDocument=button.dataset.selectDocument;renderDocumentWorkspace(row,data);});
+    cell.querySelectorAll('[data-review-doc]').forEach(button=>button.onclick=()=>reviewDocument(providerID,button.dataset.reviewDoc,button.dataset.status));
+    cell.querySelectorAll('[data-provider-status]').forEach(button=>button.onclick=()=>moderateProvider(providerID,button.dataset.providerStatus));
+    cell.querySelectorAll('.review-original img').forEach(img=>img.onerror=()=>{img.remove();});
   }
-  async function moderateProvider(id, status) {
-    const notes = prompt(`${status} provider. Add an internal note (optional):`, ""); if (notes === null) return;
-    try { await request(`/api/v1/admin/providers/${id}/verification`, { method: "PATCH", body: { status, notes } }); await loadProviders({ reset: true }); }
-    catch (error) { providerFeedback("providerStatus", error.message,"error"); }
+  async function reviewDocument(providerID,documentID,status) {
+    const row=$(`provider-docs-${providerID}`),actor=state.token;
+    if(!row||row.dataset.reviewBusy==='true'||providerReviewOwners.get(row)!==actor)return;
+    const evidence=row.querySelector(`[data-driver-evidence="${documentID}"]`);
+    if(status==='approved'&&evidence&&!evidence.checked){providerFeedback('providerStatus','Review the driver evidence and confirm the matching expiry date before approval.','error');return;}
+    const notes=prompt(`${status} document. Add a note (optional):`,'');if(notes===null)return;
+    const controls=Array.from(row.querySelectorAll('button'),button=>[button,button.disabled]);
+    row.dataset.reviewBusy='true';controls.forEach(([button])=>button.disabled=true);
+    try{await request(`/api/v1/admin/providers/${providerID}/verification-documents/${documentID}`,{method:'PATCH',body:{status,notes,evidence_confirmed:!!evidence?.checked}});
+      delete row.dataset.reviewBusy;if(actor===state.token&&row.isConnected&&row.dataset.providerReviewOpen===providerID)await loadProviderDocuments(providerID);
+    }catch(error){if(actor===state.token)providerFeedback('providerStatus',error.message,'error');}
+    finally{delete row.dataset.reviewBusy;if(actor===state.token&&row.isConnected)controls.forEach(([button,disabled])=>{if(button.isConnected)button.disabled=disabled;});}
+  }
+  async function moderateProvider(id,status) {
+    const row=$(`provider-docs-${id}`),actor=state.token;
+    if(!row||row.dataset.reviewBusy==='true'||providerReviewOwners.get(row)!==actor)return;
+    if(status==='approved'&&row.dataset.requiredApproved!=='true'){providerFeedback('providerStatus','Approve all required documents first.','error');return;}
+    const notes=prompt(`${status} provider. Add an internal note (optional):`,'');if(notes===null)return;
+    const controls=Array.from(row.querySelectorAll('button'),button=>[button,button.disabled]);
+    row.dataset.reviewBusy='true';controls.forEach(([button])=>button.disabled=true);
+    try{await request(`/api/v1/admin/providers/${id}/verification`,{method:'PATCH',body:{status,notes}});if(actor===state.token){await loadProviders({reset:true});providerFeedback('providerStatus',`Provider confirmed ${status}.`,'success');}}
+    catch(error){if(actor===state.token)providerFeedback('providerStatus',error.message,'error');}
+    finally{delete row.dataset.reviewBusy;if(actor===state.token&&row.isConnected)controls.forEach(([button,disabled])=>{if(button.isConnected)button.disabled=disabled;});}
   }
 
   function renderProviderListings() {
