@@ -316,7 +316,7 @@ async function loadDashboard({ force = false } = {}) {
 
 let visibleAdminRefreshing = false;
 async function refreshVisibleAdminPage() {
-  if (!state.token || state.activeTab === "analytics" || document.hidden || visibleAdminRefreshing || document.querySelector("dialog[open]") || document.activeElement?.matches("input,textarea,select")) return;
+  if (!state.token || state.activeTab === "analytics" || document.hidden || visibleAdminRefreshing || window.AtlProviderDocumentReview?.isOpen() || document.querySelector("dialog[open]") || document.activeElement?.matches("input,textarea,select")) return;
   visibleAdminRefreshing = true;
   try { await loadTabData(state.activeTab, {force: true}); if (state.activeTab === "support" && currentTicketId) await openTicketView(currentTicketId, $("ticketSubject").textContent); }
   catch(error) { showListError(state.activeTab,error); }
@@ -358,7 +358,7 @@ async function pollAdminActivity() {
     }
     renderAdminNotifications();
     if (!isInitialLoad && events.length) {
-      await Promise.allSettled([allowedTabsForRole().includes("overview")?loadOverview():Promise.resolve(), state.activeTab === "analytics" ? Promise.resolve() : loadTabData(state.activeTab, { force: true })]);
+      await Promise.allSettled([allowedTabsForRole().includes("overview")?loadOverview():Promise.resolve(), state.activeTab === "analytics" || window.AtlProviderDocumentReview?.isOpen() ? Promise.resolve() : loadTabData(state.activeTab, { force: true })]);
     }
   } catch (error) {
     if (error.status === 401) logout();
