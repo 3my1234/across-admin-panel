@@ -23,3 +23,12 @@ vm.runInContext(source.slice(source.indexOf('  async function reviewDocument('),
  scope.state.token='different-admin';await scope.reviewDocument('provider','doc','rejected');assert.equal(requests.length,2,'stale review cannot mutate another session');
  console.log('Driver evidence admin review passed: role checklist, latest replacement, expiry, licence-as-ID, fail-closed provider approval, explicit evidence confirmation, rejection, single-flight and account scoping.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
+const legacySource=require('node:fs').readFileSync('provider-admin.js','utf8');
+const legacyFn=legacySource.slice(legacySource.indexOf('function documentReviewModel(data)'),legacySource.indexOf('function renderProviderQueue()'));
+const reviewModel=new Function(legacyFn+';return documentReviewModel;')();
+const oldKinds=['drivers_license','driver_vehicle','driver_plate'];
+const oldData={required_documents:oldKinds,items:oldKinds.map(document_type=>({document_type,status:'approved'}))};
+assert.equal(reviewModel(oldData).ready,false);
+assert.equal(reviewModel({...oldData,legacy_driver_screening:true}).ready,true);
+assert.equal(reviewModel({...oldData,legacy_driver_screening:true,items:[...oldData.items.slice(1),{document_type:'drivers_license',status:'rejected'}]}).ready,false);
