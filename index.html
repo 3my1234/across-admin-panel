@@ -37,13 +37,14 @@
       }
     </script>
     <link rel="stylesheet" href="./styles.20260927.css?v=20261011-chat-app" />
-    <script src="./admin-role-policy.js?v=20261025" defer></script>
+    <script src="./admin-role-policy.js?v=jobs-117" defer></script>
 <script src="./app.20260927.js?v=review-88f5d2fe9528" defer></script>
     <script src="./catalog-live.js?v=20261005-page-refresh" defer></script>
     <script src="./waitlist-admin.js?v=20261009-launch" defer></script>
     <script src="./xp-withdrawals.js?v=20261025-roles-20261017-operations" defer></script>
     <script src="./listing-review.js?v=20261012-review" defer></script>
     <script src="./provider-admin.js?v=review-ee77dd8e5d81" defer></script>
+    <script src="./jobs-admin.js?v=jobs-117" defer></script>
     <script src="./community-admin.js?v=20261025-roles-20261017-reports" defer></script>
   <link rel="stylesheet" href="./theme.css?v=20261012-theme-ready" />
     <link rel="stylesheet" href="./dashboard.css?v=20261012-review" />
@@ -51,7 +52,7 @@
 <script src="provider-identity.js?v=1" defer></script>
 <link rel="stylesheet" href="./settings.css?v=20261015" />
 <script src="./settings.js?v=20261025-roles" defer></script>
-<link rel="stylesheet" href="./admin-providers.css?v=review-f8eea3d9c3dd"/>
+<link rel="stylesheet" href="./admin-providers.css?v=jobs-117"/>
 <link rel="stylesheet" href="./admin-operations.css?v=20261017-analytics"/>
 <script src="./admin-operations.js?v=20261017-workspace" defer></script>
 <link rel="stylesheet" href="./admin-analytics.css?v=20261017" />
@@ -98,6 +99,7 @@
             <button class="nav-item" data-tab="providers">Providers</button>
             <button class="nav-item" data-tab="service-moderation">Services</button>
             <button class="nav-item" data-tab="product-moderation">Products</button>
+            <button class="nav-item" data-tab="jobs">Jobs</button>
             <button class="nav-item" data-tab="subscriptions">Subscriptions</button>
             <button class="nav-item" data-tab="waitlist">Launch waitlist</button>
             <button class="nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
@@ -396,6 +398,18 @@
               </div>
             </section>
           </section>
+          <section class="tab-panel hidden" data-panel="jobs">
+            <section class="panel">
+              <div class="section-head"><div><h2>Jobs</h2><p class="muted">Moderate job listings and review reports. Applications and reports have separate statuses.</p></div><button id="reloadJobs" type="button" class="secondary-button">Reload jobs</button></div>
+              <div class="provider-review-layout jobs-review-layout">
+                <aside class="provider-queue-panel"><h3>Moderation queue</h3><label>Search jobs or employers<input id="jobsSearch" type="search" maxlength="160" placeholder="Search jobs or employers" /></label>
+                <label>Listing status<select id="jobsStatus"><option value="">All statuses</option><option value="published">Published</option><option value="draft">Draft</option><option value="closed">Closed</option><option value="filled">Filled</option><option value="expired">Expired</option><option value="removed">Removed</option></select></label>
+                <label>Reports<select id="jobsReports"><option value="all">All reports</option><option value="open">Open reports</option><option value="dismissed">Dismissed reports</option></select></label>
+                <p id="jobsFeedback" role="status"></p><div id="jobsQueue" class="jobs-queue" aria-label="Jobs moderation queue"></div><button id="jobsMore" class="secondary-button hidden" type="button">Load more jobs</button></aside>
+                <section id="jobReview" class="provider-review-panel" aria-label="Job review"><h3>Job review</h3><p>Select a job from the moderation queue.</p></section>
+              </div>
+            </section>
+          </section>
           <section class="tab-panel hidden" data-panel="subscriptions">
             <section class="panel"><div class="section-head"><div><h2>Subscriptions</h2><p class="muted">Paid provider access, ordered by expiry. Free profiles and future prepaid periods are not active subscribers.</p></div><button id="reloadSubscribersButton" class="secondary-button">Refresh subscribers</button></div>
               <div class="filter-grid"><label>Search subscribers<input id="subscriberSearch" type="search" maxlength="120" placeholder="Business, email or plan" /></label><label>Paid access<select id="subscriberStatus"><option value="active">All active subscribers</option><option value="expiring">Expiring within 7 days</option></select></label></div>
@@ -576,7 +590,7 @@
             <button class="mobile-nav-item active" data-tab="overview">Overview</button>
             <button class="mobile-nav-item" data-tab="providers">Providers</button>
             <button class="mobile-nav-item" data-tab="service-moderation">Services</button>
-            <button class="mobile-nav-item" data-tab="product-moderation">Products</button>
+            <button class="mobile-nav-item" data-tab="product-moderation">Products</button><button class="mobile-nav-item" data-tab="jobs">Jobs</button>
             <button class="mobile-nav-item" data-tab="subscriptions">Subscriptions</button>
             <button class="mobile-nav-item" data-tab="xp-withdrawals">XP withdrawals</button>
             <button class="mobile-nav-item" data-tab="waitlist">Waitlist</button>

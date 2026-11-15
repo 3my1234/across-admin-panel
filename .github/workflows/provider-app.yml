@@ -55,6 +55,7 @@ jobs:
           node scripts/test-listing-review.cjs
           node scripts/test-moderation-feedback.cjs
           node scripts/test-driver-evidence-review.cjs
+          node --check jobs-admin.js
           node --check provider-admin.js
           node scripts/test-subscription-periods.cjs
           node scripts/test-subscription-recovery.cjs
@@ -80,6 +81,7 @@ jobs:
           node scripts/test-provider-browser.cjs
           node scripts/test-overview-browser.cjs
           node scripts/test-admin-providers-browser.cjs
+          node scripts/test-admin-jobs-browser.cjs
           node scripts/test-admin-operations-browser.cjs
           node scripts/test-admin-analytics-browser.cjs
           node scripts/test-admin-workspace-browser.cjs
