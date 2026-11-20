@@ -19,6 +19,7 @@ jobs:
           node --check app.20260927.js
           node --check admin-role-policy.js
           node --check admin-role-workspaces.js
+          node --check capacity-monitor.js
           node --check settings.js
           node --check xp-withdrawals.js
       - name: Start isolated browser and frontend
@@ -31,4 +32,6 @@ jobs:
           done
           exit 1
       - name: Verify all roles in actual admin page using synthetic API responses
-        run: node scripts/test-admin-roles-browser.cjs
+        run: |
+          node scripts/test-admin-roles-browser.cjs
+          CAPACITY_CDP_PORT=9227 CAPACITY_HTTP_PORT=5178 node scripts/test-capacity-browser.cjs
