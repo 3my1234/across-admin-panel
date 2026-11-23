@@ -12,14 +12,6 @@ async function main(){
  request=ctx.loadTickets();pending.shift().reject(new Error('Offline'));await request;assert.equal(rendered.length,2);assert.equal($('ticketListStatus').textContent,'Offline','list errors must be visible outside the closed thread panel');
  $('ticketStatusFilter').value='responded';request=ctx.loadTickets('',true);assert.match(pending[0].url,/status=responded/);pending.shift().resolve({tickets:[{id:'answered',updated_at:'2026-10-01',status:'responded'}]});await request;assert.equal(rendered.length,1);
  request=ctx.loadTickets();state.token='other-admin';pending.shift().resolve({tickets:[{id:'private',updated_at:'2026-10-09',status:'responded'}]});await request;assert.equal(rendered[0].id,'answered','old session history must be ignored');
- const providerSource=fs.readFileSync(path.join(__dirname,'../provider.js'),'utf8');
- const provider={token:'provider',provider:{},conversations:[]};let providerError='';pending=[];
- const portal=vm.createContext({state:provider,$,setMessage:(text)=>{providerError=text;},renderConversations(){},api:url=>new Promise((resolve,reject)=>pending.push({url,resolve,reject}))});
- vm.runInContext(providerSource.slice(providerSource.indexOf('  let conversationsGeneration = 0;'),providerSource.indexOf('  function renderConversations()')),portal);
- request=portal.loadConversations();await portal.loadConversations();assert.equal(pending.length,1);pending.shift().resolve({items:[{id:'booking-chat',last_message_at:'2026-10-07'}],next_cursor:'older'});await request;
- request=portal.loadConversations('older');assert.match(pending[0].url,/cursor=older/);pending.shift().resolve({items:[{id:'old-chat',last_message_at:'2026-01-01'}]});await request;assert.equal(provider.conversations.length,2);
- request=portal.loadConversations();pending.shift().reject(new Error('Offline'));await request;assert.equal(provider.conversations.length,2);assert.equal(providerError,'Offline');
- request=portal.loadConversations();provider.token='other-provider';pending.shift().resolve({items:[{id:'private',last_message_at:'2026-10-08'}]});await request;assert.equal(provider.conversations.length,2);
  console.log('Admin support passed: filters, earlier tickets, retained refresh history, coalesced reads, visible errors and session isolation.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
