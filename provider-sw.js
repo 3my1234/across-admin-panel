@@ -1,28 +1,13 @@
-const CACHE="atl-provider-shell-20261025-tiers-v31";
-const root=new URL("./",self.location.href);
-function communityDestination(url,payload){for(const [field,param] of [['chat_room_id','shared'],['town_hall_room_id','hall']])if(/^[a-f0-9-]{36}$/i.test(payload[field]||''))url.searchParams.set(param,payload[field]);if(['chats','town-hall'].includes(payload.community))url.searchParams.set('community',payload.community);return url;}
-function senderNotificationIcon(payload){try{const url=new URL(payload.sender_avatar_url);if(url.origin==='https://api.atlxpres.com'&&url.pathname.startsWith('/api/v1/public/images/view/user-uploads/')&&url.searchParams.get('avatar')==='1')return url.href;}catch{}return new URL('provider-icon-192.png',root).href;}
-// Refresh an already-open chat on arrival without navigating or exposing its body.
-self.addEventListener('push',event=>event.waitUntil((async()=>{let payload;try{payload=event.data?.json()}catch{return}if(!payload)return;const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of clients){if(new URL(client.url).origin===root.origin)client.postMessage({type:'provider-community-activity',routing:Object.fromEntries(['conversation_id','chat_room_id','ticket_id'].filter(key=>/^[a-f0-9-]{36}$/i.test(payload[key]||'')).map(key=>[key,payload[key]]))});}})()));
-const shell=new Set(["provider.html","provider.js","provider-promotions.js","provider.css","community-portal.js","community-portal.css","provider-identity.js","provider-identity.css","provider-background.png","theme.js","theme.css","dashboard.css","chat-history.js","chat-photo-viewer.js","provider-pwa.js","provider-updates.js","storage-upload.js","delivery-areas.js","catalog-live.js","favicon.png","provider-icon-192.png","provider-icon-512.png","provider.webmanifest","provider-offline.html"]);
-// Activate a waiting update only after the person chooses Refresh app.
-shell.add('provider-overview.css');shell.add('message-receipts.js');shell.add('message-receipts.css');shell.add('location-sharing.js');shell.add('driver-availability.js');shell.add('town-hall.css');shell.add('community-town-hall.js');shell.add('listing-images.js');shell.add('settings.js');shell.add('provider-map-loader.js');shell.add('settings.css');shell.add('private-chat-store.js');
-for(const file of ['service-categories-data.js','service-categories.js','provider-form-defaults.js','hall-icon.js','provider-native.js'])shell.add(file);
-shell.add('provider-install.js');shell.add('provider-tier-benefits.js');
-self.addEventListener("message",event=>{if(event.data?.type==="ACTIVATE_PROVIDER_UPDATE")event.waitUntil(self.skipWaiting());});
-self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.add(new URL("provider-offline.html",root).href)));});
-self.addEventListener("activate",event=>{event.waitUntil((async()=>{for(const name of await caches.keys())if(name.startsWith("atl-provider-shell-")&&name!==CACHE)await caches.delete(name);await self.clients.claim();})());});
-self.addEventListener("fetch",event=>{
- const request=event.request,url=new URL(request.url),relative=url.pathname.slice(root.pathname.length);
- // Never intercept or cache API responses, authenticated requests, photos or third parties.
- const providerHome=root.hostname==="provider.atlxpres.com"&&(relative===""||relative==="index.html");
- if(request.method!=="GET"||url.origin!==root.origin||!url.pathname.startsWith(root.pathname)||!(shell.has(relative)||providerHome)||request.headers.has("Authorization"))return;
- event.respondWith((async()=>{
-  const cache=await caches.open(CACHE);
-  try{const response=await fetch(request,{cache:"no-cache"});if(response.ok)await cache.put(request,response.clone());return response;}
-  catch(error){if(request.mode==="navigate")return await cache.match(new URL("provider-offline.html",root).href);const stored=await cache.match(request);if(stored)return stored;throw error;}
- })());
+// The provider web portal is retired; providers use the ATL Xpres mobile app.
+// Browsers that installed the portal fetch this updated worker, which deletes the
+// cached portal, unregisters itself and reloads open portal tabs onto the notice page.
+self.addEventListener('install', function () { self.skipWaiting(); });
+self.addEventListener('activate', function (event) {
+  event.waitUntil((async function () {
+    var keys = await caches.keys();
+    await Promise.all(keys.map(function (key) { return caches.delete(key); }));
+    await self.registration.unregister();
+    var clients = await self.clients.matchAll({type: 'window'});
+    clients.forEach(function (client) { if (client.navigate) client.navigate(client.url); });
+  })());
 });
-
-self.addEventListener("push",event=>{event.waitUntil((async()=>{let payload={};try{payload=event.data?.json() || {};}catch{}const view=["messages","requests","support","overview","listings","products","merchant-orders","subscription"].includes(payload.view)?payload.view:"overview";const url=communityDestination(new URL("provider.html",root),payload);url.searchParams.set("view",view);if(/^[a-f0-9-]{36}$/i.test(payload.conversation_id || ""))url.searchParams.set("conversation",payload.conversation_id);for(const [field,param] of [["ticket_id","ticket"],["event_id","event"],["notification_id","notification"]])if(/^[a-f0-9-]{36}$/i.test(payload[field] || ""))url.searchParams.set(param,payload[field]);await self.registration.showNotification(payload.sender_name || payload.title || "Atlantic Express",{body:payload.body || "You have a new business update.",icon:senderNotificationIcon(payload),badge:new URL("provider-icon-192.png",root).href,tag:payload.tag,renotify:false,data:{url:url.href}});})());});
-self.addEventListener("notificationclick",event=>{event.notification.close();event.waitUntil((async()=>{const target=new URL(event.notification.data?.url || "provider.html",root);if(target.origin!==root.origin)return;const windows=await self.clients.matchAll({type:"window",includeUncontrolled:true});for(const client of windows){const current=new URL(client.url);if(current.origin!==root.origin||!(current.pathname.endsWith("/provider.html")||(current.hostname==="provider.atlxpres.com"&&["/","/index.html"].includes(current.pathname))))continue;await client.focus();client.postMessage({type:"provider-notification",url:target.href});return;}await self.clients.openWindow(target.href);})());});
